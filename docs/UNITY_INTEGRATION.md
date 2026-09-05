@@ -6,7 +6,7 @@ Unity is the presentation, authoring, orchestration, and platform layer for Debr
 
 The detailed GPU implementation and Steam build/cloud/input boundary is documented in `docs/IMPLEMENTATION_RESEARCH.md`.
 
-The project targets the current Unity LTS/stable editor with URP. Exact package/editor versions are pinned in `ProjectSettings/ProjectVersion.txt` and `Packages/manifest.json` once an editor version is selected and verified.
+The project targets the current Unity LTS/stable editor with URP. Exact package/editor versions are pinned in `ProjectSettings/ProjectVersion.txt` and `Packages/manifest.json` once an editor version is selected and verified. Release targets are macOS, Windows, and Linux through Steam, with macOS as the primary development/validation platform. Platform-specific code and asset choices must preserve all three targets from the outset; performance certification begins on macOS before cross-platform validation.
 
 ## Project layout
 
@@ -21,8 +21,10 @@ Assets/
     Simulation/           Compute shaders, GPU resources, cell/debris simulation
     Rendering/            URP shaders, render features, palette/field drawing
     Ships/                Blueprints, structural fields, components, cargo
+    Player/               Arcturus controller, boosters, boarding, personal tools
+    Encounters/           Temporal contacts, crews, routes, expiry, capture conversion
     Persistence/          Save models, codecs, repository implementations
-    Economy/              Inventory, storage, sale/shipment transactions
+    Economy/              Markets, EE Inc. debt, storage, sale/shipment transactions
     UI/                   UI Toolkit documents/controllers and HUD
     Effects/              GPU particles, semantic audio/effect cue producers
     Audio/                FMOD service, banks, snapshots, audio diagnostics
@@ -38,6 +40,7 @@ Assets/
     Bootstrap.unity
     Strategic.unity
     Salvage.unity
+    Hub.unity
     DevShowcase.unity
   Settings/               URP assets, input actions, simulation settings
 ```
@@ -53,7 +56,7 @@ Bootstrap → Strategic → loading transition → Salvage → loading transitio
                                   ↘ DevShowcase (development only)
 ```
 
-`Strategic` owns the zoomed-out camera, player/contact markers, home station, and strategic HUD. Selecting a contact serializes the strategic ship snapshot, records it as anchored at that contact, and opens `Salvage`. `Salvage` creates a `SiteSession` from a `SiteId`, loads/generates chunks and the ship, then commits the modified site and ship snapshot before returning to `Strategic`. Strategic time/travel is paused while a salvage site is active.
+`Strategic` owns the zoomed-out camera, player/contact markers, home station, Frontier Count, and strategic HUD. Selecting a persistent contact serializes the strategic ship snapshot, records it as anchored at that contact, and opens `Salvage`. `Salvage` creates a `SiteSession` from a `SiteId`, loads/generates chunks, ship, and (when present) Arcturus, then commits the modified site and ship snapshot before returning to `Strategic`. `Hub` is a physical walkable station presentation/session entered after landing. Temporal encounters use a separate non-persistent session contract. Strategic travel is paused while a close-up session is active.
 
 Scenes must not use hidden cross-scene object references as game state. Scene objects receive state through explicit bootstrap/session interfaces. Additive scene loading is acceptable for common presentation layers later, but never changes which system owns authoritative data.
 
@@ -107,3 +110,11 @@ Prefer small changes scoped to one module/content asset. Avoid editing a broad s
 4. Create initial material, component, starter-ship, asteroid-profile, and showcase-preset assets.
 5. Implement content validators and the DevShowcase overlay before expanding gameplay.
 6. Add compute resource lifecycle diagnostics before activating high-volume pixel simulation.
+
+## Implementation checklist
+
+IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
+
+- [ ] A.1 Editor/packages/test commands.
+- [ ] A.2 URP/input/bootstrap/showcase/validation.
+- [ ] C.6 Platform builds.

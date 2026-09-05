@@ -7,3 +7,9 @@ The material cell is a universal fixed-volume physical unit. A resource cell in 
 Material fields carry an index plus per-cell deterministic variation seed and state channels. Render shaders choose palette variation and emission from those fields. Inspection converts the sampled index back through the catalog and reports the definition; no switch statement needs to know individual material names.
 
 The prototype content set is rock, iron, copper, ice, carbonaceous material, and rare ore. It is intentionally small and representative rather than a locked production list.
+
+## Implementation checklist
+
+IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
+
+- [ ] A.3 Catalog/generation validation.

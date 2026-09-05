@@ -24,9 +24,11 @@ No component definition stores per-save mutable state. A `ComponentInstance` sto
 | External | drill, saw, thruster, cargo door, grappler | occupies real outside/edge space and needs exposed anchor geometry |
 | Embedded | battery, fuel tank, processor, cable junction | occupies or is enclosed by a valid internal structural footprint |
 | Overlay upgrade | software/firmware/robotic-management upgrade | may attach to an existing eligible component/structure without consuming cargo volume |
-| Structural module | prebuilt cargo section, reinforced hull section | contributes real material cells and may include component sockets |
+| Structural prefab | prebuilt cargo section, girder, reinforced hull section | contributes ordinary real material cells and may include component sockets; can be cut/repaired cell by cell |
 
 An overlay never overrides physical constraints of the component it improves. A robotic cargo organizer, for example, can apply organizing forces inside an existing cavity but cannot increase its visible volume.
+
+Unit components—tools/weapons, propulsion jets, command center, fuel tank, and misc-storage—are atomic functional objects. They occupy genuine footprint but are not drawn apart into editable material pixels. They either remain physically whole with a damaged/disabled state that an appropriate repair kit may restore, or are destroyed into non-functional pieces. This is distinct from a structural prefab, whose material cells remain individually destructible.
 
 ## Operational state
 
@@ -74,6 +76,8 @@ Components do not mutate site textures or other component internals. When active
 | collection drone | player-assigned material pickup/intake commands within its operating range |
 | cutting drone | executes a player-authored cutting route; does not choose salvage goals autonomously |
 | articulated arm | transforms a mounted tool output within its joint limits under player control |
+| misc-storage unit | capacity-limited menu inventory for patch material, repair kits, and personal equipment; consumes ship footprint but not cargo cells |
+| fuel tank | atomic tank inventory; accepts pumped recoverable loose fuel and supplies engines/tools |
 
 The component system receives compact outcomes/events from the simulation—tool blocked by material gate, fuel transfer, anchor failure, cargo intake, damage—but does not poll cell fields directly.
 
@@ -91,3 +95,12 @@ The first vertical slice requires a player controller, upper/lower rear thruster
 - Power priority, battery charge behavior, and generator/fuel conversion detail.
 - Whether components can be repaired to partial effectiveness.
 - Automation, drone, and processor programming UX.
+
+## Implementation checklist
+
+IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
+
+- [ ] B.1 Whole units/structural prefabs.
+- [ ] B.3 Support loss.
+- [ ] D.1 Pressure/repair.
+- [ ] D.3 Articulation/weapons.

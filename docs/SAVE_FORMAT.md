@@ -9,7 +9,7 @@ Debris saves reconstruct deterministic generation plus every authoritative modif
 ```text
 SaveSlot/
   manifest.json                 schema, world seed, active profile, save revision
-  world.json                    player/strategic/station/economy/debt/relationship index
+  world.json                    Frontier Count, player/strategic/station/economy/debt/relationship/narrative index
   sites/<SiteId>/site.json      generation metadata and site record index
   sites/<SiteId>/fixed/*.bin    changed fixed-field chunks by ChunkCoord
   sites/<SiteId>/loose/*.bin    lossless spatial loose-cell buckets
@@ -47,6 +47,15 @@ Steam Cloud syncs these local files; it is not the live database. Keep world/ind
 
 The intended world capacity is at least 100,000 indexed modified sites without a player-visible count limit. The site index is paged/addressable rather than eagerly loading all `site.json` records. Benchmark index metadata and a mixed 100,000-site fixture separately from payload-heavy sites; a large number of untouched procedural contacts must not create one file each.
 
+Temporal encounters are excluded from `sites/`: they are regenerated/expired runtime contacts. An active encounter has a temporary authoritative session snapshot in `world.json`, preserving identity, expiry, inventories and damage on resume. After resolution/expiry retain only durable results (transactions, captured-ship conversion, relationship/discovery/narrative flags, and player/ship state). Atomic component inventories serialize stable item keys/counts/state; physical cargo remains a lossless cargo-cell field.
+
 ## Versioning
 
 `SaveSchemaVersion`, generator revision, field codec version, loose-cell codec version, fragment codec version, material key, and component key are explicit. Any incompatible change requires a migration, retained baseline snapshot, or a visible compatibility/recovery path. The game must not silently regenerate a modified site with a new generator revision.
+
+## Implementation checklist
+
+IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
+
+- [ ] B.4 Codecs/migration/interrupted writes.
+- [ ] D.GATE Encounter session snapshot.

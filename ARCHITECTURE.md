@@ -12,7 +12,7 @@ The first prototype is deliberately a narrow implementation of these production 
 |---|---|---|
 | `Core` | composition root, game state transitions, service interfaces | `IGameState`, events only |
 | `World` | seed, persistent IDs, coordinate conversion | `WorldId`, `SiteId`, conversion APIs |
-| `Strategic` | contacts, arcade flight, physical fuel/cargo mass, station position | `IStrategicWorld`, `EnterSiteRequest` |
+| `Strategic` | contacts, Frontier Count, arcade flight, physical fuel/cargo mass, station position | `IStrategicWorld`, `EnterSiteRequest` |
 | `Sites` | loaded site lifecycle and chunk streaming | `ISiteSession`, commands, read-only snapshots |
 | `Materials` | material definitions and packed GPU lookup table | `MaterialDefinition`, `MaterialCatalog` |
 | `PixelSimulation` | material fields, damage, debris cells, active chunks | batched `SiteCommand`, sampled readback |
@@ -21,6 +21,8 @@ The first prototype is deliberately a narrow implementation of these production 
 | `Audio` | FMOD bank lifecycle, cue playback, mix/snapshots, accessibility | `IAudioService`; presentation only |
 | `Ships` | structure field, component placement, cargo topology | `ShipDefinition`, `ShipRuntime` |
 | `Components` | component behavior/data | component command producers |
+| `Player` | Arcturus body, zero-g booster, equipment, boarding, misc inventory | `IPlayerRuntime`, semantic field commands |
+| `Encounters` | temporal contacts, crew/trader profiles, expiry, capture conversion | `IEncounterService`, durable outcome events |
 | `Persistence` | world/save records and lossless site deltas | `ISaveRepository` |
 | `Economy` | inventory, station storage, sale ledger | transactions/events |
 | `UI` | HUD, inspection, menus | subscribes to snapshots/events |
@@ -32,7 +34,7 @@ Dependencies point inward through contracts: UI/Input → Core; Core → interfa
 
 Strategic coordinates use `double` kilometres relative to the world origin. A loaded site has a stable `SiteId` and a site-local, signed integer **cell** coordinate. One material cell is the canonical simulation unit: a square simulation cell rendered as a crisp pixel, not a literal display pixel. Initial presentation is 1 cell = 0.125 Unity metres (8 cells/metre), configurable in `SimulationSettings` rather than embedded in gameplay code. The starter ship targets roughly 100 cells in length with a 50×50 cargo cavity; chunking/streaming must accommodate 1000×1000-cell ships and larger. `ChunkCoord` uses floor division, including negative positions.
 
-`WorldId`, `SiteId`, `ShipId`, `ComponentId`, and `StationId` are stable 128-bit serialized values. Content assets use immutable string keys. Persistent generation derives independent deterministic streams from `(worldSeed, stableId, purposeKey)`; runtime visual randomness never uses Unity global random and never changes generated geometry.
+`WorldId`, `SiteId`, `ShipId`, `ComponentId`, `StationId`, `EncounterId`, and `ActorId` are stable 128-bit serialized values. The world additionally stores a fixed-point/integer **Frontier Count** rather than wall-clock days/years. Content assets use immutable string keys. Persistent generation derives independent deterministic streams from `(worldSeed, stableId, purposeKey)`; runtime visual randomness never uses Unity global random and never changes generated geometry.
 
 ## Site and pixel model
 
@@ -58,13 +60,13 @@ CPU does not poll every pixel. Hover inspection is a one-cell asynchronous readb
 
 ## Ships and cargo
 
-A ship uses a site-local structural field and discrete component instances. Components have transform/ports, definition data, health, and connections to structural anchors. The starter ship is authored from the same blueprint/field form planned for future construction. Cargo cavities are explicit hull-space collision volumes plus an intake aperture controlled by a door component. Their dimensions are immutable at runtime except through actual ship construction/destruction. Loose cargo cells enter through the open aperture and continue GPU physics inside this volume: they have individual position/velocity, collide without overlap, and can spill through an open door. Capacity is the physical available cavity volume, never an abstract stack. A later organizing component may influence these cells but cannot resize or bypass the cavity.
+A ship uses a site-local structural field and discrete component instances. Components have transform/ports, definition data, health, and connections to structural anchors. Whole-unit components (command centers, tanks, tools/weapons, jets, misc-storage) are atomic runtime entities: they can fail whole, be repaired with a kit, or be destroyed, but they are not editable cell fields. Structural prefabs (cargo bays, girders, hull modules) instantiate ordinary material cells and are therefore cuttable/repairable like free-drawn hull. The starter ship is authored from the same blueprint/field form planned for future construction. Cargo cavities are explicit hull-space collision volumes plus an intake aperture controlled by a door component. Their dimensions are immutable at runtime except through actual ship construction/destruction. Loose cargo cells enter through the open aperture and continue GPU physics inside this volume: they have individual position/velocity, collide without overlap, and can spill through an open door. Capacity is the physical available cavity volume, never an abstract stack. A later organizing component may influence these cells but cannot resize or bypass the cavity.
 
 Components require structural anchors. Loss of a supporting connection disables or detaches a component; a severed thruster therefore removes its propulsion. For normal construction, intact components connected to the continuous supported hull receive abstract ship power from a valid source—no visible cable routing or per-cell power management. Structural connectivity is evaluated over the material field. Detached connected regions become loose physical ship fragments, and the long-term target includes stress/support failure and collapse rather than only simplistic attachment checks. The first slice establishes the connectivity data and detached-fragment event path, then expands stress simulation under measured GPU budgets.
 
 ## Persistence and serialization
 
-World-level save stores player ship state, strategic contacts/discovery, station inventories, economy/debt ledger, relationships, and a paged site record index designed for at least 100,000 modified sites. Site save data stores generator revision/seed and only state that differs from deterministic generation: changed chunk payloads, component/atmosphere state, and every loose material/fuel cell and detached-fragment record. It does not serialize render textures. Details and versioning rules are in `docs/PERSISTENCE.md`.
+World-level save stores player ship/body/misc-inventory state, Frontier Count, strategic contacts/discovery, station inventories, economy/debt ledger, relationships, and a paged site record index designed for at least 100,000 modified sites. Site save data stores generator revision/seed and only state that differs from deterministic generation: changed chunk payloads, component/atmosphere state, and every loose material/fuel cell and detached-fragment record. Temporal encounters are not site records: active encounters save temporary session snapshots for exact inventory/damage/expiry resume; resolved/expired encounters retain only durable outcomes, including captured ships converted to persistent ships. It does not serialize render textures. Details and versioning rules are in `docs/PERSISTENCE.md`.
 
 ## Threading and GPU ownership
 
@@ -93,3 +95,13 @@ Unity main thread owns Unity object lifecycle and public orchestration. Jobs/Bur
 | custom ships diverge from starter ships | one structural field + component/blueprint model from day one |
 | CPU/GPU data races or excess readback | explicit command/event ownership and async, rate-limited readback contracts |
 | chunk seams cause artifacts | padded neighbor sampling and deterministic border refresh protocol |
+
+## Approved interpretation and implementation tracking
+
+The [continuous execution contract](docs/EXECUTION_PLAN.md) governs phases A–E and resolves inventory, pressure, recovery, encounter resume, and calendar rules.
+
+- [ ] A.GATE Foundation proof.
+- [ ] B.GATE Physical salvage persistence.
+- [ ] C.GATE Contractor career and freedom.
+- [ ] D.GATE Field careers and encounters.
+- [ ] E.GATE Alien-drone escalation.

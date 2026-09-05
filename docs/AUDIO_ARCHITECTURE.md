@@ -89,10 +89,16 @@ Banks must be assigned deliberately and loaded before their events are used; FMO
 
 ## Music and narrative audio
 
-Music is sparse and stateful: near-silence/exterior drone while alone, restrained industrial pulse during sustained work, and warmer but still worn textures in the hub. Music follows long-lived context snapshots, not every drill hit. Dialogue is text-first: radio calls, logs, and face-to-face scenes can play voice texture, beeps, filtered breaths, or optional voiced lines, but every message remains readable without sound. Signal strength can alter radio processing without obscuring required text.
+Music is sparse and stateful: near-silence/exterior drone while alone, restrained industrial pulse during sustained work, and warmer but still worn textures in the hub. Music follows long-lived context snapshots, not every drill hit. The soundtrack begins with generated/temporary implementation assets, while its eventual authored music is intended to be made by the project owner; event keys and stems must therefore be stable enough to replace temporary content without code changes. Dialogue is text-first: radio calls, logs, Cepheus’s same-hardware voice, and face-to-face scenes can play voice texture, beeps, filtered breaths, or optional voiced lines, but every message remains readable without sound. Signal strength can alter radio processing without obscuring required text.
 
 ## Accessibility and verification
 
 Provide independent VCAs, subtitles/transcripts for all speech/radio/log content, speaker/source labels, visual indicators for critical alarms, dynamic-range modes, tinnitus-safe alternatives for alarms, and no requirement to identify a material or hazard only by audio.
 
 The audio test scene must exercise vacuum/pressurized transitions, drill material variation, full-cargo impacts, fuel grades, damage loops, hub density, radio signal, bank load/unload, pause/menu behavior, and a worst-case cue storm. Verify no stuck loops, abrupt bank-unload silence, duplicate one-shots, or loss of critical cues at the voice limit. Profile on target hardware before setting voice and memory budgets.
+
+## Implementation checklist
+
+IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
+
+- [ ] E.4 Dark industrial audio, replaceable soundtrack.

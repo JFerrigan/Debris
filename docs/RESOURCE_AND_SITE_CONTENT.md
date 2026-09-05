@@ -45,8 +45,12 @@ Sites are generated from a profile plus deterministic seed and stable site ID. P
 | Freighter wreck | large-volume cargo, heavy concentration of one material, logistics value | large-scale collection challenge |
 | Space station/industrial structure | very large mixed material field, many systems and compartments | late-game, broad salvage variety |
 | Alien/anomalous structure | extremely rare invented materials and end-game technology | late-game mystery and discovery |
+| Planetary station/mine | dockable planetary hub or designated resource area | station economy or planet-specific extraction; no arbitrary surface landing |
+| Temporal convoy/crew | shipment, traveling salvager, trader, or shipkeeper inventory | non-permanent interaction/combat/trade opportunity; may hold rare gear or blueprints |
 
 Asteroids are initially mostly compact rock with veins. They can occasionally contain ice, hollows, embedded components, or fuel-bearing material. Cavities reserve an explicit vacuum/pressurized state from the outset. Oxygen, fire, pressure effects, and life forms are later content/simulation layers; Arcturus does not require oxygen, but living occupants and some equipment do.
+
+Alien artifacts, materials, functional tools, and blueprints become progressively available through varied jobs and farther site bands. Autonomous alien drones are late-game hostile content whose encounter weight escalates with recorded alien discovery/gear. They are not merely a random rare-material spawn.
 
 ## Scale
 
@@ -63,3 +67,12 @@ New resources are added through MaterialDefinition assets and catalog validation
 - Which site types introduce particular scanner tiers, blueprints, and upgrades.
 - Exact fuel-grade names, energy/range values, and recovery-tool progression.
 - Fire/oxygen/pressure simulation depth and their relationship to site type.
+
+## Implementation checklist
+
+IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
+
+- [ ] A.3 Starter materials/asteroid.
+- [ ] C.1 Planet contacts.
+- [ ] D.4 Temporal stock.
+- [ ] E.1 Alien resources/equipment.

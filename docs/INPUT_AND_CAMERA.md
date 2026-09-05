@@ -10,6 +10,8 @@ Keyboard/mouse ships first. Input is action-based, compact, contextual, and cont
 |---|---|
 | Flight thrust | arcade directional thrust in strategic and salvage flight |
 | Rotate | ship rotation in any direction |
+| Exit/return ship | place/recover Arcturus’s body at a valid ship boundary or external position |
+| Personal movement/booster | walk in stations/interiors and move in zero-g vacuum |
 | Aim/pointer | material hover inspection; controls an articulated tool arm when one is fitted |
 | Tool primary/secondary | active tool behavior or alternate function |
 | Interact | contact/site/station/context actions |
@@ -19,6 +21,8 @@ Keyboard/mouse ships first. Input is action-based, compact, contextual, and cont
 | Pause/menu | settings, save, accessibility |
 
 The exact keyboard defaults, rebinding UX, and controller layout remain open. Fixed tools act directly along their mounted forward axis; they do not aim independently of ship rotation. An articulated-arm component adds a contextual arm-control mode that steers the tool mounted at its end. Unity Input System action assets are the source for initial mappings; Steam Input can later map the same action vocabulary.
+
+When outside the ship, the same action vocabulary maps to Arcturus’s equipped personal tool, welding, interaction/boarding, and booster controls. Personal field operation is deferred until after the starter ship loop; its full scope is in `docs/FIELD_OPERATIONS_AND_COMBAT.md`.
 
 ## Camera modes
 
@@ -43,3 +47,12 @@ Free inspection, temporary detached camera, and automatic cinematic framing are 
 ## Accessibility and controller readiness
 
 Support rebinding, hold/toggle alternatives for sustained tools, adjustable pointer/camera sensitivity, readable palette/outline alternatives, and scalable UI from the first usable interface. Controller support should use action sets such as Flight, Salvage, Strategic, and Menu rather than incompatible one-off controls.
+
+## Implementation checklist
+
+IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
+
+- [ ] A.2 Semantic actions.
+- [ ] C.2 Basic walking/ship exit.
+- [ ] D.1 EVA/tools.
+- [ ] E.4 Accessibility.

@@ -56,3 +56,10 @@ Deterministic fixtures cover: cutting a thin bridge, severing a thruster anchor,
 - Which materials act as structural support versus decorative/loose fill.
 - How fragment-to-fragment collisions scale at late-game station size.
 - Player-facing repair tools and safe temporary bracing mechanics.
+
+## Implementation checklist
+
+IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
+
+- [ ] B.3 Connectivity/detachment.
+- [ ] B.5 Large structures.

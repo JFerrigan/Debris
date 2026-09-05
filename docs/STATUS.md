@@ -1,26 +1,27 @@
-# Status
+# Implementation status
 
-## Completed
+Current phase: checkpoint 0 → Phase A / M0. Current commit: `git log -1`.
 
-- Extracted and preserved the product design constraints in `GAME_DESIGN.md`.
-- Defined the production architecture, GPU approach, persistence approach, risks, and vertical-slice sequencing.
-- Created the initial Unity project scaffold and assembly boundaries.
-- Implemented deterministic IDs/RNG, chunk coordinate math, material catalog definitions, site command contracts, deterministic asteroid generation, sparse site records, fixed-volume cargo occupancy, and initial deterministic tests.
-- Made universal fixed-size, non-overlapping material cells and visible fixed-volume cargo a preserved product/architecture constraint.
-- Recorded starter-ship cargo handling, onboarding intent, exploration risk, scanner intent, and remote-storage shipment as product constraints without over-specifying their mechanics.
-- Captured zero-g tumbling/spillable cargo, individual-cell drilling, starter scale/layout, separate site loading, component-anchor failure, and stress/support collapse as explicit requirements.
-- Added Unity project/editor integration, scene flow, URP/compute, content authoring, validation, and source-control guidance.
-- Integrated flight, damage, fuel, construction, site-content, controls, lossless persistence, and tone decisions; added dedicated resource/site-content and narrative-foundation documentation.
-- Researched and documented a Unity GPU hybrid simulation and Steam delivery/save/input plan, including comparable Noita technical reference material.
-- Expanded the GPU/Steam research into simulation representation, overflow/determinism rules, prototype gates, and a milestone-driven technical/documentation roadmap.
-- Documented component ports/networks, layered structural collapse/fragments, lossless save format, input/camera contracts, and strategic travel/site-transition architecture.
-- Integrated ship-loss recovery (cargo forfeiture), 100,000-site persistence target, fuel grades/recovery, hull-abstracted power, atmosphere-aware cavities, fixed versus articulated tool control, and navigation/inspection/automation decisions.
-- Added economy/debt/logistics, home-station characters/dialogue, and FMOD-based dark-industrial audio architecture documents.
+## Documented
 
-## In progress
+Phases A–E and locked interpretations are recorded in [EXECUTION_PLAN](EXECUTION_PLAN.md). Existing uncommitted design work is preserved in the planning baseline. Basic hub walking is Phase C.
 
-- Unity project scaffold and foundational deterministic/data-oriented systems.
+## Implemented, unverified
 
-## Blocked verification
+Starter IDs/RNG/coordinates, ScriptableObject material catalog/profile, asteroid generator, site command and record types, cargo occupancy mirror. No runnable scene yet; C# compatibility fixes are required.
 
-- Unity is not installed on this machine, so compilation, scene launch, visual inspection, screenshots, and benchmarks cannot yet be performed.
+## Verified
+
+2026-09-05: installed editor Info.plist reports Unity 6000.3.11f1, revision 3000ef702840. Host is arm64 macOS 15.1 (24B2082). Git remote is git@github.com:JFerrigan/Debris.git, branch main. Documentation audit added stable checklists and continuous phase-gate authorization.
+
+## Blocked
+
+Unity MCP tools/list startup times out. Direct editor CLI is available and will be used. No compilation or performance claim yet. Shell startup references a missing unrelated Rust environment; commands still run.
+
+## Exact next task
+
+A.1: pin editor/packages, fix unsupported C# namespaces and compiler errors, run editor import and EditMode tests. Then A.2 bootstrap/URP/input/showcase. Phase advancement requires measured A.GATE.
+
+## Resumption
+
+Read PROJECT_PLAN.md → EXECUTION_PLAN.md → this file → TECHNICAL_ROADMAP.md and relevant subsystem docs. Preserve working changes. Run relevant checks and record evidence in the same commit as completed checklist entries; push origin/main at coherent checkpoints. Continue phases automatically after passing gates.

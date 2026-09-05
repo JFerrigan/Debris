@@ -30,3 +30,11 @@ Save readback copies only altered chunk state into versioned compressed payloads
 ## Validation requirements
 
 The debug scene must expose active/visible/sleeping chunks, field/debris occupancy, buffer capacity, dispatch count, readback queue, simulation milliseconds, draw calls, and dirty/save payload size. Stress cases cover large fields, sustained cutting, debris saturation, rapid streaming, and save/unload. Performance values are recorded only after actual measurement in `docs/PERFORMANCE.md`.
+
+## Implementation checklist
+
+IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
+
+- [ ] A.4 Chunk fields/rendering/inspection.
+- [ ] A.5 Fixed-step loose simulation, collision, sleep, overflow.
+- [ ] A.6 CPU/GPU fixtures.

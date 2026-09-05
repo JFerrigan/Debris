@@ -118,3 +118,10 @@ Before claiming the architecture viable, capture actual measurements for: steady
 - GPU resource/persistence rationale: `docs/GPU_SIMULATION.md`, `docs/PERSISTENCE.md`
 - Unity editor/scenes/content workflow: `docs/UNITY_INTEGRATION.md`
 - Production work sequence and documentation ownership: `docs/TECHNICAL_ROADMAP.md`
+
+## Implementation checklist
+
+IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
+
+- [ ] A.GATE Measured GPU representation proof.
+- [ ] C.6 Steam/cloud integration.

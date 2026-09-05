@@ -6,6 +6,21 @@ Home is a physical, walkable salvage station made from the same destructible mat
 
 Every character tracks a lightweight disposition toward Arcturus, the company, and sentient AI. Most choices are tonal—helpful, neutral, or rude—and change future wording, greetings, and small opportunities. A smaller authored set changes prices, access, contract support, or narrative flags. No character is a universal moral meter.
 
+**EE Inc.** is the company that holds Arcturus’s starter-ship debt. Company dialogue reacts to interest, missed pressure thresholds, forced contracts, credible repossession threats, and eventual freedom. Key home characters are fully hand-written. Distant station merchants and temporal-encounter crews are procedurally varied from authored fragments, with their role, stock, faction disposition, and consequence rules still data-driven.
+
+## Cepheus — resident support AI
+
+**Role:** Arcturus’s simpler same-hardware companion; early field guidance and continuing private conversation.
+**Disposition:** deeply invested in Arcturus’s movement, creativity, and choice; no sprite or independent physical location.
+
+> “We have a route, a tool, and enough power to try. That is almost a plan.”
+
+- Early guidance: “The drill can only reach where the hull points. We can change the hull—or later, the arm.”
+- After debt freedom: “No dispatch has arrived. Is that frightening, or is it the first useful silence we have had?”
+- Alien escalation: “They sent machines to clear us away. I do not think they have considered that we might answer.”
+
+Cepheus’s dialogue is hand-authored and staged by the core milestones in `docs/PROGRESSION_AND_TEMPORAL_WORLD.md`. He can advise but never replaces player decisions or reveals hidden answers.
+
 ## Company landing area
 
 ### Mara Venn — Company intake clerk
@@ -120,6 +135,21 @@ Every character tracks a lightweight disposition toward Arcturus, the company, a
 - Rude: “Save the poetry.” → “Vacuum has no use for it. People do.”
 - Consequence seed: offers lore and an alternate ethical framing for luminous material without revealing its late-game truth too early.
 
+## Station leadership
+
+### Director Amina Rell — Home-station coordinator
+
+**Role:** station continuity, security authority, and later liaison for government questions about alien discoveries.
+**Disposition:** practical defender of the station; initially sees Arcturus through EE Inc.’s contractor frame, then through earned evidence.
+
+> “This station survives because people leave their grudges outside the pressure doors. Do not make me test that rule.”
+
+- Before freedom: “EE Inc. owns your contract. It does not own every consequence of what you bring home.”
+- Alien threshold: “The government has questions. I have fewer answers than I would like. Will you speak with them?”
+- Consequence seed: becomes a principal home-side investigator once alien artifacts accumulate; can support recruitment dialogue but cannot prevent autonomous drone escalation.
+
+Critical leadership and shop characters can be removed or their working areas destroyed. Their lost services and dialogue do not silently return; alternate stations and routes preserve game completion while making the damage matter.
+
 ## Dialogue rules and delivery
 
 - Face-to-face conversations use portrait/name/text and two to four concise player replies. Radio, logs, and recovered transmissions reuse the same UI but identify the source and signal condition.
@@ -127,3 +157,11 @@ Every character tracks a lightweight disposition toward Arcturus, the company, a
 - The player’s sentient-AI status is discussed through individual experience, fear, solidarity, opportunism, and prejudice. Never imply that all humans or all robots share one view.
 - Company opinion and personal opinion are distinct values. A company loyalist can respect Arcturus; an AI ally can still oppose its independent choices.
 - New characters must declare role, stock/contracts, initial dispositions, progression gates, and at least one greeting plus two tonal responses before implementation.
+
+## Implementation checklist
+
+IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
+
+- [ ] C.2 Authored hub/onboarding.
+- [ ] C.5 Alternate services.
+- [ ] E.2 Cepheus/government.
