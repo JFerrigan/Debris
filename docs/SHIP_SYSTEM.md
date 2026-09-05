@@ -1,0 +1,9 @@
+# Ship System
+
+A ship is a blueprint: a structural material layout plus component placements and connections. `ShipRuntime` owns mutable fuel, transform, and component state; it submits commands to a loaded site rather than directly mutating pixel buffers.
+
+Components are data-defined and use stable component IDs. The first slice includes upper/lower rear-facing propulsion, a front drill, a middle cargo cavity, a rear door, and suction. The starter ship is about 100 cells long with an approximately 50×50-cell cavity. A cargo cavity is an explicit fixed ship-local collision volume. Individual loose cells enter only through its open rear intake, retain their size/material/velocity, and naturally collide/tumble in zero gravity. With the door open they can spill back out. Its visible volume is its exact capacity: no resizing, compression, overlap, or hidden stack inventory is permitted. A future robotic organizer may arrange cells within the cavity.
+
+Components attach to structural anchors. A severed anchor disables or detaches the component; cutting off a thruster removes the associated propulsion. Power is player-facingly abstract: an intact component supported by the continuous hull receives ship power from an operating source without visible cable routing. Material connectivity and stress determine supported regions; detached ship regions become physical loose fragments. Future player-built ships use these exact structure, cavity, and component rules, allowing larger ships (1000×1000 cells and beyond) to carry more through larger genuine cavities.
+
+Cavities track sealed/pressurized versus vacuum connection state. Cargo does not need atmosphere, but oxygen stores, fire, pressure-sensitive parts, and life forms do. The starter drill and suction are fixed forward mounts. Later articulated arms provide an independent, player-controlled tool transform and must be modeled as vulnerable, physical components with joint limits.

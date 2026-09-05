@@ -1,0 +1,5 @@
+{
+  "name": "Debris.Sites",
+  "rootNamespace": "Debris.Sites",
+  "references": ["Debris.Core", "Debris.World", "Debris.Materials"]
+}

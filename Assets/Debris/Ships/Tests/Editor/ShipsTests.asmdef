@@ -1,0 +1,7 @@
+{
+  "name": "Debris.Ships.Tests",
+  "rootNamespace": "Debris.Ships.Tests",
+  "references": ["Debris.Ships"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "includePlatforms": ["Editor"]
+}

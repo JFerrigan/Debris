@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+
+# Unity generated folders
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+MemoryCaptures/
+Recordings/
+
+# Unity generated files
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.opendb
+*.VC.db
+
+# IDE and local tooling
+.vs/
+.vscode/
+*.csproj
+*.sln
+*.user
+*.userprefs

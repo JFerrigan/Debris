@@ -1,0 +1,5 @@
+{
+  "name": "Debris.Persistence",
+  "rootNamespace": "Debris.Persistence",
+  "references": ["Debris.Core", "Debris.World"]
+}
