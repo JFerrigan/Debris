@@ -1,6 +1,6 @@
 # Implementation status
 
-Current phase: Phase A / M2–M3. Planning baseline d46f7a9 is pushed. Current commit: `git log -1`.
+Current phase: Phase B / M4. Phase A gate passed. Planning baseline d46f7a9 is pushed. Current commit: `git log -1`.
 
 ## Documented
 
@@ -8,21 +8,23 @@ Phases A–E and locked interpretations are recorded in [EXECUTION_PLAN](EXECUTI
 
 ## Implemented, unverified
 
-URP showcase, GPU chunk rendering/cutting/loose motion, diagnostics, benchmark runner, and Mac build entry point. A.GATE awaits actual player run, visual inspection, measured scaling and active-budget selection.
+Phases B–E are not implemented yet. Large-world dirty-chunk streaming, ship physics, and player career progression remain unchecked.
 
 ## Verified
 
-Unity 6000.3.11f1 (3000ef702840), URP 17.3.0, Input System 1.19.0 imported successfully on arm64 macOS 15.1. `bash tools/unity.sh setup` passed. `bash tools/unity.sh test`: 15/15 EditMode tests pass, including GPU cut/reference accounting, saturation, moving non-overlap, async inspection, and page eviction/resume preserving cells and damage. Evidence: [A-tests](evidence/A-tests.txt).
+Planning baseline d46f7a9 and GPU implementation 1134125 pushed to origin/main. Unity setup and Mac build succeed. 15/15 EditMode tests pass: deterministic content, GPU/reference cutting, saturation, non-overlap, async inspection, and page eviction/resume with exact damage/cells.
 
-The GPU fixture caught and fixed a loop counter update problem: cutter allocation/throttle totals are now accumulated locally and written once per command. No gate was advanced with failing conservation tests.
+Phase A Mac player gate passed on Apple M4 Pro: 8,192-capacity preset frame p95 17.577 ms, GPU p95 1.876 ms; all three presets conserve 22,400 initial material cells. Captured image inspected. Initial active budget: 8,192 loose cells/four 128² chunks. See PERFORMANCE and evidence/A-* for exact results and limitations.
 
 ## Blocked
 
-Unity MCP unavailable; direct editor commands work. No Mac performance certification yet. Windows/Linux execution and Steam integration are not yet attempted.
+Unity MCP remains unavailable; direct editor works. Windows/Linux execution and Steam integration not attempted. No blocker to Phase B.
 
 ## Exact next task
 
-Complete the running Mac build (`bash tools/unity.sh build`), run `Builds/Debris.app/Contents/MacOS/Debris -debrisBenchmark -logFile Logs/player.log`, inspect screenshot and benchmark report, repair any rendering/performance issue. Then verify A.2/A.4/A.5 and A.GATE before Phase B. Commands use bash with no user shell startup.
+B.1 / M4: read SHIP_SYSTEM, COMPONENT_SYSTEM, STRUCTURAL_SIMULATION, PERSISTENCE and SAVE_FORMAT. Implement blueprint structural cells and whole machinery, starter ship, then inertial flight/fuel and moving-hull cargo integration. Verify B.3 rotating cavity before advancing to career features.
+
+Commands: `bash tools/unity.sh setup`, `test`, `build`, `open`. Player: `Builds/Debris.app/Contents/MacOS/Debris -debrisBenchmark -logFile Logs/player.log`; benchmark artifacts currently write under Builds/Logs. Close only the Debris editor before batch execution.
 
 ## Resumption
 

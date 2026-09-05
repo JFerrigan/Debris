@@ -100,7 +100,7 @@ Unity main thread owns Unity object lifecycle and public orchestration. Jobs/Bur
 
 The [continuous execution contract](docs/EXECUTION_PLAN.md) governs phases A–E and resolves inventory, pressure, recovery, encounter resume, and calendar rules.
 
-- [ ] A.GATE Foundation proof.
+- [x] A.GATE Foundation proof.
 - [ ] B.GATE Physical salvage persistence.
 - [ ] C.GATE Contractor career and freedom.
 - [ ] D.GATE Field careers and encounters.

@@ -123,5 +123,5 @@ Before claiming the architecture viable, capture actual measurements for: steady
 
 IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
-- [ ] A.GATE Measured GPU representation proof.
+- [x] A.GATE Measured GPU representation proof.
 - [ ] C.6 Steam/cloud integration.

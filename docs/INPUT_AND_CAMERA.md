@@ -52,7 +52,7 @@ Support rebinding, hold/toggle alternatives for sustained tools, adjustable poin
 
 IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
-- [ ] A.2 Semantic actions.
+- [x] A.2 Semantic actions.
 - [ ] C.2 Basic walking/ship exit.
 - [ ] D.1 EVA/tools.
 - [ ] E.4 Accessibility.

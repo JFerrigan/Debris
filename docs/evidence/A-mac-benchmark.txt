@@ -1,0 +1,4 @@
+Mac16,8 / Apple M4 Pro / Mac OS X 15.1.0 / Unity 6000.3.11f1
+capacity=1024 chunks=4 fixed=21376 loose=1024 initial=22400 overflow=280154 conserved=True cpu_p50=16.669 cpu_p95=17.334 gpu_p50=2.135 gpu_p95=2.161 frame_p95=17.331 gpu_samples=310 buffers=885220 unity_allocated=88121496
+capacity=8192 chunks=4 fixed=14208 loose=8192 initial=22400 overflow=47897 conserved=True cpu_p50=16.690 cpu_p95=17.576 gpu_p50=1.667 gpu_p95=1.876 frame_p95=17.577 gpu_samples=310 buffers=1114596 unity_allocated=88300768
+capacity=32768 chunks=16 fixed=8963 loose=13437 initial=22400 overflow=0 conserved=True cpu_p50=16.668 cpu_p95=17.027 gpu_p50=1.951 gpu_p95=2.082 frame_p95=17.029 gpu_samples=310 buffers=4260372 unity_allocated=88559696

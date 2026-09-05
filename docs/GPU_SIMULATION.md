@@ -35,8 +35,8 @@ The debug scene must expose active/visible/sleeping chunks, field/debris occupan
 
 IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
-- [ ] A.4 Chunk fields/rendering/inspection.
-- [ ] A.5 Fixed-step loose simulation, collision, sleep, overflow.
+- [x] A.4 Chunk fields/rendering/inspection.
+- [x] A.5 Fixed-step loose simulation, collision, sleep, overflow.
 - [x] A.6 CPU/GPU fixtures.
 
 ## Phase A implementation details

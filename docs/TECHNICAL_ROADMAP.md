@@ -64,7 +64,7 @@ Every performance/stress result records frame time percentiles; active, visible,
 
 IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
-- [ ] A.GATE Engine proof.
+- [x] A.GATE Engine proof.
 - [ ] B.GATE Physical salvage.
 - [ ] C.GATE Contractor career.
 - [ ] D.GATE Field careers.

@@ -116,7 +116,7 @@ Prefer small changes scoped to one module/content asset. Avoid editing a broad s
 IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
 - [x] A.1 Editor/packages/test commands.
-- [ ] A.2 URP/input/bootstrap/showcase/validation.
+- [x] A.2 URP/input/bootstrap/showcase/validation.
 - [ ] C.6 Platform builds.
 
 ## Reproducible commands (installed editor)
