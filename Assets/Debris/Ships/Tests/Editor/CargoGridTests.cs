@@ -1,6 +1,7 @@
 using NUnit.Framework;
 
-namespace Debris.Ships.Tests;
+namespace Debris.Ships.Tests
+{
 
 public sealed class CargoGridTests
 {
@@ -17,4 +18,6 @@ public sealed class CargoGridTests
         Assert.That(cargo.TryGetMaterial(cell, out var material), Is.True);
         Assert.That(material, Is.EqualTo("iron"));
     }
+}
+
 }

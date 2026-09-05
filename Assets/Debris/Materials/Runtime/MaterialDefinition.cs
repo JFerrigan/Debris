@@ -1,6 +1,7 @@
 using UnityEngine;
 
-namespace Debris.Materials;
+namespace Debris.Materials
+{
 
 [CreateAssetMenu(menuName = "Debris/Materials/Material Definition")]
 public sealed class MaterialDefinition : ScriptableObject
@@ -23,8 +24,26 @@ public sealed class MaterialDefinition : ScriptableObject
     public float Density => density;
     public int UnitValue => unitValue;
 
+    public void Configure(string key, Color color, float hardness, float mass, int value, Color emission)
+    {
+        materialKey = key; baseColor = color; shadowColor = color * .55f;
+        durability = hardness; density = mass; unitValue = value;
+        emissiveColor = emission; emissiveIntensity = emission.maxColorComponent > 0 ? 1 : 0;
+        Validate();
+    }
+
+    public void Validate()
+    {
+        if (string.IsNullOrWhiteSpace(materialKey) || materialKey != materialKey.Trim().ToLowerInvariant()
+            || !(durability > 0) || float.IsInfinity(durability) || !(density > 0)
+            || float.IsInfinity(density) || unitValue < 0)
+            throw new System.InvalidOperationException("Invalid material definition: " + materialKey);
+    }
+
     private void OnValidate()
     {
         materialKey = materialKey?.Trim().ToLowerInvariant();
     }
+}
+
 }

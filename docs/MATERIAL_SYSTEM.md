@@ -12,4 +12,4 @@ The prototype content set is rock, iron, copper, ice, carbonaceous material, and
 
 IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
-- [ ] A.3 Catalog/generation validation.
+- [x] A.3 Catalog/generation validation.

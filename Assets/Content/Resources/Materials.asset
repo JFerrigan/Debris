@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 56b85236e4a2c4b669985b97d1acf2d4, type: 3}
+  m_Name: Materials
+  m_EditorClassIdentifier: Debris.Materials::Debris.Materials.MaterialCatalog
+  definitions:
+  - {fileID: 11400000, guid: 67533e07b6fda46cdabb646191ee4bfe, type: 2}
+  - {fileID: 11400000, guid: 50870a99bdb744ac0b536b536ef3769c, type: 2}
+  - {fileID: 11400000, guid: 89f705407803b40c0a06d4c88d68d981, type: 2}
+  - {fileID: 11400000, guid: 90886b2d94e13462da81cb69439aaa89, type: 2}
+  - {fileID: 11400000, guid: 0ee8fc0e331c346348c69e86f49e3474, type: 2}
+  - {fileID: 11400000, guid: ce14378c73bb5483d9a81da2fe1a35ce, type: 2}

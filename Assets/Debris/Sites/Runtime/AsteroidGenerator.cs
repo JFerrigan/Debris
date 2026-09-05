@@ -1,14 +1,18 @@
+using System;
 using Debris.Core;
 using Debris.Materials;
 
-namespace Debris.Sites;
+namespace Debris.Sites
+{
 
 /// <summary>Deterministic CPU generation used to populate GPU chunk fields. It has no Unity random dependency.</summary>
 public static class AsteroidGenerator
 {
     public static ushort[] GenerateChunk(ulong worldSeed, StableId siteId, int chunkX, int chunkY, int chunkSize, AsteroidProfile profile, MaterialCatalog catalog)
     {
-        var result = new ushort[chunkSize * chunkSize]; // zero is reserved for empty by the eventual GPU packing layer.
+        if (chunkSize <= 0 || chunkSize > 1024) throw new ArgumentOutOfRangeException(nameof(chunkSize));
+        profile.Validate(catalog);
+        var result = new ushort[chunkSize * chunkSize];
         var rng = new DeterministicRandom(DeterministicRandom.Seed(worldSeed, siteId, "asteroid-shape"));
         var radius = profile.MinimumRadiusCells + rng.NextInt(profile.MaximumRadiusCells - profile.MinimumRadiusCells + 1);
         var cx = (rng.NextFloat() - .5f) * 16f;
@@ -41,7 +45,7 @@ public static class AsteroidGenerator
         foreach (var band in profile.Materials)
         {
             cursor += band.Weight / total;
-            if (roll <= cursor) return catalog.IndexOf(band.MaterialKey);
+            if (band.Weight > 0 && roll < cursor) return catalog.IndexOf(band.MaterialKey);
         }
         return catalog.IndexOf(profile.Materials[profile.Materials.Length - 1].MaterialKey);
     }
@@ -51,4 +55,6 @@ public static class AsteroidGenerator
         var seed = DeterministicRandom.Seed(worldSeed, siteId, purpose) ^ ((ulong)(uint)x << 32) ^ (uint)y;
         return new DeterministicRandom(seed).NextFloat();
     }
+}
+
 }

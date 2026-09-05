@@ -1,7 +1,16 @@
 {
   "name": "Debris.Core.Tests",
   "rootNamespace": "Debris.Core.Tests",
-  "references": ["Debris.Core", "Debris.World"],
-  "optionalUnityReferences": ["TestAssemblies"],
-  "includePlatforms": ["Editor"]
+  "references": [
+    "Debris.Core",
+    "Debris.World",
+    "Debris.Materials",
+    "Debris.Sites"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ]
 }

@@ -39,11 +39,11 @@ Authoritative detail: [Game Design](GAME_DESIGN.md), [Architecture](ARCHITECTURE
 
 **Milestones M7–M8.** Add strategic navigation, Frontier Count, contacts, home landing/hub, company sales/storage/debt, starter loan pressure, and release/build plumbing for macOS, Windows, and Linux.
 
-**Gate:** a new player can take an EE Inc. mining job, return, sell from the landed cargo menu, service debt, buy an approved upgrade, save, and continue. The experience should stand on its own before personal movement, combat, or alien story content expands.
+**Gate:** a new player can take an EE Inc. mining job, return, sell from the landed cargo menu, service debt, buy an approved upgrade, save, and continue. The experience should stand on its own before advanced EVA, combat, or alien story content expands.
 
 ### Phase D — field operations and career breadth
 
-**Milestones M9–M10.** Add Arcturus exiting the ship, booster movement, welding and misc storage, hub walking, temporal encounters, trade, boarding/capture boundaries, late tools/weapons, and station security/consequence behavior.
+**Milestones M9–M10.** Extend Phase C walking/exit with booster movement, welding and misc storage, advanced field work, temporal encounters, trade, boarding/capture boundaries, late tools/weapons, and station security/consequence behavior.
 
 **Gate:** Arcturus can leave the ship, repair a physical breach, return without duplication, and resolve a temporal encounter whose durable result survives while the encounter itself expires.
 

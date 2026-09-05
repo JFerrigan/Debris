@@ -1,6 +1,7 @@
 using System;
 
-namespace Debris.Core;
+namespace Debris.Core
+{
 
 /// <summary>Small deterministic PRNG for persistent generation. Do not replace with UnityEngine.Random.</summary>
 public struct DeterministicRandom
@@ -17,8 +18,15 @@ public struct DeterministicRandom
         return (uint)((_state * 2685821657736338717UL) >> 32);
     }
 
-    public float NextFloat() => NextUInt() / ((float)uint.MaxValue + 1f);
-    public int NextInt(int exclusiveMax) => (int)(NextFloat() * exclusiveMax);
+    public float NextFloat() => (NextUInt() >> 8) * (1f / 16777216f);
+    public int NextInt(int exclusiveMax)
+    {
+        if (exclusiveMax <= 0) throw new ArgumentOutOfRangeException(nameof(exclusiveMax));
+        uint bound = (uint)exclusiveMax, threshold = unchecked(0u - bound) % bound;
+        uint value;
+        do { value = NextUInt(); } while (value < threshold);
+        return (int)(value % bound);
+    }
 
     public static ulong Seed(ulong worldSeed, StableId id, string purpose)
     {
@@ -36,4 +44,6 @@ public struct DeterministicRandom
             hash *= 1099511628211UL;
         }
     }
+}
+
 }

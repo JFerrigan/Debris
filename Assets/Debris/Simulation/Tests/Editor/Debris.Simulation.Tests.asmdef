@@ -1,0 +1,1 @@
+{"name":"Debris.Simulation.Tests","references":["Debris.Core","Debris.World","Debris.Materials","Debris.Sites","Debris.Simulation"],"optionalUnityReferences":["TestAssemblies"],"includePlatforms":["Editor"]}

@@ -1,6 +1,7 @@
 using System;
 
-namespace Debris.World;
+namespace Debris.World
+{
 
 public readonly struct ChunkCoord : IEquatable<ChunkCoord>
 {
@@ -17,8 +18,11 @@ public readonly struct ChunkCoord : IEquatable<ChunkCoord>
 
     private static int FloorDivide(int value, int divisor)
     {
+        if (divisor <= 0) throw new ArgumentOutOfRangeException(nameof(divisor));
         var quotient = value / divisor;
         var remainder = value % divisor;
         return remainder < 0 ? quotient - 1 : quotient;
     }
+}
+
 }

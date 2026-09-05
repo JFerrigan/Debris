@@ -1,0 +1,111 @@
+#pragma kernel Upload
+#pragma kernel Cut
+#pragma kernel Integrate
+#pragma kernel Inspect
+#pragma kernel RestoreOccupancy
+#pragma kernel UploadDamage
+struct Cell { float2 position; float2 velocity; uint material; uint identity; uint step; uint flags; };
+RWTexture2DArray<uint> _Field;
+RWTexture2DArray<float> _Damage;
+RWStructuredBuffer<Cell> _Cells;
+RWStructuredBuffer<uint> _Counters; // count, initial material, throttled attempts, dirty chunks
+RWStructuredBuffer<uint> _Dirty;
+RWStructuredBuffer<int> _Occupancy;
+StructuredBuffer<uint> _Upload;
+StructuredBuffer<float4> _Properties; // durability, density, value, reserved
+RWStructuredBuffer<uint> _Inspection;
+int _ChunkSize, _Side, _Width, _Capacity, _UploadSlice;
+int2 _Origin;
+float2 _CutPosition, _Impulse, _ForcePosition;
+float _Radius, _Power, _Delta, _Force;
+int _Color, _Tick;
+int2 _InspectPosition;
+int3 Address(int2 p) { int2 q=p-_Origin; return int3(q%_ChunkSize,(q.y/_ChunkSize)*_Side+q.x/_ChunkSize); }
+bool Inside(int2 p) { int2 q=p-_Origin;return all(q>=0)&&all(q<_Width); }
+int Index(int2 p) { int2 q=p-_Origin;return q.y*_Width+q.x; }
+[numthreads(8,8,1)]
+void Upload(uint3 id:SV_DispatchThreadID)
+{
+    if(any(id.xy >= (uint)_ChunkSize))return;
+    _Field[int3(id.xy,_UploadSlice)]=_Upload[id.y*_ChunkSize+id.x];
+    _Damage[int3(id.xy,_UploadSlice)]=0;
+}
+[numthreads(8,8,1)]
+void UploadDamage(uint3 id:SV_DispatchThreadID)
+{
+    if(any(id.xy >= (uint)_ChunkSize))return;
+    _Damage[int3(id.xy,_UploadSlice)]=asfloat(_Upload[id.y*_ChunkSize+id.x]);
+}
+// Commands are deliberately bounded and ordered. Reserve a slot BEFORE removing matter.
+[numthreads(1,1,1)]
+void Cut(uint3 id:SV_DispatchThreadID)
+{
+    uint allocated=_Counters[0], throttled=_Counters[2], dirtyCount=_Counters[3];
+    int2 low=(int2)floor(_CutPosition-_Radius),high=(int2)ceil(_CutPosition+_Radius);
+    for(int y=low.y;y<=high.y;y++)for(int x=low.x;x<=high.x;x++)
+    {
+        int2 p=int2(x,y);
+        if(!Inside(p)||distance(float2(p)+.5,_CutPosition)>_Radius)continue;
+        int3 a=Address(p);uint m=_Field[a];if(m==0)continue;
+        float damage=_Damage[a]+_Power*_Delta;
+        if(damage<_Properties[m].x) { _Damage[a]=damage; if(_Dirty[a.z]==0){_Dirty[a.z]=1;dirtyCount++;} continue; }
+        uint slot=allocated;
+        if(slot>=(uint)_Capacity) { throttled++; continue; }
+        Cell c;c.position=float2(p);c.velocity=_Impulse;c.material=m;c.identity=slot+1;c.step=0;c.flags=0;
+        _Cells[slot]=c;_Occupancy[Index(p)]=(int)slot+1;
+        allocated=slot+1;_Field[a]=0;_Damage[a]=0;
+        if(_Dirty[a.z]==0){_Dirty[a.z]=1;dirtyCount++;}
+    }
+    _Counters[0]=allocated;_Counters[2]=throttled;_Counters[3]=dirtyCount;
+}
+bool Free(float2 target,uint self)
+{
+    int2 base=(int2)floor(target);
+    if(!Inside(base)||!Inside((int2)ceil(target)))return false;
+    for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++)
+    {
+        int2 p=base+int2(x,y);if(!Inside(p))continue;
+        if(_Field[Address(p)]!=0 && all(abs(target-float2(p))<.99999))return false;
+        int other=_Occupancy[Index(p)];
+        if(other>0 && other!=(int)self+1 && all(abs(target-_Cells[other-1].position)<.99999))return false;
+    }
+    return true;
+}
+[numthreads(64,1,1)]
+void Integrate(uint3 id:SV_DispatchThreadID)
+{
+    uint i=id.x;if(i>=_Counters[0])return;
+    Cell c=_Cells[i];int2 old=(int2)floor(c.position);
+    int2 color=(old-_Origin)&3;
+    if(color.y*4+color.x!=_Color || c.step==(uint)_Tick)return;
+    c.step=_Tick;
+    if(_Force>0 && distance(c.position,_ForcePosition)<35) { c.velocity+=normalize(_ForcePosition-c.position+float2(.0001,0))*_Force*_Delta;c.flags=0; }
+    if(c.flags==1) { _Cells[i]=c;return; }
+    // A substep never crosses more than .2 cell: disjoint 4x4 colors have disjoint read/write neighborhoods.
+    float2 motion=clamp(c.velocity*_Delta,-.2,.2);
+    float2 target=c.position+motion;
+    if(Free(target,i))
+    {
+        int2 next=(int2)floor(target);
+        _Occupancy[Index(old)]=0;_Occupancy[Index(next)]=(int)i+1;c.position=target;c.flags=0;
+    }
+    else
+    {
+        if(!Inside((int2)floor(target))||!Inside((int2)ceil(target)))c.flags=2; // streamed boundary: retain velocity
+        else {c.velocity*=-.4;if(length(c.velocity)<.02)c.flags=1;}
+    }
+    _Cells[i]=c;
+}
+[numthreads(1,1,1)]
+void Inspect(uint3 id:SV_DispatchThreadID)
+{
+    int2 p=_InspectPosition;uint m=0;
+    if(Inside(p)) {m=_Field[Address(p)];int slot=_Occupancy[Index(p)];if(m==0&&slot>0)m=_Cells[slot-1].material;}
+    _Inspection[0]=m;
+}
+[numthreads(64,1,1)]
+void RestoreOccupancy(uint3 id:SV_DispatchThreadID)
+{
+    if(id.x>=_Counters[0])return;
+    Cell c=_Cells[id.x];int2 p=(int2)floor(c.position);if(Inside(p))_Occupancy[Index(p)]=(int)id.x+1;
+}

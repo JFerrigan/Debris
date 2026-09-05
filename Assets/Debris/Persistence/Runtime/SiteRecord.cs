@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using Debris.Core;
 using Debris.World;
 
-namespace Debris.Persistence;
+namespace Debris.Persistence
+{
 
 [Serializable]
 public sealed class SiteRecord
@@ -40,4 +41,6 @@ public sealed class ChangedChunkRecord
         CompressedPayload = compressedPayload;
         IntegrityHash = integrityHash;
     }
+}
+
 }

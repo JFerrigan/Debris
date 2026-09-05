@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3704f06b4b45c4f1fac9ae7a0bb37db7, type: 3}
+  m_Name: iron
+  m_EditorClassIdentifier: Debris.Materials::Debris.Materials.MaterialDefinition
+  materialKey: iron
+  baseColor: {r: 0.5, g: 0.59, b: 0.62, a: 1}
+  shadowColor: {r: 0.275, g: 0.3245, b: 0.34100002, a: 0.55}
+  emissiveColor: {r: 0, g: 0, b: 0, a: 1}
+  emissiveIntensity: 0
+  durability: 1.4
+  density: 1.3
+  unitValue: 5

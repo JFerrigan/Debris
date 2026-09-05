@@ -1,6 +1,7 @@
 using UnityEngine;
 
-namespace Debris.Sites;
+namespace Debris.Sites
+{
 
 public enum SiteCommandType : byte { CutterStroke, SuctionVolume, CargoIntake, SetComponentState }
 
@@ -23,4 +24,6 @@ public readonly struct SiteCommand
         Strength = strength;
         SourceId = sourceId;
     }
+}
+
 }

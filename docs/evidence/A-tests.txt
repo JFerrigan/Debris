@@ -1,0 +1,18 @@
+Command: bash tools/unity.sh test
+Unity 6000.3.11f1 / Metal / macOS arm64
+{'id': '2', 'testcasecount': '15', 'result': 'Passed', 'total': '15', 'passed': '15', 'failed': '0', 'inconclusive': '0', 'skipped': '0', 'asserts': '0', 'engine-version': '3.5.0.0', 'clr-version': '4.0.30319.42000', 'start-time': '2026-09-05 20:23:32Z', 'end-time': '2026-09-05 20:23:33Z', 'duration': '0.5390255'}
+Debris.Core.Tests.ContentTests.GeneratedChunkMatchesSubchunksAndSiteIdentityChangesGeometry Passed
+Debris.Core.Tests.ContentTests.IdAndCoordinateValidation Passed
+Debris.Core.Tests.ContentTests.InvalidCatalogAndWeightsFailBeforeGeneration Passed
+Debris.Core.Tests.ContentTests.RandomRangeNeverIncludesUpperBound Passed
+Debris.Core.Tests.DeterministicFoundationTests.ChunkCoordinates_FloorDivideNegativeCells(-1,-1) Passed
+Debris.Core.Tests.DeterministicFoundationTests.ChunkCoordinates_FloorDivideNegativeCells(-128,-1) Passed
+Debris.Core.Tests.DeterministicFoundationTests.ChunkCoordinates_FloorDivideNegativeCells(-129,-2) Passed
+Debris.Core.Tests.DeterministicFoundationTests.ChunkCoordinates_FloorDivideNegativeCells(128,1) Passed
+Debris.Core.Tests.DeterministicFoundationTests.PurposeSeed_IsStableAndPurposeScoped Passed
+Debris.Ships.Tests.CargoGridTests.CargoStoresOnlyOneMaterialPerVisibleCavityCell Passed
+Debris.Simulation.Tests.MatterTests.CuttingMatchesCpuReferenceAndSaturationRetainsMatter Passed
+Debris.Simulation.Tests.MatterTests.InspectionIsAsynchronousAndReturnsMaterial Passed
+Debris.Simulation.Tests.MatterTests.MovingCellsDoNotOverlapTerrainOrEachOther Passed
+Debris.Simulation.Tests.MatterTests.PageEvictionAndResumePreservesDamageAndEveryCell Passed
+Debris.Simulation.Tests.MatterTests.ShaderLayoutIsExactly32Bytes Passed

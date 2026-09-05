@@ -2,14 +2,15 @@ using Debris.Core;
 using Debris.World;
 using NUnit.Framework;
 
-namespace Debris.Core.Tests;
+namespace Debris.Core.Tests
+{
 
 public sealed class DeterministicFoundationTests
 {
     [Test]
     public void PurposeSeed_IsStableAndPurposeScoped()
     {
-        var id = new StableId("a1b2c3");
+        var id = new StableId("a1b2c300000000000000000000000001");
         var first = DeterministicRandom.Seed(42, id, "asteroid");
         var second = DeterministicRandom.Seed(42, id, "asteroid");
         var otherPurpose = DeterministicRandom.Seed(42, id, "contact");
@@ -26,4 +27,6 @@ public sealed class DeterministicFoundationTests
     {
         Assert.That(ChunkCoord.FromCell(cell, 0, 128).X, Is.EqualTo(expectedChunk));
     }
+}
+
 }

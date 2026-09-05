@@ -17,16 +17,16 @@ Authorized scope: implement phases A–E in order through playable alien-drone e
 
 - [x] P0.1 Preserve this handoff, link project plan, remove Phase-A-only stop rule.
 - [x] P0.2 Add stable implementation checklists to subsystem documents; separate documented/implemented/verified/blocked status.
-- [ ] P0.3 Record environment, reconcile design conflicts, commit/push planning baseline.
+- [x] P0.3 Record environment, reconcile design conflicts, commit/push planning baseline.
 
 ## Phase A — engine foundation and simulation proof
 
-- [ ] A.1 / M0 Validate Unity, pin packages/editor, fix C# compatibility, reproduce editor/test commands.
+- [x] A.1 / M0 Validate Unity, pin packages/editor, fix C# compatibility, reproduce editor/test commands.
 - [ ] A.2 / M0 Configure URP, input actions, bootstrap, showcase, content validation, diagnostics.
-- [ ] A.3 / M1 Verify IDs, RNG, coordinates, material catalog, asteroid generation.
+- [x] A.3 / M1 Verify IDs, RNG, coordinates, material catalog, asteroid generation.
 - [ ] A.4 / M2 Chunk allocation, rendering, dirty updates, asynchronous name/value inspection.
 - [ ] A.5 / M3 Fixed-step cutting, loose allocation, occupancy/collision, sleeping/streaming, lossless overflow.
-- [ ] A.6 / M3 Shader layouts and CPU reference fixtures.
+- [x] A.6 / M3 Shader layouts and CPU reference fixtures.
 - [ ] A.GATE Runnable Mac showcase cuts asteroid with material accounting, CPU/GPU frame and memory measurements. Saturation throttles without deleting cells. Record scaling before approving active budget.
 
 ## Phase B — physical ship and persistent salvage

@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
 
-namespace Debris.Ships;
+namespace Debris.Ships
+{
 
 /// <summary>
 /// Fixed-volume cavity occupancy index. The GPU loose-cell simulation owns continuous
@@ -49,4 +50,6 @@ public readonly struct CargoCell : IEquatable<CargoCell>
     public bool Equals(CargoCell other) => X == other.X && Y == other.Y;
     public override bool Equals(object obj) => obj is CargoCell other && Equals(other);
     public override int GetHashCode() => HashCode.Combine(X, Y);
+}
+
 }

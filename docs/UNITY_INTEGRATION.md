@@ -115,6 +115,21 @@ Prefer small changes scoped to one module/content asset. Avoid editing a broad s
 
 IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
-- [ ] A.1 Editor/packages/test commands.
+- [x] A.1 Editor/packages/test commands.
 - [ ] A.2 URP/input/bootstrap/showcase/validation.
 - [ ] C.6 Platform builds.
+
+## Reproducible commands (installed editor)
+
+Run from the repository using bash, avoiding unrelated user shell startup scripts:
+
+```sh
+bash tools/unity.sh setup
+bash tools/unity.sh test
+bash tools/unity.sh build
+bash tools/unity.sh open
+```
+
+The script pins Unity 6000.3.11f1. Setup is idempotent and retains existing authored assets/scenes. Tests write Logs/editmode.xml; setup/tests/build each have a log under Logs. The standalone benchmark is `Builds/Debris.app/Contents/MacOS/Debris -debrisBenchmark -logFile Logs/player.log`. Close the Debris editor before running batch commands against this project; other projects are independent.
+
+The showcase uses camera scale in simulation-cell units. Presentation conversion to the planned 0.125-metre physical scale remains explicit work for ship integration. FMOD integration is not installed; audio remains Phase E.

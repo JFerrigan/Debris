@@ -2,13 +2,23 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Debris.Materials;
+namespace Debris.Materials
+{
 
 [CreateAssetMenu(menuName = "Debris/Materials/Material Catalog")]
 public sealed class MaterialCatalog : ScriptableObject
 {
     [SerializeField] private MaterialDefinition[] definitions = Array.Empty<MaterialDefinition>();
     private Dictionary<string, ushort> _indices;
+    public int Count => definitions.Length;
+
+    public void Configure(MaterialDefinition[] values)
+    {
+        definitions = (MaterialDefinition[])values.Clone(); _indices = null; Validate();
+    }
+
+    private void OnValidate() => _indices = null;
+    public void Validate() { _indices = null; BuildIndex(); }
 
     public ushort IndexOf(string materialKey)
     {
@@ -24,13 +34,19 @@ public sealed class MaterialCatalog : ScriptableObject
     private void BuildIndex()
     {
         if (_indices != null) return;
-        _indices = new Dictionary<string, ushort>(StringComparer.Ordinal);
-        for (ushort i = 0; i < definitions.Length; i++)
+        if (definitions.Length == 0 || definitions.Length > ushort.MaxValue)
+            throw new InvalidOperationException("Catalog needs 1..65535 materials.");
+        var indices = new Dictionary<string, ushort>(StringComparer.Ordinal);
+        for (int i = 0; i < definitions.Length; i++)
         {
             var definition = definitions[i];
-            if (definition == null || string.IsNullOrWhiteSpace(definition.MaterialKey)) continue;
-            if (!_indices.TryAdd(definition.MaterialKey, (ushort)(i + 1)))
+            if (definition == null) throw new InvalidOperationException("Catalog contains a null material.");
+            definition.Validate();
+            if (!indices.TryAdd(definition.MaterialKey, (ushort)(i + 1)))
                 throw new InvalidOperationException($"Duplicate material key '{definition.MaterialKey}'.");
         }
+        _indices = indices;
     }
+}
+
 }

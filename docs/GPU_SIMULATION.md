@@ -37,4 +37,14 @@ IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
 - [ ] A.4 Chunk fields/rendering/inspection.
 - [ ] A.5 Fixed-step loose simulation, collision, sleep, overflow.
-- [ ] A.6 CPU/GPU fixtures.
+- [x] A.6 CPU/GPU fixtures.
+
+## Phase A implementation details
+
+`MatterSession` owns 128×128 R32_UInt material and R32_SFloat damage texture-array slices. The page is 2×2 or 4×4 chunks for measured presets. Loose cells use a 32-byte structured record: float2 lower-left position (0), float2 velocity (8), uint material (16), uint identity (20), uint step (24), uint sleep/boundary flags (28). CPU/GPU fixture asserts stride and material offset. The initial float motion encoding is an explicit prototype choice; fixed-point save encoding is not yet implemented or cross-GPU certified.
+
+Cut commands have maximum radius 16 and execute in order, accumulating allocation and throttle counters locally. Capacity is reserved before clearing the fixed cell. This bounded serial tool pass is separate from parallel loose-cell work. Durability accumulates at 60 Hz; saturated work keeps material intact.
+
+Loose motion uses 16 spatial colors. Each source bucket updates once per tick, moves at most .2 cell per step, and checks exact square overlap against nearby fixed and loose cells. Separated colors avoid conflicting occupancy writes. Collision damping can sleep a cell without deleting its record or velocity; boundary suspension retains velocity. This is a conservative prototype solver with a speed cap, not certification for moving/rotating hulls (B.3).
+
+`SnapshotAsync` fences mutation, reads authoritative fields/damage/cells/counters, and supports disposing then restoring a page exactly. Inspection and compact metrics are asynchronous; normal gameplay never synchronously reads a field. Page-level eviction is tested; large-world incremental dirty-chunk streaming remains B.4/B.5. Unity's [AsyncGPUReadback API](https://docs.unity3d.com/6000.0/ScriptReference/Rendering.AsyncGPUReadback.html) defines the readback boundary.

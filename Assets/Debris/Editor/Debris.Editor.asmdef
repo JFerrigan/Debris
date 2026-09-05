@@ -1,0 +1,1 @@
+{"name":"Debris.Editor","references":["Debris.Core","Debris.World","Debris.Materials","Debris.Sites","Debris.Presentation","Unity.RenderPipelines.Universal.Runtime","Unity.RenderPipelines.Core.Runtime","Unity.InputSystem"],"includePlatforms":["Editor"]}

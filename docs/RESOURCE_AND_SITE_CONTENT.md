@@ -72,7 +72,7 @@ New resources are added through MaterialDefinition assets and catalog validation
 
 IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
-- [ ] A.3 Starter materials/asteroid.
+- [x] A.3 Starter materials/asteroid.
 - [ ] C.1 Planet contacts.
 - [ ] D.4 Temporal stock.
 - [ ] E.1 Alien resources/equipment.
