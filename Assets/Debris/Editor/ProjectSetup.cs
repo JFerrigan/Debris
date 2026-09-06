@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using Debris.Materials;
 using Debris.Sites;
+using Debris.Ships;
 using Debris.Presentation;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -56,6 +57,8 @@ namespace Debris.Editor
                 map.AddAction("Move",InputActionType.Value,expectedControlLayout:"Vector2").AddCompositeBinding("2DVector").With("Up","<Keyboard>/w").With("Down","<Keyboard>/s").With("Left","<Keyboard>/a").With("Right","<Keyboard>/d");
                 File.WriteAllText("Assets/Content/Resources/Debris.inputactions", input.ToJson()); UnityEngine.Object.DestroyImmediate(input);
             }
+            if (!AssetDatabase.LoadAssetAtPath<ShipBlueprint>("Assets/Content/Resources/StarterShip.asset"))
+                AssetDatabase.CreateAsset(ShipBlueprint.Starter(catalog.IndexOf("iron")),"Assets/Content/Resources/StarterShip.asset");
             string[] scenes={"Bootstrap","DevShowcase"};
             foreach(var name in scenes)
             {

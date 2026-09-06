@@ -1,5 +1,8 @@
 {
   "name": "Debris.Ships",
   "rootNamespace": "Debris.Ships",
-  "references": ["Debris.Materials"]
+  "references": [
+    "Debris.Materials",
+    "Debris.Core"
+  ]
 }

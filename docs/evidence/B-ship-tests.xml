@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="8" result="Passed" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-09-06 07:04:43Z" end-time="2026-09-06 07:04:43Z" duration="0.07409">
+  <test-suite type="TestSuite" id="1000" name="Debris" fullname="Debris" runstate="Runnable" testcasecount="22" result="Passed" start-time="2026-09-06 07:04:43Z" end-time="2026-09-06 07:04:43Z" duration="0.074090" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="1027" name="Debris.Ships.Tests.dll" fullname="/Users/jakeferrigan/Documents/Debris/Library/ScriptAssemblies/Debris.Ships.Tests.dll" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-09-06 07:04:43Z" end-time="2026-09-06 07:04:43Z" duration="0.070798" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="2209" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="1028" name="Debris" fullname="Debris" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-09-06 07:04:43Z" end-time="2026-09-06 07:04:43Z" duration="0.070525" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1029" name="Ships" fullname="Debris.Ships" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-09-06 07:04:43Z" end-time="2026-09-06 07:04:43Z" duration="0.070259" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="1030" name="Tests" fullname="Debris.Ships.Tests" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-09-06 07:04:43Z" end-time="2026-09-06 07:04:43Z" duration="0.064231" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1017" name="CargoGridTests" fullname="Debris.Ships.Tests.CargoGridTests" classname="Debris.Ships.Tests.CargoGridTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-09-06 07:04:43Z" end-time="2026-09-06 07:04:43Z" duration="0.011754" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1018" name="CargoStoresOnlyOneMaterialPerVisibleCavityCell" fullname="Debris.Ships.Tests.CargoGridTests.CargoStoresOnlyOneMaterialPerVisibleCavityCell" methodname="CargoStoresOnlyOneMaterialPerVisibleCavityCell" classname="Debris.Ships.Tests.CargoGridTests" runstate="Runnable" seed="947406388" result="Passed" start-time="2026-09-06 07:04:43Z" end-time="2026-09-06 07:04:43Z" duration="0.007045" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1019" name="ShipTests" fullname="Debris.Ships.Tests.ShipTests" classname="Debris.Ships.Tests.ShipTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-09-06 07:04:43Z" end-time="2026-09-06 07:04:43Z" duration="0.051896" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1022" name="CargoMassReducesAccelerationAndFuelCannotUnderflow" fullname="Debris.Ships.Tests.ShipTests.CargoMassReducesAccelerationAndFuelCannotUnderflow" methodname="CargoMassReducesAccelerationAndFuelCannotUnderflow" classname="Debris.Ships.Tests.ShipTests" runstate="Runnable" seed="1981190174" result="Passed" start-time="2026-09-06 07:04:43Z" end-time="2026-09-06 07:04:43Z" duration="0.007353" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1025" name="DestroyedTankStopsFuelSupplyAndInvalidTimeCannotPoisonMotion" fullname="Debris.Ships.Tests.ShipTests.DestroyedTankStopsFuelSupplyAndInvalidTimeCannotPoisonMotion" methodname="DestroyedTankStopsFuelSupplyAndInvalidTimeCannotPoisonMotion" classname="Debris.Ships.Tests.ShipTests" runstate="Runnable" seed="773587750" result="Passed" start-time="2026-09-06 07:04:43Z" end-time="2026-09-06 07:04:43Z" duration="0.003080" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1023" name="DetachedStructurePersistsAndSeveredThrusterStops" fullname="Debris.Ships.Tests.ShipTests.DetachedStructurePersistsAndSeveredThrusterStops" methodname="DetachedStructurePersistsAndSeveredThrusterStops" classname="Debris.Ships.Tests.ShipTests" runstate="Runnable" seed="406153550" result="Passed" start-time="2026-09-06 07:04:43Z" end-time="2026-09-06 07:04:43Z" duration="0.021353" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1021" name="FailedPrefabPlacementIsAtomic" fullname="Debris.Ships.Tests.ShipTests.FailedPrefabPlacementIsAtomic" methodname="FailedPrefabPlacementIsAtomic" classname="Debris.Ships.Tests.ShipTests" runstate="Runnable" seed="194112843" result="Passed" start-time="2026-09-06 07:04:43Z" end-time="2026-09-06 07:04:43Z" duration="0.002414" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1024" name="LostCommandPreservesInertiaButDisablesControl" fullname="Debris.Ships.Tests.ShipTests.LostCommandPreservesInertiaButDisablesControl" methodname="LostCommandPreservesInertiaButDisablesControl" classname="Debris.Ships.Tests.ShipTests" runstate="Runnable" seed="728622448" result="Passed" start-time="2026-09-06 07:04:43Z" end-time="2026-09-06 07:04:43Z" duration="0.005961" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1026" name="RotatingTransformRoundTripsWithoutScalingCells" fullname="Debris.Ships.Tests.ShipTests.RotatingTransformRoundTripsWithoutScalingCells" methodname="RotatingTransformRoundTripsWithoutScalingCells" classname="Debris.Ships.Tests.ShipTests" runstate="Runnable" seed="910695730" result="Passed" start-time="2026-09-06 07:04:43Z" end-time="2026-09-06 07:04:43Z" duration="0.005571" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1020" name="StarterBlueprintHasRealCavityAndWholeMachinery" fullname="Debris.Ships.Tests.ShipTests.StarterBlueprintHasRealCavityAndWholeMachinery" methodname="StarterBlueprintHasRealCavityAndWholeMachinery" classname="Debris.Ships.Tests.ShipTests" runstate="Runnable" seed="364815092" result="Passed" start-time="2026-09-06 07:04:43Z" end-time="2026-09-06 07:04:43Z" duration="0.004952" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Saving results to: /Users/jakeferrigan/Library/Application Support/JFerrigan/Debris/TestResults.xml
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

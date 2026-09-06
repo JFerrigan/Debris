@@ -18,3 +18,9 @@ IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 - [ ] B.2 Flight/fuel.
 - [ ] B.3 Cargo/damage/fragments.
 - [ ] D.2 Automation.
+
+## M4 data checkpoint
+
+`ShipBlueprint` supports atomic prefab placement, free-drawn structural cells, validated non-overlapping whole-unit footprints and connected structural support. The starter definition is 100 cells long with a 50×50 empty cargo cavity and seven machinery placements. `ShipRuntime` owns unit damage, support, fragments, inertia and finite tank inventory; cargo mass lowers acceleration/turning. Hull topology changes trigger connectivity work, not a per-frame scan. GPU moving-hull/cargo integration and streaming remain unverified; this data checkpoint alone does not complete B.1/B.2/B.3.
+
+Verified data evidence: `docs/evidence/B-ship-tests.xml` (8/8 passed, 2026-09-06). Command loss retains inertia; destroyed tanks cannot supply propulsion. GPU/cargo gates remain unchecked.

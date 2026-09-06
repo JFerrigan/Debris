@@ -1,0 +1,1664 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a06e35e898cfd489984c61a68626e8ee, type: 3}
+  m_Name: StarterShip
+  m_EditorClassIdentifier: Debris.Ships::Debris.Ships.ShipBlueprint
+  Key: starter
+  Structure:
+  - Position: {x: -40, y: 25}
+    Material: 2
+  - Position: {x: -40, y: -28}
+    Material: 2
+  - Position: {x: -40, y: 26}
+    Material: 2
+  - Position: {x: -40, y: -27}
+    Material: 2
+  - Position: {x: -40, y: 27}
+    Material: 2
+  - Position: {x: -40, y: -26}
+    Material: 2
+  - Position: {x: -39, y: 25}
+    Material: 2
+  - Position: {x: -39, y: -28}
+    Material: 2
+  - Position: {x: -39, y: 26}
+    Material: 2
+  - Position: {x: -39, y: -27}
+    Material: 2
+  - Position: {x: -39, y: 27}
+    Material: 2
+  - Position: {x: -39, y: -26}
+    Material: 2
+  - Position: {x: -38, y: 25}
+    Material: 2
+  - Position: {x: -38, y: -28}
+    Material: 2
+  - Position: {x: -38, y: 26}
+    Material: 2
+  - Position: {x: -38, y: -27}
+    Material: 2
+  - Position: {x: -38, y: 27}
+    Material: 2
+  - Position: {x: -38, y: -26}
+    Material: 2
+  - Position: {x: -37, y: 25}
+    Material: 2
+  - Position: {x: -37, y: -28}
+    Material: 2
+  - Position: {x: -37, y: 26}
+    Material: 2
+  - Position: {x: -37, y: -27}
+    Material: 2
+  - Position: {x: -37, y: 27}
+    Material: 2
+  - Position: {x: -37, y: -26}
+    Material: 2
+  - Position: {x: -36, y: 25}
+    Material: 2
+  - Position: {x: -36, y: -28}
+    Material: 2
+  - Position: {x: -36, y: 26}
+    Material: 2
+  - Position: {x: -36, y: -27}
+    Material: 2
+  - Position: {x: -36, y: 27}
+    Material: 2
+  - Position: {x: -36, y: -26}
+    Material: 2
+  - Position: {x: -35, y: 25}
+    Material: 2
+  - Position: {x: -35, y: -28}
+    Material: 2
+  - Position: {x: -35, y: 26}
+    Material: 2
+  - Position: {x: -35, y: -27}
+    Material: 2
+  - Position: {x: -35, y: 27}
+    Material: 2
+  - Position: {x: -35, y: -26}
+    Material: 2
+  - Position: {x: -34, y: 25}
+    Material: 2
+  - Position: {x: -34, y: -28}
+    Material: 2
+  - Position: {x: -34, y: 26}
+    Material: 2
+  - Position: {x: -34, y: -27}
+    Material: 2
+  - Position: {x: -34, y: 27}
+    Material: 2
+  - Position: {x: -34, y: -26}
+    Material: 2
+  - Position: {x: -33, y: 25}
+    Material: 2
+  - Position: {x: -33, y: -28}
+    Material: 2
+  - Position: {x: -33, y: 26}
+    Material: 2
+  - Position: {x: -33, y: -27}
+    Material: 2
+  - Position: {x: -33, y: 27}
+    Material: 2
+  - Position: {x: -33, y: -26}
+    Material: 2
+  - Position: {x: -32, y: 25}
+    Material: 2
+  - Position: {x: -32, y: -28}
+    Material: 2
+  - Position: {x: -32, y: 26}
+    Material: 2
+  - Position: {x: -32, y: -27}
+    Material: 2
+  - Position: {x: -32, y: 27}
+    Material: 2
+  - Position: {x: -32, y: -26}
+    Material: 2
+  - Position: {x: -31, y: 25}
+    Material: 2
+  - Position: {x: -31, y: -28}
+    Material: 2
+  - Position: {x: -31, y: 26}
+    Material: 2
+  - Position: {x: -31, y: -27}
+    Material: 2
+  - Position: {x: -31, y: 27}
+    Material: 2
+  - Position: {x: -31, y: -26}
+    Material: 2
+  - Position: {x: -30, y: 25}
+    Material: 2
+  - Position: {x: -30, y: -28}
+    Material: 2
+  - Position: {x: -30, y: 26}
+    Material: 2
+  - Position: {x: -30, y: -27}
+    Material: 2
+  - Position: {x: -30, y: 27}
+    Material: 2
+  - Position: {x: -30, y: -26}
+    Material: 2
+  - Position: {x: -29, y: 25}
+    Material: 2
+  - Position: {x: -29, y: -28}
+    Material: 2
+  - Position: {x: -29, y: 26}
+    Material: 2
+  - Position: {x: -29, y: -27}
+    Material: 2
+  - Position: {x: -29, y: 27}
+    Material: 2
+  - Position: {x: -29, y: -26}
+    Material: 2
+  - Position: {x: -28, y: 25}
+    Material: 2
+  - Position: {x: -28, y: -28}
+    Material: 2
+  - Position: {x: -28, y: 26}
+    Material: 2
+  - Position: {x: -28, y: -27}
+    Material: 2
+  - Position: {x: -28, y: 27}
+    Material: 2
+  - Position: {x: -28, y: -26}
+    Material: 2
+  - Position: {x: -27, y: 25}
+    Material: 2
+  - Position: {x: -27, y: -28}
+    Material: 2
+  - Position: {x: -27, y: 26}
+    Material: 2
+  - Position: {x: -27, y: -27}
+    Material: 2
+  - Position: {x: -27, y: 27}
+    Material: 2
+  - Position: {x: -27, y: -26}
+    Material: 2
+  - Position: {x: -26, y: 25}
+    Material: 2
+  - Position: {x: -26, y: -28}
+    Material: 2
+  - Position: {x: -26, y: 26}
+    Material: 2
+  - Position: {x: -26, y: -27}
+    Material: 2
+  - Position: {x: -26, y: 27}
+    Material: 2
+  - Position: {x: -26, y: -26}
+    Material: 2
+  - Position: {x: -25, y: 25}
+    Material: 2
+  - Position: {x: -25, y: -28}
+    Material: 2
+  - Position: {x: -25, y: 26}
+    Material: 2
+  - Position: {x: -25, y: -27}
+    Material: 2
+  - Position: {x: -25, y: 27}
+    Material: 2
+  - Position: {x: -25, y: -26}
+    Material: 2
+  - Position: {x: -24, y: 25}
+    Material: 2
+  - Position: {x: -24, y: -28}
+    Material: 2
+  - Position: {x: -24, y: 26}
+    Material: 2
+  - Position: {x: -24, y: -27}
+    Material: 2
+  - Position: {x: -24, y: 27}
+    Material: 2
+  - Position: {x: -24, y: -26}
+    Material: 2
+  - Position: {x: -23, y: 25}
+    Material: 2
+  - Position: {x: -23, y: -28}
+    Material: 2
+  - Position: {x: -23, y: 26}
+    Material: 2
+  - Position: {x: -23, y: -27}
+    Material: 2
+  - Position: {x: -23, y: 27}
+    Material: 2
+  - Position: {x: -23, y: -26}
+    Material: 2
+  - Position: {x: -22, y: 25}
+    Material: 2
+  - Position: {x: -22, y: -28}
+    Material: 2
+  - Position: {x: -22, y: 26}
+    Material: 2
+  - Position: {x: -22, y: -27}
+    Material: 2
+  - Position: {x: -22, y: 27}
+    Material: 2
+  - Position: {x: -22, y: -26}
+    Material: 2
+  - Position: {x: -21, y: 25}
+    Material: 2
+  - Position: {x: -21, y: -28}
+    Material: 2
+  - Position: {x: -21, y: 26}
+    Material: 2
+  - Position: {x: -21, y: -27}
+    Material: 2
+  - Position: {x: -21, y: 27}
+    Material: 2
+  - Position: {x: -21, y: -26}
+    Material: 2
+  - Position: {x: -20, y: 25}
+    Material: 2
+  - Position: {x: -20, y: -28}
+    Material: 2
+  - Position: {x: -20, y: 26}
+    Material: 2
+  - Position: {x: -20, y: -27}
+    Material: 2
+  - Position: {x: -20, y: 27}
+    Material: 2
+  - Position: {x: -20, y: -26}
+    Material: 2
+  - Position: {x: -19, y: 25}
+    Material: 2
+  - Position: {x: -19, y: -28}
+    Material: 2
+  - Position: {x: -19, y: 26}
+    Material: 2
+  - Position: {x: -19, y: -27}
+    Material: 2
+  - Position: {x: -19, y: 27}
+    Material: 2
+  - Position: {x: -19, y: -26}
+    Material: 2
+  - Position: {x: -18, y: 25}
+    Material: 2
+  - Position: {x: -18, y: -28}
+    Material: 2
+  - Position: {x: -18, y: 26}
+    Material: 2
+  - Position: {x: -18, y: -27}
+    Material: 2
+  - Position: {x: -18, y: 27}
+    Material: 2
+  - Position: {x: -18, y: -26}
+    Material: 2
+  - Position: {x: -17, y: 25}
+    Material: 2
+  - Position: {x: -17, y: -28}
+    Material: 2
+  - Position: {x: -17, y: 26}
+    Material: 2
+  - Position: {x: -17, y: -27}
+    Material: 2
+  - Position: {x: -17, y: 27}
+    Material: 2
+  - Position: {x: -17, y: -26}
+    Material: 2
+  - Position: {x: -16, y: 25}
+    Material: 2
+  - Position: {x: -16, y: -28}
+    Material: 2
+  - Position: {x: -16, y: 26}
+    Material: 2
+  - Position: {x: -16, y: -27}
+    Material: 2
+  - Position: {x: -16, y: 27}
+    Material: 2
+  - Position: {x: -16, y: -26}
+    Material: 2
+  - Position: {x: -15, y: 25}
+    Material: 2
+  - Position: {x: -15, y: -28}
+    Material: 2
+  - Position: {x: -15, y: 26}
+    Material: 2
+  - Position: {x: -15, y: -27}
+    Material: 2
+  - Position: {x: -15, y: 27}
+    Material: 2
+  - Position: {x: -15, y: -26}
+    Material: 2
+  - Position: {x: -14, y: 25}
+    Material: 2
+  - Position: {x: -14, y: -28}
+    Material: 2
+  - Position: {x: -14, y: 26}
+    Material: 2
+  - Position: {x: -14, y: -27}
+    Material: 2
+  - Position: {x: -14, y: 27}
+    Material: 2
+  - Position: {x: -14, y: -26}
+    Material: 2
+  - Position: {x: -13, y: 25}
+    Material: 2
+  - Position: {x: -13, y: -28}
+    Material: 2
+  - Position: {x: -13, y: 26}
+    Material: 2
+  - Position: {x: -13, y: -27}
+    Material: 2
+  - Position: {x: -13, y: 27}
+    Material: 2
+  - Position: {x: -13, y: -26}
+    Material: 2
+  - Position: {x: -12, y: 25}
+    Material: 2
+  - Position: {x: -12, y: -28}
+    Material: 2
+  - Position: {x: -12, y: 26}
+    Material: 2
+  - Position: {x: -12, y: -27}
+    Material: 2
+  - Position: {x: -12, y: 27}
+    Material: 2
+  - Position: {x: -12, y: -26}
+    Material: 2
+  - Position: {x: -11, y: 25}
+    Material: 2
+  - Position: {x: -11, y: -28}
+    Material: 2
+  - Position: {x: -11, y: 26}
+    Material: 2
+  - Position: {x: -11, y: -27}
+    Material: 2
+  - Position: {x: -11, y: 27}
+    Material: 2
+  - Position: {x: -11, y: -26}
+    Material: 2
+  - Position: {x: -10, y: 25}
+    Material: 2
+  - Position: {x: -10, y: -28}
+    Material: 2
+  - Position: {x: -10, y: 26}
+    Material: 2
+  - Position: {x: -10, y: -27}
+    Material: 2
+  - Position: {x: -10, y: 27}
+    Material: 2
+  - Position: {x: -10, y: -26}
+    Material: 2
+  - Position: {x: -9, y: 25}
+    Material: 2
+  - Position: {x: -9, y: -28}
+    Material: 2
+  - Position: {x: -9, y: 26}
+    Material: 2
+  - Position: {x: -9, y: -27}
+    Material: 2
+  - Position: {x: -9, y: 27}
+    Material: 2
+  - Position: {x: -9, y: -26}
+    Material: 2
+  - Position: {x: -8, y: 25}
+    Material: 2
+  - Position: {x: -8, y: -28}
+    Material: 2
+  - Position: {x: -8, y: 26}
+    Material: 2
+  - Position: {x: -8, y: -27}
+    Material: 2
+  - Position: {x: -8, y: 27}
+    Material: 2
+  - Position: {x: -8, y: -26}
+    Material: 2
+  - Position: {x: -7, y: 25}
+    Material: 2
+  - Position: {x: -7, y: -28}
+    Material: 2
+  - Position: {x: -7, y: 26}
+    Material: 2
+  - Position: {x: -7, y: -27}
+    Material: 2
+  - Position: {x: -7, y: 27}
+    Material: 2
+  - Position: {x: -7, y: -26}
+    Material: 2
+  - Position: {x: -6, y: 25}
+    Material: 2
+  - Position: {x: -6, y: -28}
+    Material: 2
+  - Position: {x: -6, y: 26}
+    Material: 2
+  - Position: {x: -6, y: -27}
+    Material: 2
+  - Position: {x: -6, y: 27}
+    Material: 2
+  - Position: {x: -6, y: -26}
+    Material: 2
+  - Position: {x: -5, y: 25}
+    Material: 2
+  - Position: {x: -5, y: -28}
+    Material: 2
+  - Position: {x: -5, y: 26}
+    Material: 2
+  - Position: {x: -5, y: -27}
+    Material: 2
+  - Position: {x: -5, y: 27}
+    Material: 2
+  - Position: {x: -5, y: -26}
+    Material: 2
+  - Position: {x: -4, y: 25}
+    Material: 2
+  - Position: {x: -4, y: -28}
+    Material: 2
+  - Position: {x: -4, y: 26}
+    Material: 2
+  - Position: {x: -4, y: -27}
+    Material: 2
+  - Position: {x: -4, y: 27}
+    Material: 2
+  - Position: {x: -4, y: -26}
+    Material: 2
+  - Position: {x: -3, y: 25}
+    Material: 2
+  - Position: {x: -3, y: -28}
+    Material: 2
+  - Position: {x: -3, y: 26}
+    Material: 2
+  - Position: {x: -3, y: -27}
+    Material: 2
+  - Position: {x: -3, y: 27}
+    Material: 2
+  - Position: {x: -3, y: -26}
+    Material: 2
+  - Position: {x: -2, y: 25}
+    Material: 2
+  - Position: {x: -2, y: -28}
+    Material: 2
+  - Position: {x: -2, y: 26}
+    Material: 2
+  - Position: {x: -2, y: -27}
+    Material: 2
+  - Position: {x: -2, y: 27}
+    Material: 2
+  - Position: {x: -2, y: -26}
+    Material: 2
+  - Position: {x: -1, y: 25}
+    Material: 2
+  - Position: {x: -1, y: -28}
+    Material: 2
+  - Position: {x: -1, y: 26}
+    Material: 2
+  - Position: {x: -1, y: -27}
+    Material: 2
+  - Position: {x: -1, y: 27}
+    Material: 2
+  - Position: {x: -1, y: -26}
+    Material: 2
+  - Position: {x: 0, y: 25}
+    Material: 2
+  - Position: {x: 0, y: -28}
+    Material: 2
+  - Position: {x: 0, y: 26}
+    Material: 2
+  - Position: {x: 0, y: -27}
+    Material: 2
+  - Position: {x: 0, y: 27}
+    Material: 2
+  - Position: {x: 0, y: -26}
+    Material: 2
+  - Position: {x: 1, y: 25}
+    Material: 2
+  - Position: {x: 1, y: -28}
+    Material: 2
+  - Position: {x: 1, y: 26}
+    Material: 2
+  - Position: {x: 1, y: -27}
+    Material: 2
+  - Position: {x: 1, y: 27}
+    Material: 2
+  - Position: {x: 1, y: -26}
+    Material: 2
+  - Position: {x: 2, y: 25}
+    Material: 2
+  - Position: {x: 2, y: -28}
+    Material: 2
+  - Position: {x: 2, y: 26}
+    Material: 2
+  - Position: {x: 2, y: -27}
+    Material: 2
+  - Position: {x: 2, y: 27}
+    Material: 2
+  - Position: {x: 2, y: -26}
+    Material: 2
+  - Position: {x: 3, y: 25}
+    Material: 2
+  - Position: {x: 3, y: -28}
+    Material: 2
+  - Position: {x: 3, y: 26}
+    Material: 2
+  - Position: {x: 3, y: -27}
+    Material: 2
+  - Position: {x: 3, y: 27}
+    Material: 2
+  - Position: {x: 3, y: -26}
+    Material: 2
+  - Position: {x: 4, y: 25}
+    Material: 2
+  - Position: {x: 4, y: -28}
+    Material: 2
+  - Position: {x: 4, y: 26}
+    Material: 2
+  - Position: {x: 4, y: -27}
+    Material: 2
+  - Position: {x: 4, y: 27}
+    Material: 2
+  - Position: {x: 4, y: -26}
+    Material: 2
+  - Position: {x: 5, y: 25}
+    Material: 2
+  - Position: {x: 5, y: -28}
+    Material: 2
+  - Position: {x: 5, y: 26}
+    Material: 2
+  - Position: {x: 5, y: -27}
+    Material: 2
+  - Position: {x: 5, y: 27}
+    Material: 2
+  - Position: {x: 5, y: -26}
+    Material: 2
+  - Position: {x: 6, y: 25}
+    Material: 2
+  - Position: {x: 6, y: -28}
+    Material: 2
+  - Position: {x: 6, y: 26}
+    Material: 2
+  - Position: {x: 6, y: -27}
+    Material: 2
+  - Position: {x: 6, y: 27}
+    Material: 2
+  - Position: {x: 6, y: -26}
+    Material: 2
+  - Position: {x: 7, y: 25}
+    Material: 2
+  - Position: {x: 7, y: -28}
+    Material: 2
+  - Position: {x: 7, y: 26}
+    Material: 2
+  - Position: {x: 7, y: -27}
+    Material: 2
+  - Position: {x: 7, y: 27}
+    Material: 2
+  - Position: {x: 7, y: -26}
+    Material: 2
+  - Position: {x: 8, y: 25}
+    Material: 2
+  - Position: {x: 8, y: -28}
+    Material: 2
+  - Position: {x: 8, y: 26}
+    Material: 2
+  - Position: {x: 8, y: -27}
+    Material: 2
+  - Position: {x: 8, y: 27}
+    Material: 2
+  - Position: {x: 8, y: -26}
+    Material: 2
+  - Position: {x: 9, y: 25}
+    Material: 2
+  - Position: {x: 9, y: -28}
+    Material: 2
+  - Position: {x: 9, y: 26}
+    Material: 2
+  - Position: {x: 9, y: -27}
+    Material: 2
+  - Position: {x: 9, y: 27}
+    Material: 2
+  - Position: {x: 9, y: -26}
+    Material: 2
+  - Position: {x: 10, y: 25}
+    Material: 2
+  - Position: {x: 10, y: -28}
+    Material: 2
+  - Position: {x: 10, y: 26}
+    Material: 2
+  - Position: {x: 10, y: -27}
+    Material: 2
+  - Position: {x: 10, y: 27}
+    Material: 2
+  - Position: {x: 10, y: -26}
+    Material: 2
+  - Position: {x: 11, y: 25}
+    Material: 2
+  - Position: {x: 11, y: -28}
+    Material: 2
+  - Position: {x: 11, y: 26}
+    Material: 2
+  - Position: {x: 11, y: -27}
+    Material: 2
+  - Position: {x: 11, y: 27}
+    Material: 2
+  - Position: {x: 11, y: -26}
+    Material: 2
+  - Position: {x: 12, y: 25}
+    Material: 2
+  - Position: {x: 12, y: -28}
+    Material: 2
+  - Position: {x: 12, y: 26}
+    Material: 2
+  - Position: {x: 12, y: -27}
+    Material: 2
+  - Position: {x: 12, y: 27}
+    Material: 2
+  - Position: {x: 12, y: -26}
+    Material: 2
+  - Position: {x: 13, y: 25}
+    Material: 2
+  - Position: {x: 13, y: -28}
+    Material: 2
+  - Position: {x: 13, y: 26}
+    Material: 2
+  - Position: {x: 13, y: -27}
+    Material: 2
+  - Position: {x: 13, y: 27}
+    Material: 2
+  - Position: {x: 13, y: -26}
+    Material: 2
+  - Position: {x: 14, y: 25}
+    Material: 2
+  - Position: {x: 14, y: -28}
+    Material: 2
+  - Position: {x: 14, y: 26}
+    Material: 2
+  - Position: {x: 14, y: -27}
+    Material: 2
+  - Position: {x: 14, y: 27}
+    Material: 2
+  - Position: {x: 14, y: -26}
+    Material: 2
+  - Position: {x: 15, y: 25}
+    Material: 2
+  - Position: {x: 15, y: -28}
+    Material: 2
+  - Position: {x: 15, y: 26}
+    Material: 2
+  - Position: {x: 15, y: -27}
+    Material: 2
+  - Position: {x: 15, y: 27}
+    Material: 2
+  - Position: {x: 15, y: -26}
+    Material: 2
+  - Position: {x: 16, y: 25}
+    Material: 2
+  - Position: {x: 16, y: -28}
+    Material: 2
+  - Position: {x: 16, y: 26}
+    Material: 2
+  - Position: {x: 16, y: -27}
+    Material: 2
+  - Position: {x: 16, y: 27}
+    Material: 2
+  - Position: {x: 16, y: -26}
+    Material: 2
+  - Position: {x: 17, y: 25}
+    Material: 2
+  - Position: {x: 17, y: -28}
+    Material: 2
+  - Position: {x: 17, y: 26}
+    Material: 2
+  - Position: {x: 17, y: -27}
+    Material: 2
+  - Position: {x: 17, y: 27}
+    Material: 2
+  - Position: {x: 17, y: -26}
+    Material: 2
+  - Position: {x: 18, y: 25}
+    Material: 2
+  - Position: {x: 18, y: -28}
+    Material: 2
+  - Position: {x: 18, y: 26}
+    Material: 2
+  - Position: {x: 18, y: -27}
+    Material: 2
+  - Position: {x: 18, y: 27}
+    Material: 2
+  - Position: {x: 18, y: -26}
+    Material: 2
+  - Position: {x: 19, y: 25}
+    Material: 2
+  - Position: {x: 19, y: -28}
+    Material: 2
+  - Position: {x: 19, y: 26}
+    Material: 2
+  - Position: {x: 19, y: -27}
+    Material: 2
+  - Position: {x: 19, y: 27}
+    Material: 2
+  - Position: {x: 19, y: -26}
+    Material: 2
+  - Position: {x: 20, y: 25}
+    Material: 2
+  - Position: {x: 20, y: -28}
+    Material: 2
+  - Position: {x: 20, y: 26}
+    Material: 2
+  - Position: {x: 20, y: -27}
+    Material: 2
+  - Position: {x: 20, y: 27}
+    Material: 2
+  - Position: {x: 20, y: -26}
+    Material: 2
+  - Position: {x: 21, y: 25}
+    Material: 2
+  - Position: {x: 21, y: -28}
+    Material: 2
+  - Position: {x: 21, y: 26}
+    Material: 2
+  - Position: {x: 21, y: -27}
+    Material: 2
+  - Position: {x: 21, y: 27}
+    Material: 2
+  - Position: {x: 21, y: -26}
+    Material: 2
+  - Position: {x: 22, y: 25}
+    Material: 2
+  - Position: {x: 22, y: -28}
+    Material: 2
+  - Position: {x: 22, y: 26}
+    Material: 2
+  - Position: {x: 22, y: -27}
+    Material: 2
+  - Position: {x: 22, y: 27}
+    Material: 2
+  - Position: {x: 22, y: -26}
+    Material: 2
+  - Position: {x: 23, y: 25}
+    Material: 2
+  - Position: {x: 23, y: -28}
+    Material: 2
+  - Position: {x: 23, y: 26}
+    Material: 2
+  - Position: {x: 23, y: -27}
+    Material: 2
+  - Position: {x: 23, y: 27}
+    Material: 2
+  - Position: {x: 23, y: -26}
+    Material: 2
+  - Position: {x: 24, y: 25}
+    Material: 2
+  - Position: {x: 24, y: -28}
+    Material: 2
+  - Position: {x: 24, y: 26}
+    Material: 2
+  - Position: {x: 24, y: -27}
+    Material: 2
+  - Position: {x: 24, y: 27}
+    Material: 2
+  - Position: {x: 24, y: -26}
+    Material: 2
+  - Position: {x: 25, y: 25}
+    Material: 2
+  - Position: {x: 25, y: -28}
+    Material: 2
+  - Position: {x: 25, y: 26}
+    Material: 2
+  - Position: {x: 25, y: -27}
+    Material: 2
+  - Position: {x: 25, y: 27}
+    Material: 2
+  - Position: {x: 25, y: -26}
+    Material: 2
+  - Position: {x: 26, y: 25}
+    Material: 2
+  - Position: {x: 26, y: -28}
+    Material: 2
+  - Position: {x: 26, y: 26}
+    Material: 2
+  - Position: {x: 26, y: -27}
+    Material: 2
+  - Position: {x: 26, y: 27}
+    Material: 2
+  - Position: {x: 26, y: -26}
+    Material: 2
+  - Position: {x: 27, y: 25}
+    Material: 2
+  - Position: {x: 27, y: -28}
+    Material: 2
+  - Position: {x: 27, y: 26}
+    Material: 2
+  - Position: {x: 27, y: -27}
+    Material: 2
+  - Position: {x: 27, y: 27}
+    Material: 2
+  - Position: {x: 27, y: -26}
+    Material: 2
+  - Position: {x: 28, y: 25}
+    Material: 2
+  - Position: {x: 28, y: -28}
+    Material: 2
+  - Position: {x: 28, y: 26}
+    Material: 2
+  - Position: {x: 28, y: -27}
+    Material: 2
+  - Position: {x: 28, y: 27}
+    Material: 2
+  - Position: {x: 28, y: -26}
+    Material: 2
+  - Position: {x: 29, y: 25}
+    Material: 2
+  - Position: {x: 29, y: -28}
+    Material: 2
+  - Position: {x: 29, y: 26}
+    Material: 2
+  - Position: {x: 29, y: -27}
+    Material: 2
+  - Position: {x: 29, y: 27}
+    Material: 2
+  - Position: {x: 29, y: -26}
+    Material: 2
+  - Position: {x: 30, y: 25}
+    Material: 2
+  - Position: {x: 30, y: -28}
+    Material: 2
+  - Position: {x: 30, y: 26}
+    Material: 2
+  - Position: {x: 30, y: -27}
+    Material: 2
+  - Position: {x: 30, y: 27}
+    Material: 2
+  - Position: {x: 30, y: -26}
+    Material: 2
+  - Position: {x: 31, y: 25}
+    Material: 2
+  - Position: {x: 31, y: -28}
+    Material: 2
+  - Position: {x: 31, y: 26}
+    Material: 2
+  - Position: {x: 31, y: -27}
+    Material: 2
+  - Position: {x: 31, y: 27}
+    Material: 2
+  - Position: {x: 31, y: -26}
+    Material: 2
+  - Position: {x: 32, y: 25}
+    Material: 2
+  - Position: {x: 32, y: -28}
+    Material: 2
+  - Position: {x: 32, y: 26}
+    Material: 2
+  - Position: {x: 32, y: -27}
+    Material: 2
+  - Position: {x: 32, y: 27}
+    Material: 2
+  - Position: {x: 32, y: -26}
+    Material: 2
+  - Position: {x: 33, y: 25}
+    Material: 2
+  - Position: {x: 33, y: -28}
+    Material: 2
+  - Position: {x: 33, y: 26}
+    Material: 2
+  - Position: {x: 33, y: -27}
+    Material: 2
+  - Position: {x: 33, y: 27}
+    Material: 2
+  - Position: {x: 33, y: -26}
+    Material: 2
+  - Position: {x: 34, y: 25}
+    Material: 2
+  - Position: {x: 34, y: -28}
+    Material: 2
+  - Position: {x: 34, y: 26}
+    Material: 2
+  - Position: {x: 34, y: -27}
+    Material: 2
+  - Position: {x: 34, y: 27}
+    Material: 2
+  - Position: {x: 34, y: -26}
+    Material: 2
+  - Position: {x: 35, y: 25}
+    Material: 2
+  - Position: {x: 35, y: -28}
+    Material: 2
+  - Position: {x: 35, y: 26}
+    Material: 2
+  - Position: {x: 35, y: -27}
+    Material: 2
+  - Position: {x: 35, y: 27}
+    Material: 2
+  - Position: {x: 35, y: -26}
+    Material: 2
+  - Position: {x: 36, y: 25}
+    Material: 2
+  - Position: {x: 36, y: -28}
+    Material: 2
+  - Position: {x: 36, y: 26}
+    Material: 2
+  - Position: {x: 36, y: -27}
+    Material: 2
+  - Position: {x: 36, y: 27}
+    Material: 2
+  - Position: {x: 36, y: -26}
+    Material: 2
+  - Position: {x: 37, y: 25}
+    Material: 2
+  - Position: {x: 37, y: -28}
+    Material: 2
+  - Position: {x: 37, y: 26}
+    Material: 2
+  - Position: {x: 37, y: -27}
+    Material: 2
+  - Position: {x: 37, y: 27}
+    Material: 2
+  - Position: {x: 37, y: -26}
+    Material: 2
+  - Position: {x: 38, y: 25}
+    Material: 2
+  - Position: {x: 38, y: -28}
+    Material: 2
+  - Position: {x: 38, y: 26}
+    Material: 2
+  - Position: {x: 38, y: -27}
+    Material: 2
+  - Position: {x: 38, y: 27}
+    Material: 2
+  - Position: {x: 38, y: -26}
+    Material: 2
+  - Position: {x: 25, y: -25}
+    Material: 2
+  - Position: {x: 25, y: -24}
+    Material: 2
+  - Position: {x: 25, y: -23}
+    Material: 2
+  - Position: {x: 25, y: -22}
+    Material: 2
+  - Position: {x: 25, y: -21}
+    Material: 2
+  - Position: {x: 25, y: -20}
+    Material: 2
+  - Position: {x: 25, y: -19}
+    Material: 2
+  - Position: {x: 25, y: -18}
+    Material: 2
+  - Position: {x: 25, y: -17}
+    Material: 2
+  - Position: {x: 25, y: -16}
+    Material: 2
+  - Position: {x: 25, y: -15}
+    Material: 2
+  - Position: {x: 25, y: -14}
+    Material: 2
+  - Position: {x: 25, y: -13}
+    Material: 2
+  - Position: {x: 25, y: -12}
+    Material: 2
+  - Position: {x: 25, y: -11}
+    Material: 2
+  - Position: {x: 25, y: -10}
+    Material: 2
+  - Position: {x: 25, y: -9}
+    Material: 2
+  - Position: {x: 25, y: -8}
+    Material: 2
+  - Position: {x: 25, y: -7}
+    Material: 2
+  - Position: {x: 25, y: -6}
+    Material: 2
+  - Position: {x: 25, y: -5}
+    Material: 2
+  - Position: {x: 25, y: -4}
+    Material: 2
+  - Position: {x: 25, y: -3}
+    Material: 2
+  - Position: {x: 25, y: -2}
+    Material: 2
+  - Position: {x: 25, y: -1}
+    Material: 2
+  - Position: {x: 25, y: 0}
+    Material: 2
+  - Position: {x: 25, y: 1}
+    Material: 2
+  - Position: {x: 25, y: 2}
+    Material: 2
+  - Position: {x: 25, y: 3}
+    Material: 2
+  - Position: {x: 25, y: 4}
+    Material: 2
+  - Position: {x: 25, y: 5}
+    Material: 2
+  - Position: {x: 25, y: 6}
+    Material: 2
+  - Position: {x: 25, y: 7}
+    Material: 2
+  - Position: {x: 25, y: 8}
+    Material: 2
+  - Position: {x: 25, y: 9}
+    Material: 2
+  - Position: {x: 25, y: 10}
+    Material: 2
+  - Position: {x: 25, y: 11}
+    Material: 2
+  - Position: {x: 25, y: 12}
+    Material: 2
+  - Position: {x: 25, y: 13}
+    Material: 2
+  - Position: {x: 25, y: 14}
+    Material: 2
+  - Position: {x: 25, y: 15}
+    Material: 2
+  - Position: {x: 25, y: 16}
+    Material: 2
+  - Position: {x: 25, y: 17}
+    Material: 2
+  - Position: {x: 25, y: 18}
+    Material: 2
+  - Position: {x: 25, y: 19}
+    Material: 2
+  - Position: {x: 25, y: 20}
+    Material: 2
+  - Position: {x: 25, y: 21}
+    Material: 2
+  - Position: {x: 25, y: 22}
+    Material: 2
+  - Position: {x: 25, y: 23}
+    Material: 2
+  - Position: {x: 25, y: 24}
+    Material: 2
+  - Position: {x: 26, y: -25}
+    Material: 2
+  - Position: {x: 26, y: -24}
+    Material: 2
+  - Position: {x: 26, y: -23}
+    Material: 2
+  - Position: {x: 26, y: -22}
+    Material: 2
+  - Position: {x: 26, y: -21}
+    Material: 2
+  - Position: {x: 26, y: -20}
+    Material: 2
+  - Position: {x: 26, y: -19}
+    Material: 2
+  - Position: {x: 26, y: -18}
+    Material: 2
+  - Position: {x: 26, y: -17}
+    Material: 2
+  - Position: {x: 26, y: -16}
+    Material: 2
+  - Position: {x: 26, y: -15}
+    Material: 2
+  - Position: {x: 26, y: -14}
+    Material: 2
+  - Position: {x: 26, y: -13}
+    Material: 2
+  - Position: {x: 26, y: -12}
+    Material: 2
+  - Position: {x: 26, y: -11}
+    Material: 2
+  - Position: {x: 26, y: -10}
+    Material: 2
+  - Position: {x: 26, y: -9}
+    Material: 2
+  - Position: {x: 26, y: -8}
+    Material: 2
+  - Position: {x: 26, y: -7}
+    Material: 2
+  - Position: {x: 26, y: -6}
+    Material: 2
+  - Position: {x: 26, y: -5}
+    Material: 2
+  - Position: {x: 26, y: -4}
+    Material: 2
+  - Position: {x: 26, y: -3}
+    Material: 2
+  - Position: {x: 26, y: -2}
+    Material: 2
+  - Position: {x: 26, y: -1}
+    Material: 2
+  - Position: {x: 26, y: 0}
+    Material: 2
+  - Position: {x: 26, y: 1}
+    Material: 2
+  - Position: {x: 26, y: 2}
+    Material: 2
+  - Position: {x: 26, y: 3}
+    Material: 2
+  - Position: {x: 26, y: 4}
+    Material: 2
+  - Position: {x: 26, y: 5}
+    Material: 2
+  - Position: {x: 26, y: 6}
+    Material: 2
+  - Position: {x: 26, y: 7}
+    Material: 2
+  - Position: {x: 26, y: 8}
+    Material: 2
+  - Position: {x: 26, y: 9}
+    Material: 2
+  - Position: {x: 26, y: 10}
+    Material: 2
+  - Position: {x: 26, y: 11}
+    Material: 2
+  - Position: {x: 26, y: 12}
+    Material: 2
+  - Position: {x: 26, y: 13}
+    Material: 2
+  - Position: {x: 26, y: 14}
+    Material: 2
+  - Position: {x: 26, y: 15}
+    Material: 2
+  - Position: {x: 26, y: 16}
+    Material: 2
+  - Position: {x: 26, y: 17}
+    Material: 2
+  - Position: {x: 26, y: 18}
+    Material: 2
+  - Position: {x: 26, y: 19}
+    Material: 2
+  - Position: {x: 26, y: 20}
+    Material: 2
+  - Position: {x: 26, y: 21}
+    Material: 2
+  - Position: {x: 26, y: 22}
+    Material: 2
+  - Position: {x: 26, y: 23}
+    Material: 2
+  - Position: {x: 26, y: 24}
+    Material: 2
+  - Position: {x: 27, y: -25}
+    Material: 2
+  - Position: {x: 27, y: -24}
+    Material: 2
+  - Position: {x: 27, y: -23}
+    Material: 2
+  - Position: {x: 27, y: -22}
+    Material: 2
+  - Position: {x: 27, y: -21}
+    Material: 2
+  - Position: {x: 27, y: -20}
+    Material: 2
+  - Position: {x: 27, y: -19}
+    Material: 2
+  - Position: {x: 27, y: -18}
+    Material: 2
+  - Position: {x: 27, y: -17}
+    Material: 2
+  - Position: {x: 27, y: -16}
+    Material: 2
+  - Position: {x: 27, y: -15}
+    Material: 2
+  - Position: {x: 27, y: -14}
+    Material: 2
+  - Position: {x: 27, y: -13}
+    Material: 2
+  - Position: {x: 27, y: -12}
+    Material: 2
+  - Position: {x: 27, y: -11}
+    Material: 2
+  - Position: {x: 27, y: -10}
+    Material: 2
+  - Position: {x: 27, y: -9}
+    Material: 2
+  - Position: {x: 27, y: -8}
+    Material: 2
+  - Position: {x: 27, y: -7}
+    Material: 2
+  - Position: {x: 27, y: -6}
+    Material: 2
+  - Position: {x: 27, y: -5}
+    Material: 2
+  - Position: {x: 27, y: -4}
+    Material: 2
+  - Position: {x: 27, y: -3}
+    Material: 2
+  - Position: {x: 27, y: -2}
+    Material: 2
+  - Position: {x: 27, y: -1}
+    Material: 2
+  - Position: {x: 27, y: 0}
+    Material: 2
+  - Position: {x: 27, y: 1}
+    Material: 2
+  - Position: {x: 27, y: 2}
+    Material: 2
+  - Position: {x: 27, y: 3}
+    Material: 2
+  - Position: {x: 27, y: 4}
+    Material: 2
+  - Position: {x: 27, y: 5}
+    Material: 2
+  - Position: {x: 27, y: 6}
+    Material: 2
+  - Position: {x: 27, y: 7}
+    Material: 2
+  - Position: {x: 27, y: 8}
+    Material: 2
+  - Position: {x: 27, y: 9}
+    Material: 2
+  - Position: {x: 27, y: 10}
+    Material: 2
+  - Position: {x: 27, y: 11}
+    Material: 2
+  - Position: {x: 27, y: 12}
+    Material: 2
+  - Position: {x: 27, y: 13}
+    Material: 2
+  - Position: {x: 27, y: 14}
+    Material: 2
+  - Position: {x: 27, y: 15}
+    Material: 2
+  - Position: {x: 27, y: 16}
+    Material: 2
+  - Position: {x: 27, y: 17}
+    Material: 2
+  - Position: {x: 27, y: 18}
+    Material: 2
+  - Position: {x: 27, y: 19}
+    Material: 2
+  - Position: {x: 27, y: 20}
+    Material: 2
+  - Position: {x: 27, y: 21}
+    Material: 2
+  - Position: {x: 27, y: 22}
+    Material: 2
+  - Position: {x: 27, y: 23}
+    Material: 2
+  - Position: {x: 27, y: 24}
+    Material: 2
+  - Position: {x: 28, y: -25}
+    Material: 2
+  - Position: {x: 28, y: -24}
+    Material: 2
+  - Position: {x: 28, y: -23}
+    Material: 2
+  - Position: {x: 28, y: -22}
+    Material: 2
+  - Position: {x: 28, y: -21}
+    Material: 2
+  - Position: {x: 28, y: -20}
+    Material: 2
+  - Position: {x: 28, y: -19}
+    Material: 2
+  - Position: {x: 28, y: -18}
+    Material: 2
+  - Position: {x: 28, y: -17}
+    Material: 2
+  - Position: {x: 28, y: -16}
+    Material: 2
+  - Position: {x: 28, y: -15}
+    Material: 2
+  - Position: {x: 28, y: -14}
+    Material: 2
+  - Position: {x: 28, y: -13}
+    Material: 2
+  - Position: {x: 28, y: -12}
+    Material: 2
+  - Position: {x: 28, y: -11}
+    Material: 2
+  - Position: {x: 28, y: -10}
+    Material: 2
+  - Position: {x: 28, y: -9}
+    Material: 2
+  - Position: {x: 28, y: -8}
+    Material: 2
+  - Position: {x: 28, y: -7}
+    Material: 2
+  - Position: {x: 28, y: -6}
+    Material: 2
+  - Position: {x: 28, y: -5}
+    Material: 2
+  - Position: {x: 28, y: -4}
+    Material: 2
+  - Position: {x: 28, y: -3}
+    Material: 2
+  - Position: {x: 28, y: -2}
+    Material: 2
+  - Position: {x: 28, y: -1}
+    Material: 2
+  - Position: {x: 28, y: 0}
+    Material: 2
+  - Position: {x: 28, y: 1}
+    Material: 2
+  - Position: {x: 28, y: 2}
+    Material: 2
+  - Position: {x: 28, y: 3}
+    Material: 2
+  - Position: {x: 28, y: 4}
+    Material: 2
+  - Position: {x: 28, y: 5}
+    Material: 2
+  - Position: {x: 28, y: 6}
+    Material: 2
+  - Position: {x: 28, y: 7}
+    Material: 2
+  - Position: {x: 28, y: 8}
+    Material: 2
+  - Position: {x: 28, y: 9}
+    Material: 2
+  - Position: {x: 28, y: 10}
+    Material: 2
+  - Position: {x: 28, y: 11}
+    Material: 2
+  - Position: {x: 28, y: 12}
+    Material: 2
+  - Position: {x: 28, y: 13}
+    Material: 2
+  - Position: {x: 28, y: 14}
+    Material: 2
+  - Position: {x: 28, y: 15}
+    Material: 2
+  - Position: {x: 28, y: 16}
+    Material: 2
+  - Position: {x: 28, y: 17}
+    Material: 2
+  - Position: {x: 28, y: 18}
+    Material: 2
+  - Position: {x: 28, y: 19}
+    Material: 2
+  - Position: {x: 28, y: 20}
+    Material: 2
+  - Position: {x: 28, y: 21}
+    Material: 2
+  - Position: {x: 28, y: 22}
+    Material: 2
+  - Position: {x: 28, y: 23}
+    Material: 2
+  - Position: {x: 28, y: 24}
+    Material: 2
+  - Position: {x: 39, y: 25}
+    Material: 2
+  - Position: {x: 39, y: 26}
+    Material: 2
+  - Position: {x: 39, y: 27}
+    Material: 2
+  - Position: {x: 40, y: 25}
+    Material: 2
+  - Position: {x: 40, y: 26}
+    Material: 2
+  - Position: {x: 40, y: 27}
+    Material: 2
+  - Position: {x: 41, y: 25}
+    Material: 2
+  - Position: {x: 41, y: 26}
+    Material: 2
+  - Position: {x: 41, y: 27}
+    Material: 2
+  - Position: {x: 42, y: 25}
+    Material: 2
+  - Position: {x: 42, y: 26}
+    Material: 2
+  - Position: {x: 42, y: 27}
+    Material: 2
+  - Position: {x: 43, y: 25}
+    Material: 2
+  - Position: {x: 43, y: 26}
+    Material: 2
+  - Position: {x: 43, y: 27}
+    Material: 2
+  - Position: {x: 44, y: 25}
+    Material: 2
+  - Position: {x: 44, y: 26}
+    Material: 2
+  - Position: {x: 44, y: 27}
+    Material: 2
+  - Position: {x: 45, y: 25}
+    Material: 2
+  - Position: {x: 45, y: 26}
+    Material: 2
+  - Position: {x: 45, y: 27}
+    Material: 2
+  - Position: {x: 46, y: 25}
+    Material: 2
+  - Position: {x: 46, y: 26}
+    Material: 2
+  - Position: {x: 46, y: 27}
+    Material: 2
+  - Position: {x: 47, y: 25}
+    Material: 2
+  - Position: {x: 47, y: 26}
+    Material: 2
+  - Position: {x: 47, y: 27}
+    Material: 2
+  - Position: {x: 48, y: 25}
+    Material: 2
+  - Position: {x: 48, y: 26}
+    Material: 2
+  - Position: {x: 48, y: 27}
+    Material: 2
+  - Position: {x: 49, y: 25}
+    Material: 2
+  - Position: {x: 49, y: 26}
+    Material: 2
+  - Position: {x: 49, y: 27}
+    Material: 2
+  - Position: {x: 50, y: 25}
+    Material: 2
+  - Position: {x: 50, y: 26}
+    Material: 2
+  - Position: {x: 50, y: 27}
+    Material: 2
+  - Position: {x: 51, y: 25}
+    Material: 2
+  - Position: {x: 51, y: 26}
+    Material: 2
+  - Position: {x: 51, y: 27}
+    Material: 2
+  - Position: {x: 52, y: 25}
+    Material: 2
+  - Position: {x: 52, y: 26}
+    Material: 2
+  - Position: {x: 52, y: 27}
+    Material: 2
+  - Position: {x: 53, y: 25}
+    Material: 2
+  - Position: {x: 53, y: 26}
+    Material: 2
+  - Position: {x: 53, y: 27}
+    Material: 2
+  - Position: {x: 54, y: 25}
+    Material: 2
+  - Position: {x: 54, y: 26}
+    Material: 2
+  - Position: {x: 54, y: 27}
+    Material: 2
+  - Position: {x: 52, y: 5}
+    Material: 2
+  - Position: {x: 52, y: 6}
+    Material: 2
+  - Position: {x: 52, y: 7}
+    Material: 2
+  - Position: {x: 52, y: 8}
+    Material: 2
+  - Position: {x: 52, y: 9}
+    Material: 2
+  - Position: {x: 52, y: 10}
+    Material: 2
+  - Position: {x: 52, y: 11}
+    Material: 2
+  - Position: {x: 52, y: 12}
+    Material: 2
+  - Position: {x: 52, y: 13}
+    Material: 2
+  - Position: {x: 52, y: 14}
+    Material: 2
+  - Position: {x: 52, y: 15}
+    Material: 2
+  - Position: {x: 52, y: 16}
+    Material: 2
+  - Position: {x: 52, y: 17}
+    Material: 2
+  - Position: {x: 52, y: 18}
+    Material: 2
+  - Position: {x: 52, y: 19}
+    Material: 2
+  - Position: {x: 52, y: 20}
+    Material: 2
+  - Position: {x: 52, y: 21}
+    Material: 2
+  - Position: {x: 52, y: 22}
+    Material: 2
+  - Position: {x: 52, y: 23}
+    Material: 2
+  - Position: {x: 52, y: 24}
+    Material: 2
+  - Position: {x: 53, y: 5}
+    Material: 2
+  - Position: {x: 53, y: 6}
+    Material: 2
+  - Position: {x: 53, y: 7}
+    Material: 2
+  - Position: {x: 53, y: 8}
+    Material: 2
+  - Position: {x: 53, y: 9}
+    Material: 2
+  - Position: {x: 53, y: 10}
+    Material: 2
+  - Position: {x: 53, y: 11}
+    Material: 2
+  - Position: {x: 53, y: 12}
+    Material: 2
+  - Position: {x: 53, y: 13}
+    Material: 2
+  - Position: {x: 53, y: 14}
+    Material: 2
+  - Position: {x: 53, y: 15}
+    Material: 2
+  - Position: {x: 53, y: 16}
+    Material: 2
+  - Position: {x: 53, y: 17}
+    Material: 2
+  - Position: {x: 53, y: 18}
+    Material: 2
+  - Position: {x: 53, y: 19}
+    Material: 2
+  - Position: {x: 53, y: 20}
+    Material: 2
+  - Position: {x: 53, y: 21}
+    Material: 2
+  - Position: {x: 53, y: 22}
+    Material: 2
+  - Position: {x: 53, y: 23}
+    Material: 2
+  - Position: {x: 53, y: 24}
+    Material: 2
+  - Position: {x: 54, y: 5}
+    Material: 2
+  - Position: {x: 54, y: 6}
+    Material: 2
+  - Position: {x: 54, y: 7}
+    Material: 2
+  - Position: {x: 54, y: 8}
+    Material: 2
+  - Position: {x: 54, y: 9}
+    Material: 2
+  - Position: {x: 54, y: 10}
+    Material: 2
+  - Position: {x: 54, y: 11}
+    Material: 2
+  - Position: {x: 54, y: 12}
+    Material: 2
+  - Position: {x: 54, y: 13}
+    Material: 2
+  - Position: {x: 54, y: 14}
+    Material: 2
+  - Position: {x: 54, y: 15}
+    Material: 2
+  - Position: {x: 54, y: 16}
+    Material: 2
+  - Position: {x: 54, y: 17}
+    Material: 2
+  - Position: {x: 54, y: 18}
+    Material: 2
+  - Position: {x: 54, y: 19}
+    Material: 2
+  - Position: {x: 54, y: 20}
+    Material: 2
+  - Position: {x: 54, y: 21}
+    Material: 2
+  - Position: {x: 54, y: 22}
+    Material: 2
+  - Position: {x: 54, y: 23}
+    Material: 2
+  - Position: {x: 54, y: 24}
+    Material: 2
+  Units:
+  - Id: 00000000000000000000000000000001
+    Definition:
+      Key: command
+      Kind: 0
+      Size: {x: 12, y: 14}
+      Mass: 20
+      MaximumHealth: 100
+      Output: 1
+      InventoryCapacity: 0
+    Position: {x: 29, y: -7}
+    Anchor: {x: 28, y: 0}
+  - Id: 00000000000000000000000000000002
+    Definition:
+      Key: tank
+      Kind: 2
+      Size: {x: 10, y: 14}
+      Mass: 20
+      MaximumHealth: 100
+      Output: 1
+      InventoryCapacity: 300
+    Position: {x: 29, y: 8}
+    Anchor: {x: 28, y: 10}
+  - Id: 00000000000000000000000000000003
+    Definition:
+      Key: upper-thruster
+      Kind: 1
+      Size: {x: 15, y: 8}
+      Mass: 20
+      MaximumHealth: 100
+      Output: 1
+      InventoryCapacity: 0
+    Position: {x: -45, y: 28}
+    Anchor: {x: -35, y: 27}
+  - Id: 00000000000000000000000000000004
+    Definition:
+      Key: lower-thruster
+      Kind: 1
+      Size: {x: 15, y: 8}
+      Mass: 20
+      MaximumHealth: 100
+      Output: 1
+      InventoryCapacity: 0
+    Position: {x: -45, y: -36}
+    Anchor: {x: -35, y: -28}
+  - Id: 00000000000000000000000000000005
+    Definition:
+      Key: drill
+      Kind: 3
+      Size: {x: 14, y: 10}
+      Mass: 20
+      MaximumHealth: 100
+      Output: 1
+      InventoryCapacity: 0
+    Position: {x: 41, y: -5}
+    Anchor: {x: 52, y: 5}
+  - Id: 00000000000000000000000000000006
+    Definition:
+      Key: suction
+      Kind: 4
+      Size: {x: 10, y: 8}
+      Mass: 20
+      MaximumHealth: 100
+      Output: 1
+      InventoryCapacity: 0
+    Position: {x: -40, y: 17}
+    Anchor: {x: -35, y: 25}
+  - Id: 00000000000000000000000000000007
+    Definition:
+      Key: rear-door
+      Kind: 5
+      Size: {x: 4, y: 50}
+      Mass: 20
+      MaximumHealth: 100
+      Output: 1
+      InventoryCapacity: 0
+    Position: {x: -29, y: -25}
+    Anchor: {x: -29, y: 25}
+  CargoCavity:
+    x: -25
+    y: -25
+    width: 50
+    height: 50
+  CoreAnchor: {x: 27, y: 0}
