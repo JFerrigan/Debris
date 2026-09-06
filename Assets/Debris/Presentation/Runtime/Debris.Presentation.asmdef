@@ -1,1 +1,12 @@
-{"name": "Debris.Presentation", "references": ["Debris.Core", "Debris.World", "Debris.Materials", "Debris.Sites", "Unity.InputSystem", "Debris.Simulation"]}
+{
+  "name": "Debris.Presentation",
+  "references": [
+    "Debris.Core",
+    "Debris.World",
+    "Debris.Materials",
+    "Debris.Sites",
+    "Unity.InputSystem",
+    "Debris.Simulation",
+    "Debris.Ships"
+  ]
+}

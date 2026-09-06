@@ -31,7 +31,7 @@ Authorized scope: implement phases A–E in order through playable alien-drone e
 
 ## Phase B — physical ship and persistent salvage
 
-- [ ] B.1 / M4 Blueprint free-drawing, structural prefabs, whole units, starter command/propulsion/tank/drill/suction/cavity/rear door.
+- [x] B.1 / M4 Blueprint free-drawing, structural prefabs, whole units, starter command/propulsion/tank/drill/suction/cavity/rear door.
 - [ ] B.2 / M4 Inertial flight, cargo mass, fuel grades/inventory, spill/pump transfers.
 - [ ] B.3 / M5 Moving-hull collision, tumbling cargo, spills, component support loss, fragments.
 - [ ] B.4 / M6 Dirty chunks, loose/fragment records, atomic saves, migrations, interrupted-write recovery.

@@ -5,6 +5,7 @@ using System.IO;
 using Debris.Materials;
 using Debris.Simulation;
 using Debris.Sites;
+using Debris.Ships;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Profiling;
@@ -12,8 +13,9 @@ namespace Debris.Presentation
 {
     public sealed class Showcase : MonoBehaviour
     {
+        ShipRuntime ship;
         MatterSession session;MatterView view;MaterialCatalog catalog;
-        InputActionAsset input;Camera cameraView;bool paused,benchmark;
+        InputActionAsset input;Camera cameraView;bool paused,benchmark,shipBenchmark;
         float accumulator,statsTime;ushort inspected;Vector2 pointerWorld;
         readonly FrameTiming[] timings=new FrameTiming[1];
         readonly List<double> cpu=new List<double>(),gpu=new List<double>(),frames=new List<double>();
@@ -23,41 +25,78 @@ namespace Debris.Presentation
         {
             Application.targetFrameRate=60;cameraView=Camera.main;
             catalog=Resources.Load<MaterialCatalog>("Materials");input=Instantiate(Resources.Load<InputActionAsset>("Debris"));input.Enable();
+            shipBenchmark=Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisShipBenchmark");
             benchmark=Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisBenchmark");
-            ResetSession(2,8192);
+            ResetSession(benchmark?2:4,8192);
             if(benchmark)StartCoroutine(Benchmark());
+            if(shipBenchmark)StartCoroutine(ShipBenchmark());
         }
         void ResetSession(int side,int capacity)
         {
             view?.Dispose();session?.Dispose();
             session=new MatterSession(catalog,Resources.Load<AsteroidProfile>("Asteroid"),side,128,capacity);
+            ship=benchmark?null:new ShipRuntime(Resources.Load<ShipBlueprint>("StarterShip"));
+            if(ship!=null){session.ConfigureShip(ship.CollisionMask(),ship.Position);cameraView.orthographicSize=180;}
             view=new MatterView(session);accumulator=0;inspected=0;
         }
         void Update()
         {
             if(session==null)return;
             if(input["Pause"].WasPressedThisFrame())paused=!paused;
-            if(input["Reset"].WasPressedThisFrame()&&!benchmark)ResetSession(2,8192);
+            if(input["Reset"].WasPressedThisFrame()&&!benchmark)ResetSession(benchmark?2:4,8192);
             var pointer=input["Pointer"].ReadValue<Vector2>();pointerWorld=cameraView.ScreenToWorldPoint(new Vector3(pointer.x,pointer.y,10));
-            var movement=input["Move"].ReadValue<Vector2>();cameraView.transform.position+=(Vector3)(movement*(cameraView.orthographicSize*Time.unscaledDeltaTime));
+            var movement=input["Move"].ReadValue<Vector2>();if(ship==null)cameraView.transform.position+=(Vector3)(movement*(cameraView.orthographicSize*Time.unscaledDeltaTime));
+            else
+            {
+                if(Keyboard.current!=null&&Keyboard.current.gKey.wasPressedThisFrame&&ship.Has(UnitKind.Door))ship.DoorOpen=!ship.DoorOpen;
+                var pose=session.ShipStats[0];cameraView.transform.position=Vector3.Lerp(cameraView.transform.position,new Vector3(pose.x+50,pose.y,-10),1-Mathf.Exp(-4*Time.unscaledDeltaTime));
+                ship.CargoMass=session.ShipStats[2].y;
+                if(session.ShipStats[1].w>0){ship.Velocity=Vector2.zero;ship.AngularVelocity=0;}
+            }
             cameraView.orthographicSize=Mathf.Clamp(cameraView.orthographicSize-input["Zoom"].ReadValue<float>()*.025f,30,400);
-            if(!paused&&!benchmark)
+            if(!paused&&!benchmark&&!shipBenchmark)
             {
                 accumulator=Mathf.Min(accumulator+Time.deltaTime,4f/60);
                 while(accumulator>=1f/60)
                 {
                     SiteCommand? command=null;
-                    if(input["Cut"].IsPressed()&&pointer.y<Screen.height-150&&pointer.x<Screen.width-280)
-                        command=new SiteCommand(SiteCommandType.CutterStroke,pointerWorld,(pointerWorld.normalized+Vector2.up)*5,6,120,1);
-                    session.Step(command);accumulator-=1f/60;
+                    if(ship!=null)
+                    {
+                        float turn=Keyboard.current==null?0:(Keyboard.current.eKey.isPressed?1:0)-(Keyboard.current.qKey.isPressed?1:0);
+                        var old=ship.Position;float angle=ship.Angle;ship.Tick(new Vector2(movement.y,-movement.x),-turn,1f/60);
+                        bool cut=input["Cut"].IsPressed()&&ship.Has(UnitKind.Drill);
+                        if(cut)command=new SiteCommand(SiteCommandType.CutterStroke,Vector2.zero,Vector2.zero,6,120,1);
+                        bool suction=Mouse.current!=null&&Mouse.current.rightButton.isPressed&&ship.Has(UnitKind.Suction);
+                        session.Step(command,suction?40:0,default,new Vector3(ship.Position.x-old.x,ship.Position.y-old.y,ship.Angle-angle),ship.DoorOpen,cut,suction);
+                    }
+                    else session.Step(command);
+                    accumulator-=1f/60;
                 }
             }
             statsTime+=Time.unscaledDeltaTime;
             if(statsTime>.2f){statsTime=0;session.PollStats();session.Inspect(Vector2Int.FloorToInt(pointerWorld),m=>inspected=m);}
             view.Draw();
             FrameTimingManager.CaptureFrameTimings();
-            if(FrameTimingManager.GetLatestTimings(1,timings)>0){if(benchmark){cpu.Add(timings[0].cpuFrameTime);if(timings[0].gpuFrameTime>0)gpu.Add(timings[0].gpuFrameTime);}}
-            if(benchmark)frames.Add(Time.unscaledDeltaTime*1000);
+            if(FrameTimingManager.GetLatestTimings(1,timings)>0){if(benchmark||shipBenchmark){cpu.Add(timings[0].cpuFrameTime);if(timings[0].gpuFrameTime>0)gpu.Add(timings[0].gpuFrameTime);}}
+            if(benchmark||shipBenchmark)frames.Add(Time.unscaledDeltaTime*1000);
+        }
+        IEnumerator ShipBenchmark()
+        {
+            string output=Path.GetFullPath(Path.Combine(Application.dataPath,"../../Logs"));Directory.CreateDirectory(output);
+            var initial=session.SnapshotAsync();while(!initial.IsCompleted)yield return null;
+            if(initial.IsFaulted)throw initial.Exception;
+            // Controlled full-cavity workload, explicitly separate from earned salvage.
+            var state=initial.Result;var cells=new List<LooseCell>();
+            for(int y=-24;y<24;y+=2)for(int x=-24;x<24;x+=2)cells.Add(new LooseCell{Position=new Vector2(x,y),Material=2,Identity=(uint)cells.Count+1,Flags=4});
+            state.Cells=cells.ToArray();state.Counters[0]=(uint)cells.Count;state.Counters[1]+=(uint)cells.Count;session.Restore(state);
+            for(int i=0;i<60;i++){session.Step(shipMotion:new Vector3(0,.005f,.001f));yield return null;}
+            cpu.Clear();gpu.Clear();frames.Clear();
+            for(int i=0;i<300;i++){session.Step(shipMotion:new Vector3(0,.005f,.001f));yield return null;}
+            var task=session.SnapshotAsync();while(!task.IsCompleted)yield return null;if(task.IsFaulted)throw task.Exception;
+            CpuCutReference.Validate(task.Result);
+            string line=$"preset=rotating-starter cells={task.Result.Cells.Length} chunks={session.Side*session.Side} capacity={session.Capacity} frame_p95={Percentile(frames,.95):F3} cpu_p95={Percentile(cpu,.95):F3} gpu_p95={Percentile(gpu,.95):F3} buffers={session.BufferBytes} dispatches={session.Dispatches} nonoverlap=true conserved=true angle={task.Result.ShipPose[0].z:F3}";
+            File.WriteAllText(Path.Combine(output,"ship-benchmark.txt"),SystemInfo.graphicsDeviceName+" / "+Application.unityVersion+"\n"+line);Debug.Log("DEBRIS_SHIP_BENCHMARK "+line);
+            ScreenCapture.CaptureScreenshot(Path.Combine(output,"ship-showcase.png"));yield return null;yield return null;Application.Quit();
         }
         IEnumerator Benchmark()
         {
@@ -94,8 +133,8 @@ namespace Debris.Presentation
             Panel(new Rect(0,0,Screen.width,132),new Color(.025f,.045f,.065f,.97f));
             Panel(new Rect(28,28,4,72),new Color(.26f,.86f,.69f));
             GUI.Label(new Rect(48,22,650,48),"D E B R I S",title);
-            GUI.Label(new Rect(50,76,700,26),"MATERIAL FIELD LAB   /   EE INC. INDUSTRIAL RESEARCH",small);
-            GUI.Label(new Rect(50,101,850,22),"Hold left mouse to cut • WASD pan • scroll zoom • Esc pause • R reset",small);
+            GUI.Label(new Rect(50,76,700,26),"SALVAGE FLIGHT   /   EE INC. CONTRACTOR VESSEL",small);
+            GUI.Label(new Rect(50,101,850,22),"W/S thrust • A/D strafe • Q/E turn • LMB drill • RMB suction • G cargo door • scroll zoom • Esc pause • R reset",small);
             float x=Screen.width-262;
             Panel(new Rect(x-18,152,262,Screen.height-180),new Color(.025f,.045f,.065f,.94f));
             GUI.Label(new Rect(x,174,230,30),"SESSION  /  0001",label);
@@ -104,6 +143,7 @@ namespace Debris.Presentation
             GUI.Label(new Rect(x,220,230,240),info,small);
             Panel(new Rect(x,470,220,1),new Color(.18f,.3f,.32f));
             GUI.Label(new Rect(x,487,220,25),"MATERIAL INSPECTION",small);
+            if(ship!=null)GUI.Label(new Rect(30,145,650,70),$"FUEL {ship.Fuel.Energy:F1}   /   CARGO {session.ShipStats[2].x:N0} / 2,500   /   DOOR {(session.ShipStats[2].z>0?"OPEN":"CLOSED")}",label);
             var material=catalog.DefinitionAt(inspected);
             GUI.Label(new Rect(x,520,220,65),material?material.MaterialKey.ToUpperInvariant()+"\n"+material.UnitValue+" credits / cell":"VACUUM",label);
             GUI.Label(new Rect(x,610,225,95),s[2]>0?"POOL SATURATED\nCutter throttled. Unreleased material remains in the asteroid.":"All released matter remains physical. Cells retain their mass and volume.",small);

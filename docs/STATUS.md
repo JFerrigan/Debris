@@ -24,9 +24,11 @@ Unity MCP remains unavailable; direct editor works. Windows/Linux execution and 
 
 ## Exact next task
 
-B.1 / M4: read SHIP_SYSTEM, COMPONENT_SYSTEM, STRUCTURAL_SIMULATION, PERSISTENCE and SAVE_FORMAT. Implement blueprint structural cells and whole machinery, starter ship, then inertial flight/fuel and moving-hull cargo integration. Verify B.3 rotating cavity before advancing to career features.
+B.4: persist the verified GPU snapshots and ship runtime with integrity checks, atomic replacement and previous-save recovery; expose save/load in the playable showcase. Continue B.2 fuel transfers and B.3 physical fragment/breach behavior, then B.5 paged large-ship/streaming/index stress. Do not advance to Phase C until B.GATE passes.
 
-Commands: `bash tools/unity.sh setup`, `test`, `build`, `open`. Player: `Builds/Debris.app/Contents/MacOS/Debris -debrisBenchmark -logFile Logs/player.log`; benchmark artifacts currently write under Builds/Logs. Close only the Debris editor before batch execution.
+B.1 GPU checkpoint: 25/25 EditMode tests, Mac build and standalone rotating starter benchmark pass. See SHIP_SYSTEM/PERFORMANCE and evidence/B-* for measurements. B.1 is checked; B.2/B.3 are only partially implemented.
+
+Commands: `bash tools/unity.sh test`, `build`, `open`. Player preset: `Builds/Debris.app/Contents/MacOS/Debris -debrisShipBenchmark -logFile /private/tmp/debris-ship-player.log`. Benchmark artifacts write under Builds/Logs. Close only the Debris editor before batch execution.
 
 ## Resumption
 

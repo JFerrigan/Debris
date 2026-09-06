@@ -1,6 +1,6 @@
 # Performance
 
-Unity 6000.3.11f1 (3000ef702840) is installed. No project benchmarks have been run yet. This document is the recording location for measured hardware, build configuration, scene preset, FPS/frame-time percentile, active/visible/sleeping chunks, debris count, buffer use, draw calls, save payload size, and simulation/render timing.
+Unity 6000.3.11f1 (3000ef702840) is installed. Phase A and starter-ship measurements are recorded below. This document is the recording location for measured hardware, build configuration, scene preset, FPS/frame-time percentile, active/visible/sleeping chunks, debris count, buffer use, draw calls, save payload size, and simulation/render timing.
 
 Targets are 60 FPS and a 50 FPS minimum during normal development-machine gameplay, with no ordinary chunk-load spikes. The diagnostic and stress-scene requirements are defined in `ARCHITECTURE.md` and will be implemented before performance claims are made.
 
@@ -27,3 +27,9 @@ All three reconcile fixed + loose = 22,400. Saturated presets report 280,154 and
 Approve **8,192 active loose cells / four 128² chunks** as the initial Phase B development budget. This is a measured prototype budget, not a permanent site limit. Larger ship/streaming workloads must be measured independently. The live diagnostic draw path is two instanced calls (field and loose matter), plus UI.
 
 Evidence: [raw report](evidence/A-mac-benchmark.txt), [inspected screenshot](evidence/A-showcase.png), [15 passing tests](evidence/A-tests.txt). The standalone starts successfully, renders distinct material palettes, performs ordered cuts, and displays asynchronous inspection/metrics. Full rotating-cavity verification remains B.3.
+
+## Phase B starter GPU checkpoint — 2026-09-06
+
+Same Mac/Metal development configuration as Phase A. Controlled preset seeds 576 cargo cells, warms 60 steps, then samples 300 rotating steps (0.001 rad/step), 16 active chunks, 8,192 loose capacity. This is a cargo workload, not proof of an earned mining trip. Frame p95 17.581 ms, CPU p95 17.580 ms, GPU p95 16.291 ms; 3,605,060 explicit buffer bytes, 34 simulation dispatches, three matter draw calls plus UI. Snapshot validates conservation and non-overlap at 0.360 radians. The 16-chunk starter preset fits 60 FPS here, but does not establish a large-ship/full-cargo budget.
+
+Evidence: `evidence/B-ship-benchmark.txt`, `evidence/B-ship-showcase.png` (inspected), `evidence/B-gpu-tests.xml` (25/25). No Windows/Linux execution claim.

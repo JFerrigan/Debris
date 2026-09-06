@@ -100,7 +100,7 @@ The first vertical slice requires a player controller, upper/lower rear thruster
 
 IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
-- [ ] B.1 Whole units/structural prefabs.
+- [x] B.1 Whole units/structural prefabs.
 - [ ] B.3 Support loss.
 - [ ] D.1 Pressure/repair.
 - [ ] D.3 Articulation/weapons.

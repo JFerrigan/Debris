@@ -1,0 +1,2 @@
+Apple M4 Pro / 6000.3.11f1
+preset=rotating-starter cells=576 chunks=16 capacity=8192 frame_p95=17.576 cpu_p95=17.570 gpu_p95=16.408 buffers=3605060 dispatches=34 nonoverlap=true conserved=true angle=0.360

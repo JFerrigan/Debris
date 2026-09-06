@@ -64,6 +64,26 @@ namespace Debris.Ships
             Fuel.Capacity=0;foreach(var unit in Units)if(unit.Placement.Definition.Kind==UnitKind.Tank)Fuel.Capacity+=unit.Placement.Definition.InventoryCapacity;
             Fuel.Add("standard",Math.Min(250,Fuel.Capacity));
         }
+        public uint[] CollisionMask()
+        {
+            var mask=new uint[128*128];
+            foreach(var c in Structure)
+            {
+                if(c.Key.x<-64||c.Key.x>=64||c.Key.y<-64||c.Key.y>=64)throw new InvalidOperationException("Starter GPU mask exceeded; larger ships require paged masks.");
+                mask[(c.Key.y+64)*128+c.Key.x+64]=c.Value;
+            }
+            foreach(var unit in Units)
+            {
+                if(!unit.Supported||unit.Destroyed)continue;
+                var p=unit.Placement;var size=p.Definition.Size;
+                for(int y=p.Position.y;y<p.Position.y+size.y;y++)for(int x=p.Position.x;x<p.Position.x+size.x;x++)
+                {
+                    if(x<-64||x>=64||y<-64||y>=64)throw new InvalidOperationException("Unit exceeds starter GPU mask.");
+                    mask[(y+64)*128+x+64]=p.Definition.Kind==UnitKind.Door?uint.MaxValue:2u;
+                }
+            }
+            return mask;
+        }
         public bool Has(UnitKind kind)=>Units.Exists(u=>u.Placement.Definition.Kind==kind&&u.Operational)&&Units.Exists(u=>u.Placement.Definition.Kind==UnitKind.Command&&u.Operational);
         public Vector2 ToWorld(Vector2 local){float c=Mathf.Cos(Angle),s=Mathf.Sin(Angle);return Position+new Vector2(local.x*c-local.y*s,local.x*s+local.y*c);}
         public Vector2 ToLocal(Vector2 world){var p=world-Position;float c=Mathf.Cos(Angle),s=Mathf.Sin(Angle);return new Vector2(p.x*c+p.y*s,-p.x*s+p.y*c);}

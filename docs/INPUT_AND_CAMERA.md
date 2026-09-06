@@ -56,3 +56,7 @@ IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 - [ ] C.2 Basic walking/ship exit.
 - [ ] D.1 EVA/tools.
 - [ ] E.4 Accessibility.
+
+## Starter playable checkpoint
+
+W/S forward/reverse thrust, A/D strafe, Q/E turn, left mouse mounted drill, right mouse suction, G rear cargo door, scroll zoom, Escape pause, R reset. Camera follows the ship. The HUD shows finite fuel energy, physical cargo count and actual door state. Controller/rebinding remains unverified.

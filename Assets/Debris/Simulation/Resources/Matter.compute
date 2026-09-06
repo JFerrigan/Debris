@@ -4,6 +4,8 @@
 #pragma kernel Inspect
 #pragma kernel RestoreOccupancy
 #pragma kernel UploadDamage
+#pragma kernel MoveShip
+#pragma kernel TransferCargo
 struct Cell { float2 position; float2 velocity; uint material; uint identity; uint step; uint flags; };
 RWTexture2DArray<uint> _Field;
 RWTexture2DArray<float> _Damage;
@@ -23,6 +25,8 @@ int2 _InspectPosition;
 int3 Address(int2 p) { int2 q=p-_Origin; return int3(q%_ChunkSize,(q.y/_ChunkSize)*_Side+q.x/_ChunkSize); }
 bool Inside(int2 p) { int2 q=p-_Origin;return all(q>=0)&&all(q<_Width); }
 int Index(int2 p) { int2 q=p-_Origin;return q.y*_Width+q.x; }
+bool Free(float2 target,uint self);
+#include "ShipMatter.hlsl"
 [numthreads(8,8,1)]
 void Upload(uint3 id:SV_DispatchThreadID)
 {
@@ -40,18 +44,21 @@ void UploadDamage(uint3 id:SV_DispatchThreadID)
 [numthreads(1,1,1)]
 void Cut(uint3 id:SV_DispatchThreadID)
 {
+    float2 cutPosition=_MountedCut!=0?World(float2(58,0),_ShipPose[0]):_CutPosition;
+    float2 impulse=_MountedCut!=0?Rotate(float2(5,0),_ShipPose[0].z):_Impulse;
     uint allocated=_Counters[0], throttled=_Counters[2], dirtyCount=_Counters[3];
-    int2 low=(int2)floor(_CutPosition-_Radius),high=(int2)ceil(_CutPosition+_Radius);
+    int2 low=(int2)floor(cutPosition-_Radius),high=(int2)ceil(cutPosition+_Radius);
     for(int y=low.y;y<=high.y;y++)for(int x=low.x;x<=high.x;x++)
     {
         int2 p=int2(x,y);
-        if(!Inside(p)||distance(float2(p)+.5,_CutPosition)>_Radius)continue;
+        if(!Inside(p)||distance(float2(p)+.5,cutPosition)>_Radius)continue;
+        if(ShipBlocked(float2(p),0xffffffff))continue;
         int3 a=Address(p);uint m=_Field[a];if(m==0)continue;
         float damage=_Damage[a]+_Power*_Delta;
         if(damage<_Properties[m].x) { _Damage[a]=damage; if(_Dirty[a.z]==0){_Dirty[a.z]=1;dirtyCount++;} continue; }
         uint slot=allocated;
         if(slot>=(uint)_Capacity) { throttled++; continue; }
-        Cell c;c.position=float2(p);c.velocity=_Impulse;c.material=m;c.identity=slot+1;c.step=0;c.flags=0;
+        Cell c;c.position=float2(p);c.velocity=impulse;c.material=m;c.identity=slot+1;c.step=0;c.flags=0;
         _Cells[slot]=c;_Occupancy[Index(p)]=(int)slot+1;
         allocated=slot+1;_Field[a]=0;_Damage[a]=0;
         if(_Dirty[a.z]==0){_Dirty[a.z]=1;dirtyCount++;}
@@ -60,6 +67,7 @@ void Cut(uint3 id:SV_DispatchThreadID)
 }
 bool Free(float2 target,uint self)
 {
+    if(ShipBlocked(target,self))return false;
     int2 base=(int2)floor(target);
     if(!Inside(base)||!Inside((int2)ceil(target)))return false;
     for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++)
@@ -75,24 +83,39 @@ bool Free(float2 target,uint self)
 void Integrate(uint3 id:SV_DispatchThreadID)
 {
     uint i=id.x;if(i>=_Counters[0])return;
-    Cell c=_Cells[i];int2 old=(int2)floor(c.position);
+    Cell c=_Cells[i];bool cargo=(c.flags&4)!=0;if((cargo?1:0)!=_Domain)return;
+    int2 old=(int2)floor(c.position);
     int2 color=(old-_Origin)&3;
     if(color.y*4+color.x!=_Color || c.step==(uint)_Tick)return;
     c.step=_Tick;
-    if(_Force>0 && distance(c.position,_ForcePosition)<35) { c.velocity+=normalize(_ForcePosition-c.position+float2(.0001,0))*_Force*_Delta;c.flags=0; }
+    float2 forcePosition=_MountedSuction!=0?World(float2(-12,0),_ShipPose[0]):_ForcePosition;
+    float2 worldPosition=cargo?World(c.position+.5,_ShipPose[0])-.5:c.position;
+    if(_Force>0 && distance(worldPosition,forcePosition)<80) { c.velocity+=normalize(forcePosition-worldPosition+float2(.0001,0))*_Force*_Delta;c.flags=cargo?4:0; }
     if(c.flags==1) { _Cells[i]=c;return; }
     // A substep never crosses more than .2 cell: disjoint 4x4 colors have disjoint read/write neighborhoods.
-    float2 motion=clamp(c.velocity*_Delta,-.2,.2);
+    float2 velocity=c.velocity;
+    if(cargo)
+    {
+        float4 pose=_ShipPose[0],motion=_ShipPose[1];float2 localVelocity=Rotate(c.velocity-motion.xy,-pose.z);
+        velocity=localVelocity-float2(-c.position.y,c.position.x)*motion.z;
+    }
+    float2 motion=clamp(velocity*_Delta,-.2,.2);
     float2 target=c.position+motion;
-    if(Free(target,i))
+    if(cargo?CargoFree(target,i):Free(target,i))
     {
         int2 next=(int2)floor(target);
-        _Occupancy[Index(old)]=0;_Occupancy[Index(next)]=(int)i+1;c.position=target;c.flags=0;
+        if(cargo){_CargoOccupancy[CargoIndex(old)]=0;_CargoOccupancy[CargoIndex(next)]=(int)i+1;}
+        else{_Occupancy[Index(old)]=0;_Occupancy[Index(next)]=(int)i+1;}
+        c.position=target;c.flags=cargo?4:0;
     }
     else
     {
-        if(!Inside((int2)floor(target))||!Inside((int2)ceil(target)))c.flags=2; // streamed boundary: retain velocity
-        else {c.velocity*=-.4;if(length(c.velocity)<.02)c.flags=1;}
+        if(!cargo&&(!Inside((int2)floor(target))||!Inside((int2)ceil(target))))c.flags=2; // streamed boundary: retain velocity
+        else
+        {
+            if(cargo){float4 pose=_ShipPose[0],v=_ShipPose[1];float2 relative=Rotate(c.velocity-v.xy,-pose.z)-float2(-c.position.y,c.position.x)*v.z;c.velocity=v.xy+Rotate(-relative*.3+float2(-c.position.y,c.position.x)*v.z,pose.z);c.flags=4;}
+            else {c.velocity*=-.4;if(length(c.velocity)<.02)c.flags=1;}
+        }
     }
     _Cells[i]=c;
 }
@@ -107,5 +130,5 @@ void Inspect(uint3 id:SV_DispatchThreadID)
 void RestoreOccupancy(uint3 id:SV_DispatchThreadID)
 {
     if(id.x>=_Counters[0])return;
-    Cell c=_Cells[id.x];int2 p=(int2)floor(c.position);if(Inside(p))_Occupancy[Index(p)]=(int)id.x+1;
+    Cell c=_Cells[id.x];int2 p=(int2)floor(c.position);if((c.flags&4)!=0){if(LocalInside(p))_CargoOccupancy[CargoIndex(p)]=(int)id.x+1;}else if(Inside(p))_Occupancy[Index(p)]=(int)id.x+1;
 }
