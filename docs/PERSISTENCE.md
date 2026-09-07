@@ -32,7 +32,7 @@ There is no gameplay cap on discovered or modified sites. Design capacity is at 
 
 IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
-- [ ] B.4 Atomic lossless saves/recovery.
+- [x] B.4 Atomic lossless saves/recovery.
 - [x] B.5 100,000-site index (index-only fixture; full B.5 remains open).
 - [ ] D.GATE Active encounter resume/expiry.
 
@@ -47,3 +47,15 @@ F5/F9 save and restore the playable site under `Application.persistentDataPath/S
 Verified: 27/27 EditMode tests, exact disk/GPU restoration with cargo and partial terrain damage, catalog reordering, interrupted replacement, corrupt-primary recovery, future-schema rejection and the 100,000-site fixture. B.4 remains open for dirty-only per-chunk files, multi-site leave/revisit integration. B.5 remains open for large ships and active-region streaming. Full fragment physics is not established by serializing fragment records.
 
 Schema-1 → schema-2 migration and physical fuel state are now verified with a retained prior standalone save. The next unused cell identity survives pumping, spilling, pool compaction and save/load. B.4 remains unchecked for sparse dirty-only files and actual multi-site leave/revisit transitions.
+
+## B.4 sparse world and site lifecycle — 2026-09-07
+
+The playable session now uses `WorldStore`, `SparseSiteStore`, `SpatialCellCodec` and `SiteTransit`. F5 publishes a sparse world checkpoint; F9 restores it; T travels between two salvage sites. Startup resumes an existing world. R restores a saved world instead of resetting its mined terrain. A legacy `salvage.debris` remains importable with F9 when no world exists; the next save creates the world without rewriting the source.
+
+Changed fixed/damage chunks and spatial loose-cell buckets are compressed, hashed and individually addressed. Unchanged baseline chunks are regenerated and verified by a saved baseline hash. Unchanged blobs are reused. Material keys remap both generated baseline and saved deltas before validation. Ship/cargo/fragment/fuel records retain exact floating-point state and stable identities.
+
+Departure separates ship-local cargo and attached machinery from world-space deposits and detached machinery. The inactive record has no player hull, tank contents or cargo. Arrival combines the current portable ship with the destination's deposits, validates a clear physical berth and debris capacity, and allocates future cells from the monotonic world identity sequence. A damaged tank must finish its lossless spill before departure. Detached tank outlets follow the fragment's actual pose. The destination runtime is prepared before committing both site records and the active-world pointer. Failed arrival or interrupted publication retains the original committed world.
+
+A sorted index generation and all immutable site dependencies are written/verified before atomic root replacement. Revision checks and a writer lease reject stale/concurrent writes. The previous verified root remains available. Damage to an inactive site is isolated to that visit; damage to active dependencies can recover the previous complete root. Unsupported schema/generator revisions fail without silently regenerating modified sites.
+
+Verified: 38/38 tests, legacy-world import, four dirty chunks with spatial fuel/cell state, unchanged-blob reuse, A→B→save/load→A with no duplicates, exact fragment/cell/GPU restoration, interrupted publication, stale writes, content reordering, baseline mismatch and corrupt-record recovery. A Mac player performs the same two-site travel/resume/revisit loop. B.4 is checked for bounded active-site persistence. B.5 still owns large-region paging, incremental GPU readback, full-size ship/fragment masks, mixed 100,000-site payload stress and unreachable-generation cleanup. Explicit saves currently snapshot the entire bounded active page; only differences reach disk. Inactive sites sleep exactly rather than simulating elapsed absence.

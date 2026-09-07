@@ -57,7 +57,7 @@ Temporal encounters are excluded from `sites/`: they are regenerated/expired run
 
 IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
-- [ ] B.4 Codecs/migration/interrupted writes.
+- [x] B.4 Codecs/migration/interrupted writes.
 - [ ] D.GATE Encounter session snapshot.
 
 ## Executable checkpoint format (schema 1)
@@ -77,3 +77,15 @@ The decoder accepts schema 1 and infers its next identity from the maximum saved
 ## Schema 3 rigid fragments and pending impacts
 
 Schema 3 adds four impact words (local contact coordinates, IEEE-754 speed bits, pending flag), followed by fragment count and each stable ID, 128² material field, four pose floats and four motion floats. This precedes the existing ship-enabled flag. Schemas 1/2 migrate with empty GPU fragment/impact records; existing ship DTO ownership is repaired by stable unit IDs. Maximum active fragment count is 16; oversized active records fail visibly. Ship DTO fragment poses are synchronized from the GPU at save boundaries. This checkpoint is verified by 36 tests and a built-player fragment/fuel/cargo roundtrip; sparse site storage remains next.
+
+## Executable sparse world format
+
+`World/world.manifest` uses magic `0x44535752`, world schema 1, 64-bit revision, active site ID, next unused 32-bit world cell ID, then SHA-256. A `.pending` candidate is verified against all active dependencies before atomic replacement; `.backup` retains the previous verified root. Unsupported future schemas do not trigger silent rollback. `writer.lock` supplies an exclusive writer lease, and the expected root revision prevents stale asynchronous overwrites.
+
+`indices/<revision>.index` uses the verified sorted index format above. Records address immutable `sites/<id>/<revision>.site` files. Sparse site schema 2 stores magic `0x44535350`, schema, deterministic baseline hash, core-state blob hash, indexed changed-chunk hashes, and spatial loose-bucket addresses/hashes. Schema 1 sparse records remain readable. Metadata ends with SHA-256. Blob paths are `blobs/<first-two-hash-characters>/<sha256>.blob`; existing content is verified and reused. Site revisions cannot be overwritten with different data.
+
+Fixed/damage blobs contain one complete changed chunk (little-endian uint materials followed by IEEE-754 damage floats), Deflate compressed. Unmodified chunks have no payload. A partial-damage-only chunk still gets a payload. Loose buckets are addressed by coordinate domain (world or ship-local) and spatial chunk coordinate; each compressed record retains its original slot, full 32-byte cell record and optional fuel-state slot/residual energy. Slot metadata preserves exact array order while buckets remain independently addressable. Fragment fields/poses and whole-unit metadata remain in the bounded site's core blob; large fragment-field paging is B.5.
+
+Core-state blobs use active-checkpoint schema 4. Schema 4 replaces dense fixed/damage arrays with a count and indexed nonzero chunks; schemas 1–3 still decode. Sparse-world core blobs have zero terrain and no loose cells; reconstruction applies verified generation, changed chunks and spatial buckets before upload. The world owns one active player. Inactive ship DTOs are only fragment registries, with empty attached hull/fuel/cargo, so revisits cannot resurrect old player inventories.
+
+Unreferenced immutable candidates left by interrupted saves are harmless and retained for now; garbage collection and many-generation save-growth measurements are B.5 work. No production history is silently pruned. See `evidence/B-world-tests.xml` and `B-world-player.txt` for executed verification.

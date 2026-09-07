@@ -67,7 +67,7 @@ namespace Debris.Editor
             {
                 var map=actions.FindActionMap("Salvage");bool changed=false;
                 if(map.FindAction("Turn")==null){map.AddAction("Turn",InputActionType.Value,expectedControlLayout:"Axis").AddCompositeBinding("1DAxis").With("Negative","<Keyboard>/q").With("Positive","<Keyboard>/e");changed=true;}
-                foreach(var binding in new[]{("CargoDoor","<Keyboard>/g"),("Suction","<Mouse>/rightButton"),("Save","<Keyboard>/f5"),("Load","<Keyboard>/f9"),("PumpFuel","<Keyboard>/p"),("SpillFuel","<Keyboard>/j")})
+                foreach(var binding in new[]{("CargoDoor","<Keyboard>/g"),("Suction","<Mouse>/rightButton"),("Save","<Keyboard>/f5"),("Load","<Keyboard>/f9"),("PumpFuel","<Keyboard>/p"),("SpillFuel","<Keyboard>/j"),("VisitSite","<Keyboard>/t")})
                     if(map.FindAction(binding.Item1)==null){map.AddAction(binding.Item1,InputActionType.Button,binding.Item2);changed=true;}
                 if(changed)File.WriteAllText("Assets/Content/Resources/Debris.inputactions",actions.ToJson());
             }

@@ -6,6 +6,7 @@
     "Debris.World",
     "Debris.Simulation",
     "Debris.Ships",
-    "Debris.Materials"
+    "Debris.Materials",
+    "Debris.Sites"
   ]
 }

@@ -8,7 +8,7 @@ Phases A–E and locked interpretations are recorded in [EXECUTION_PLAN](EXECUTI
 
 ## Implemented, unverified
 
-Phase B blueprint/runtime foundation is implemented; starter moving hull/cargo and active-site disk checkpoints are verified. Phases C–E are not implemented yet. Large-world dirty-chunk streaming, ship physics, and player career progression remain unchecked.
+Phase B.1–B.4 are verified for bounded starter sites. Phases C–E are not implemented yet. Large ships, active-region streaming and the earned salvage-loop gate remain unchecked.
 
 ## Verified
 
@@ -24,7 +24,9 @@ Unity MCP remains unavailable; direct editor works. Windows/Linux execution and 
 
 ## Exact next task
 
-B.4: sparse dirty-only chunk files and atomic multi-site leave/revisit with portable cargo/fuel separated from deposited site debris. Then B.5 paged larger ship masks and active-region streaming.
+B.5: paged larger ship/fragment masks, active-region streaming, prolonged cutting/full-cavity frame measurements, mixed 100,000-site payload stress and unreachable-generation cleanup. Then execute the earned mine → collect → spill → save/reload → revisit B.GATE; do not enter Phase C before it passes.
+
+B.4 verified: 38/38 EditMode tests, Mac build and standalone two-site departure/resume/revisit. Sparse changed chunks/spatial loose buckets, exact cargo/fuel/fragment ownership, legacy import, immutable dependencies and atomic root recovery pass. Frame p95 18.602 ms; travel/resume/return 1,269 ms; two-site directory 54,104 bytes. F5/F9 now use the World directory, T changes sites, R restores saved state. Old salvage.debris is imported through F9 when no world exists. See PERSISTENCE/SAVE_FORMAT/PERFORMANCE for tested scope and B.5 limitations.
 
 B.3 verified: 36/36 EditMode tests, Mac build and standalone damaged rotating starter. Frame p95 17.584 ms, GPU p95 9.254 ms; 579 cells and one solid fragment survive fuel transfers and exact disk resume. Full 2,500-cell rotating cavity and anchor-only unit detachment pass geometric tests. See STRUCTURAL_SIMULATION for the 16-fragment/128² starter limits and deferred stress/further-fragment-cutting work.
 

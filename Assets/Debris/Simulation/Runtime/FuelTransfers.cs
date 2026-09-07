@@ -16,7 +16,7 @@ namespace Debris.Simulation
     // A proposal owns copied mutable records. The caller uploads it before replacing the tank.
     public static class FuelTransfers
     {
-        internal static MatterSnapshot Copy(MatterSnapshot s)=>new MatterSnapshot
+        public static MatterSnapshot Copy(MatterSnapshot s)=>new MatterSnapshot
         {
             Side=s.Side,ChunkSize=s.ChunkSize,Capacity=s.Capacity,OriginX=s.OriginX,OriginY=s.OriginY,Tick=s.Tick,
             Fields=s.Fields,Damage=s.Damage,Dirty=s.Dirty,Hull=s.Hull,ShipEnabled=s.ShipEnabled,

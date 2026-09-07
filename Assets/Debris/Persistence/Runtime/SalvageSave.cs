@@ -26,7 +26,7 @@ namespace Debris.Persistence
     // Versioned, compressed exact checkpoint. No Unity API is called by the disk worker.
     public static class SalvageSaveCodec
     {
-        public const int Schema=3;
+        public const int Schema=4;
         const int Magic=0x44534252,MaxBytes=256*1024*1024;
         public static byte[] Encode(SalvageSave save,string shipJson)
         {
@@ -41,8 +41,9 @@ namespace Debris.Persistence
                     w.Write(shipJson??"");var s=save.Matter;
                     w.Write(s.Side);w.Write(s.ChunkSize);w.Write(s.Capacity);w.Write(s.OriginX);w.Write(s.OriginY);w.Write(s.Tick);
                     foreach(var v in s.Counters)w.Write(v);foreach(var v in s.Dirty)w.Write(v);
-                    foreach(var chunk in s.Fields)foreach(var v in chunk)w.Write(v);
-                    foreach(var chunk in s.Damage)foreach(var v in chunk)w.Write(v);
+                    var stored=Enumerable.Range(0,s.Fields.Length).Where(i=>s.Fields[i].Any(v=>v!=0)||s.Damage[i].Any(v=>v!=0)).ToArray();
+                    w.Write(stored.Length);
+                    foreach(int i in stored){w.Write(i);foreach(uint v in s.Fields[i])w.Write(v);foreach(float v in s.Damage[i])w.Write(v);}
                     w.Write(s.Cells.Length);foreach(var c in s.Cells){w.Write(c.Position.x);w.Write(c.Position.y);w.Write(c.Velocity.x);w.Write(c.Velocity.y);w.Write(c.Material);w.Write(c.Identity);w.Write(c.Step);w.Write(c.Flags);}
                     w.Write(s.NextIdentity);w.Write(s.FuelCells.Length);foreach(var fuel in s.FuelCells){w.Write(fuel.Identity);w.Write(fuel.Energy);}
                     foreach(uint value in s.Impact)w.Write(value);
@@ -85,11 +86,25 @@ namespace Debris.Persistence
                     if(s.Side<2||s.Side>16||s.Side%2!=0||s.ChunkSize<8||s.ChunkSize>256||s.Capacity<1||s.Capacity>1000000)throw new InvalidDataException("Unsupported snapshot geometry.");
                     s.Counters=new uint[4];for(int i=0;i<4;i++)s.Counters[i]=r.ReadUInt32();
                     int chunks=s.Side*s.Side,area=s.ChunkSize*s.ChunkSize;
-                    if((long)chunks*area*8>raw.Length)throw new InvalidDataException("Truncated fields.");
+                    if(version<4&&(long)chunks*area*8>raw.Length)throw new InvalidDataException("Truncated fields.");
                     s.Dirty=new uint[chunks];for(int i=0;i<chunks;i++)s.Dirty[i]=r.ReadUInt32();
                     s.Fields=new uint[chunks][];s.Damage=new float[chunks][];
-                    for(int i=0;i<chunks;i++){s.Fields[i]=new uint[area];for(int j=0;j<area;j++)s.Fields[i][j]=r.ReadUInt32();}
-                    for(int i=0;i<chunks;i++){s.Damage[i]=new float[area];for(int j=0;j<area;j++)s.Damage[i][j]=r.ReadSingle();}
+                    for(int i=0;i<chunks;i++){s.Fields[i]=new uint[area];s.Damage[i]=new float[area];}
+                    if(version>=4)
+                    {
+                        int stored=r.ReadInt32();if(stored<0||stored>chunks)throw new InvalidDataException("Invalid stored chunk count.");
+                        var seen=new bool[chunks];
+                        for(int n=0;n<stored;n++)
+                        {
+                            int i=r.ReadInt32();if(i<0||i>=chunks||seen[i])throw new InvalidDataException("Invalid stored chunk index.");seen[i]=true;
+                            for(int j=0;j<area;j++)s.Fields[i][j]=r.ReadUInt32();for(int j=0;j<area;j++)s.Damage[i][j]=r.ReadSingle();
+                        }
+                    }
+                    else
+                    {
+                        for(int i=0;i<chunks;i++)for(int j=0;j<area;j++)s.Fields[i][j]=r.ReadUInt32();
+                        for(int i=0;i<chunks;i++)for(int j=0;j<area;j++)s.Damage[i][j]=r.ReadSingle();
+                    }
                     int count=r.ReadInt32();if(count<0||count>s.Capacity)throw new InvalidDataException("Invalid loose count.");
                     s.Cells=new LooseCell[count];for(int i=0;i<count;i++)s.Cells[i]=new LooseCell{Position=new Vector2(r.ReadSingle(),r.ReadSingle()),Velocity=new Vector2(r.ReadSingle(),r.ReadSingle()),Material=r.ReadUInt32(),Identity=r.ReadUInt32(),Step=r.ReadUInt32(),Flags=r.ReadUInt32()};
                     if(version>=2)

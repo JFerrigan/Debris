@@ -34,6 +34,15 @@ namespace Debris.Simulation
             var d=b-a;var local=new Vector2(d.x*c+d.y*sn,-d.x*sn+d.y*c);
             return Mathf.Abs(d.x)<extent&&Mathf.Abs(d.y)<extent&&Mathf.Abs(local.x)<extent&&Mathf.Abs(local.y)<extent;
         }
+        public static void ValidateShipPlacement(MatterSnapshot state,string shipId)
+        {
+            Validate(state);if(!state.ShipEnabled)return;
+            var probe=FuelTransfers.Copy(state);probe.ShipEnabled=false;
+            var outside=new List<LooseCell>();foreach(var c in state.Cells)if((c.Flags&4)==0)outside.Add(c);probe.Cells=outside.ToArray();
+            var hull=(uint[])state.Hull.Clone();for(int i=0;i<hull.Length;i++)if(hull[i]==uint.MaxValue)hull[i]=state.ShipPose[2].z>0?0u:2u;
+            var fragments=new List<RigidFragmentSnapshot>(state.Fragments){new RigidFragmentSnapshot{Id=shipId,Hull=hull,Pose=state.ShipPose[0],Motion=Vector4.zero}};
+            probe.Fragments=fragments.ToArray();FragmentValidator.Validate(probe,true);
+        }
         public static void Validate(MatterSnapshot state)
         {
             if(state==null||state.Side<2||state.ChunkSize<8||state.Capacity<1||state.Cells==null||state.Cells.Length>state.Capacity||state.Counters==null||state.Counters.Length!=4||state.Counters[0]!=state.Cells.Length||state.Fields==null||state.Fields.Length!=state.Side*state.Side||state.Damage==null||state.Damage.Length!=state.Fields.Length||state.Dirty==null||state.Dirty.Length!=state.Fields.Length)throw new InvalidOperationException("Invalid snapshot dimensions.");

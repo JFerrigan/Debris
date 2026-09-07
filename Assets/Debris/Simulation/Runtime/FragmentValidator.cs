@@ -15,9 +15,9 @@ namespace Debris.Simulation
             return Mathf.Abs(da.x)<extent&&Mathf.Abs(da.y)<extent&&Mathf.Abs(db.x)<extent&&Mathf.Abs(db.y)<extent;
         }
         static bool InLocal(Vector2Int p)=>p.x>=-64&&p.x<64&&p.y>=-64&&p.y<64;
-        public static void Validate(MatterSnapshot s)
+        public static void Validate(MatterSnapshot s,bool includesPlacementProbe=false)
         {
-            if(s.Fragments==null||s.Fragments.Length>16)throw new InvalidOperationException("Invalid active fragment count.");
+            if(s.Fragments==null||s.Fragments.Length>(includesPlacementProbe?17:16))throw new InvalidOperationException("Invalid active fragment count.");
             var ids=new HashSet<string>();var worldCells=new Dictionary<Vector2Int,LooseCell>();var cargoCells=new Dictionary<Vector2Int,LooseCell>();
             foreach(var cell in s.Cells)((cell.Flags&4)!=0?cargoCells:worldCells).Add(Vector2Int.FloorToInt(cell.Position),cell);
             int width=s.Side*s.ChunkSize;
