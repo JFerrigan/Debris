@@ -86,6 +86,7 @@ namespace Debris.Simulation
                     }
                 }
             }
+            FragmentValidator.Validate(state);
         }
     }
 }

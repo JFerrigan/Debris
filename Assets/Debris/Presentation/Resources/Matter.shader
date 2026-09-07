@@ -16,8 +16,8 @@ Shader "Debris/Matter"
             struct Cell { float2 position; float2 velocity; uint material; uint identity; uint step; uint flags; };
             Texture2DArray<uint> _Field;
             StructuredBuffer<Cell> _Cells;
-            StructuredBuffer<uint> _Counters, _Hull;
-            StructuredBuffer<float4> _ShipPose;
+            StructuredBuffer<uint> _Counters, _Hull, _FragmentHull;
+            StructuredBuffer<float4> _ShipPose, _FragmentPose;
             float2 ShipWorld(float2 p){float4 pose=_ShipPose[0];float c=cos(pose.z),s=sin(pose.z);return pose.xy+float2(p.x*c-p.y*s,p.x*s+p.y*c);}
             StructuredBuffer<float4> _Palette, _Shadows, _Emissions;
             float _Loose;
@@ -28,7 +28,13 @@ Shader "Debris/Matter"
             {
                 Out o;o.uv=vertex.xy;o.slice=instance;o.material=0;
                 float2 p;
-                if(_Loose>1.5)
+                if(_Loose>2.5)
+                {
+                    uint m=_FragmentHull[instance];if(m==0){o.position=float4(2,2,2,1);o.world=0;return o;}
+                    float4 pose=_FragmentPose[(instance/16384)*2];uint cell=instance%16384;float2 local=float2(cell%128,cell/128)-64+vertex.xy;
+                    float c=cos(pose.z),s=sin(pose.z);p=pose.xy+float2(local.x*c-local.y*s,local.x*s+local.y*c);o.material=m;
+                }
+                else if(_Loose>1.5)
                 {
                     uint m=_Hull[instance];if(m==0||(m==0xffffffff&&_ShipPose[2].z>0)){o.position=float4(2,2,2,1);o.world=0;return o;}
                     o.material=m==0xffffffff?2:m;p=ShipWorld(float2(instance%128,instance/128)-64+vertex.xy);

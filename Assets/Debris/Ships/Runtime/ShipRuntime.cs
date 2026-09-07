@@ -7,6 +7,7 @@ namespace Debris.Ships
     [Serializable] public sealed class UnitState
     {
         public UnitPlacement Placement;
+        public string OwnerId;
         public float Health=100;
         public bool Supported=true,Destroyed;
         public bool Operational=>Supported&&!Destroyed&&Health>0;
@@ -38,7 +39,7 @@ namespace Debris.Ships
         {
             blueprint.Validate();Blueprint=blueprint;Id=id??StableId.New().Value;
             foreach(var c in blueprint.Structure)Structure.Add(c.Position,c.Material);
-            foreach(var unit in blueprint.Units)Units.Add(new UnitState{Placement=unit,Health=unit.Definition.MaximumHealth});
+            foreach(var unit in blueprint.Units)Units.Add(new UnitState{Placement=unit,OwnerId=Id,Health=unit.Definition.MaximumHealth});
             Fuel.Capacity=0;foreach(var unit in Units)if(unit.Placement.Definition.Kind==UnitKind.Tank)Fuel.Capacity+=unit.Placement.Definition.InventoryCapacity;
             Fuel.Add("standard",Math.Min(250,Fuel.Capacity));
         }
@@ -52,17 +53,17 @@ namespace Debris.Ships
             }
             foreach(var unit in Units)
             {
-                if(!unit.Supported||unit.Destroyed)continue;
+                if(!unit.Supported)continue;
                 var p=unit.Placement;var size=p.Definition.Size;
                 for(int y=p.Position.y;y<p.Position.y+size.y;y++)for(int x=p.Position.x;x<p.Position.x+size.x;x++)
                 {
                     if(x<-64||x>=64||y<-64||y>=64)throw new InvalidOperationException("Unit exceeds starter GPU mask.");
-                    mask[(y+64)*128+x+64]=p.Definition.Kind==UnitKind.Door?uint.MaxValue:2u;
+                    mask[(y+64)*128+x+64]=p.Definition.Kind==UnitKind.Door&&!unit.Destroyed?uint.MaxValue:unit.Destroyed?5u:2u;
                 }
             }
             return mask;
         }
-        public bool Has(UnitKind kind)=>Units.Exists(u=>u.Placement.Definition.Kind==kind&&u.Operational)&&Units.Exists(u=>u.Placement.Definition.Kind==UnitKind.Command&&u.Operational);
+        public bool Has(UnitKind kind)=>Units.Exists(u=>u.OwnerId==Id&&u.Placement.Definition.Kind==kind&&u.Operational)&&Units.Exists(u=>u.Placement.Definition.Kind==UnitKind.Command&&u.Operational);
         public Vector2 ToWorld(Vector2 local){float c=Mathf.Cos(Angle),s=Mathf.Sin(Angle);return Position+new Vector2(local.x*c-local.y*s,local.x*s+local.y*c);}
         public Vector2 ToLocal(Vector2 world){var p=world-Position;float c=Mathf.Cos(Angle),s=Mathf.Sin(Angle);return new Vector2(p.x*c+p.y*s,-p.x*s+p.y*c);}
         public void Tick(Vector2 thrust,float turn,float delta)
@@ -91,6 +92,19 @@ namespace Debris.Ships
             var unit=Units.Find(u=>u.Placement.Id==id);if(unit==null)return;
             unit.Health=Mathf.Max(0,unit.Health-amount);if(unit.Health==0)unit.Destroyed=true;
         }
+        static void Recenter(ShipFragment fragment)
+        {
+            Vector2 center=Vector2.zero;foreach(var cell in fragment.Cells)center+=cell.Position;
+            if(fragment.Cells.Count==0)foreach(var unit in fragment.Units)center+=(Vector2)unit.Placement.Position+(Vector2)unit.Placement.Definition.Size*.5f;
+            var offset=Vector2Int.RoundToInt(center/Mathf.Max(1,fragment.Cells.Count==0?fragment.Units.Count:fragment.Cells.Count));
+            float c=Mathf.Cos(fragment.Angle),s=Mathf.Sin(fragment.Angle);var worldOffset=new Vector2(offset.x*c-offset.y*s,offset.x*s+offset.y*c);
+            fragment.Position+=worldOffset;fragment.Velocity+=new Vector2(-worldOffset.y,worldOffset.x)*fragment.AngularVelocity;
+            for(int i=0;i<fragment.Cells.Count;i++){var cell=fragment.Cells[i];cell.Position-=offset;fragment.Cells[i]=cell;}
+            foreach(var unit in fragment.Units)
+            {
+                var p=unit.Placement;unit.Placement=new UnitPlacement{Id=p.Id,Definition=p.Definition,Position=p.Position-offset,Anchor=p.Anchor-offset};
+            }
+        }
         void ResolveSupport()
         {
             var supported=new HashSet<Vector2Int>();var queue=new Queue<Vector2Int>();
@@ -105,10 +119,20 @@ namespace Debris.Ships
                 queue.Enqueue(first);unsupported.Remove(first);
                 var region=new HashSet<Vector2Int>();
                 while(queue.Count>0){var p=queue.Dequeue();region.Add(p);fragment.Cells.Add(new StructuralCell(p.x,p.y,Structure[p]));Structure.Remove(p);foreach(var d in directions)if(unsupported.Remove(p+d))queue.Enqueue(p+d);}
-                foreach(var unit in Units)if(region.Contains(unit.Placement.Anchor)){unit.Supported=false;fragment.Units.Add(unit);}
+                foreach(var unit in Units)if(unit.OwnerId==Id&&region.Contains(unit.Placement.Anchor)){unit.Supported=false;unit.OwnerId=fragment.Id;fragment.Units.Add(unit);}
+                Recenter(fragment);
                 Fragments.Add(fragment);
             }
-            foreach(var unit in Units)unit.Supported=supported.Contains(unit.Placement.Anchor);
+            // Destroying the anchor itself leaves a whole physical machine, even without attached hull cells.
+            foreach(var unit in Units)
+            {
+                if(unit.OwnerId==Id&&!supported.Contains(unit.Placement.Anchor))
+                {
+                    var fragment=new ShipFragment{Position=Position,Velocity=Velocity,Angle=Angle,AngularVelocity=AngularVelocity};
+                    unit.OwnerId=fragment.Id;fragment.Units.Add(unit);Recenter(fragment);Fragments.Add(fragment);
+                }
+                unit.Supported=unit.OwnerId==Id&&supported.Contains(unit.Placement.Anchor);
+            }
         }
     }
 }

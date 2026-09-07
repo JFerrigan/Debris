@@ -4,8 +4,12 @@
 #pragma kernel Inspect
 #pragma kernel RestoreOccupancy
 #pragma kernel UploadDamage
+#pragma kernel PrepareShip
+#pragma kernel CheckShipHull
+#pragma kernel CheckShipCargo
 #pragma kernel MoveShip
 #pragma kernel TransferCargo
+#pragma kernel MoveFragment
 struct Cell { float2 position; float2 velocity; uint material; uint identity; uint step; uint flags; };
 RWTexture2DArray<uint> _Field;
 RWTexture2DArray<float> _Damage;
@@ -53,7 +57,7 @@ void Cut(uint3 id:SV_DispatchThreadID)
     {
         int2 p=int2(x,y);
         if(!Inside(p)||distance(float2(p)+.5,cutPosition)>_Radius)continue;
-        if(ShipBlocked(float2(p),0xffffffff))continue;
+        if(ShipBlocked(float2(p),0xffffffff)||FragmentBlocked(float2(p)+.5,0,-1))continue;
         int3 a=Address(p);uint m=_Field[a];if(m==0)continue;
         float damage=_Damage[a]+_Power*_Delta;
         if(damage<_Properties[m].x) { _Damage[a]=damage; if(_Dirty[a.z]==0){_Dirty[a.z]=1;dirtyCount++;} continue; }
@@ -68,9 +72,10 @@ void Cut(uint3 id:SV_DispatchThreadID)
 }
 bool Free(float2 target,uint self)
 {
-    if(ShipBlocked(target,self))return false;
+    if(ShipBlocked(target,self)||FragmentBlocked(target+.5,0,-1))return false;
     int2 base=(int2)floor(target);
     if(!Inside(base)||!Inside((int2)ceil(target)))return false;
+    int occupant=_Occupancy[Index(base)];if(occupant>0&&occupant!=(int)self+1)return false;
     for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++)
     {
         int2 p=base+int2(x,y);if(!Inside(p))continue;
@@ -79,6 +84,30 @@ bool Free(float2 target,uint self)
         if(other>0 && other!=(int)self+1 && all(abs(target-_Cells[other-1].position)<.99999))return false;
     }
     return true;
+}
+bool CellContact(float2 target,uint self,bool cargo,out float2 normal,out float2 otherVelocity)
+{
+    normal=0;otherVelocity=0;float4 ship=_ShipPose[0];float angle=cargo?ship.z:0;
+    float2 center=cargo?World(target+.5,ship):target+.5;
+    float2 current=cargo?World(_Cells[self].position+.5,ship):_Cells[self].position+.5;
+    for(int domain=0;domain<(_ShipEnabled!=0?2:1);domain++)
+    {
+        int2 at=(int2)floor(domain==1?Local(center,ship):center);
+        for(int dy=-2;dy<=2;dy++)for(int dx=-2;dx<=2;dx++)
+        {
+            int2 p=at+int2(dx,dy);
+            if(domain==1?!LocalInside(p):!Inside(p))continue;
+            int slot=domain==1?_CargoOccupancy[CargoIndex(p)]:_Occupancy[Index(p)];
+            if(slot<=0||slot==(int)self+1)continue;Cell other=_Cells[slot-1];
+            float2 otherCenter=domain==1?World(other.position+.5,ship):other.position+.5;
+            bool sameBucket=(cargo==(domain==1))&&all((int2)floor(target)==p);
+            if(sameBucket||SquarePair(center,angle,otherCenter,domain==1?ship.z:0))
+            {
+                normal=normalize(current-otherCenter);otherVelocity=other.velocity;return true;
+            }
+        }
+    }
+    return false;
 }
 [numthreads(64,1,1)]
 void Integrate(uint3 id:SV_DispatchThreadID)
@@ -102,7 +131,36 @@ void Integrate(uint3 id:SV_DispatchThreadID)
     }
     float2 motion=clamp(velocity*_Delta,-.2,.2);
     float2 target=c.position+motion;
-    if(cargo?CargoFree(target,i):Free(target,i))
+    bool admitted=cargo?CargoFree(target,i):Free(target,i);
+    if(!admitted)
+    {
+        // Slide along an unblocked axis. A tiny sideways force must not jam a packed column.
+        bool verticalFirst=abs(motion.y)>=abs(motion.x);
+        for(int axis=0;axis<2&&!admitted;axis++)
+        {
+            bool vertical=axis==0?verticalFirst:!verticalFirst;
+            float2 slide=vertical?float2(0,motion.y):float2(motion.x,0);
+            if(length(slide)<.000001)continue;
+            float2 attempt=c.position+slide;
+            if(cargo?CargoFree(attempt,i):Free(attempt,i))
+            {
+                target=attempt;admitted=true;
+                float2 contactNormal,contactVelocity;
+                if(CellContact(c.position+motion,i,cargo,contactNormal,contactVelocity))
+                {
+                    float closing=dot(c.velocity-contactVelocity,contactNormal);
+                    if(closing<0)c.velocity-=contactNormal*closing*1.3;
+                }
+                else
+                {
+                    if(vertical)velocity.x*=cargo?-.3:-.4;else velocity.y*=cargo?-.3:-.4;
+                    if(cargo){float4 pose=_ShipPose[0],v=_ShipPose[1];c.velocity=v.xy+Rotate(velocity+float2(-c.position.y,c.position.x)*v.z,pose.z);}
+                    else c.velocity=velocity;
+                }
+            }
+        }
+    }
+    if(admitted)
     {
         int2 next=(int2)floor(target);
         if(cargo){_CargoOccupancy[CargoIndex(old)]=0;_CargoOccupancy[CargoIndex(next)]=(int)i+1;}
@@ -114,7 +172,15 @@ void Integrate(uint3 id:SV_DispatchThreadID)
         if(!cargo&&(!Inside((int2)floor(target))||!Inside((int2)ceil(target))))c.flags=2; // streamed boundary: retain velocity
         else
         {
-            if(cargo){float4 pose=_ShipPose[0],v=_ShipPose[1];float2 relative=Rotate(c.velocity-v.xy,-pose.z)-float2(-c.position.y,c.position.x)*v.z;c.velocity=v.xy+Rotate(-relative*.3+float2(-c.position.y,c.position.x)*v.z,pose.z);c.flags=4;}
+            float2 normal,otherVelocity;
+            if(CellContact(target,i,cargo,normal,otherVelocity))
+            {
+                // A leading cell moving away is not a stationary wall. Preserve convoy motion.
+                float closing=dot(c.velocity-otherVelocity,normal);
+                if(closing<0)c.velocity-=normal*closing*1.3;
+                c.flags=cargo?4:0;
+            }
+            else if(cargo){float4 pose=_ShipPose[0],v=_ShipPose[1];float2 relative=Rotate(c.velocity-v.xy,-pose.z)-float2(-c.position.y,c.position.x)*v.z;c.velocity=v.xy+Rotate(-relative*.3+float2(-c.position.y,c.position.x)*v.z,pose.z);c.flags=4;}
             else {c.velocity*=-.4;if(length(c.velocity)<.02)c.flags=1;}
         }
     }

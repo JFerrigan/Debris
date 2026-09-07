@@ -16,12 +16,12 @@ namespace Debris.Simulation
     // A proposal owns copied mutable records. The caller uploads it before replacing the tank.
     public static class FuelTransfers
     {
-        static MatterSnapshot Copy(MatterSnapshot s)=>new MatterSnapshot
+        internal static MatterSnapshot Copy(MatterSnapshot s)=>new MatterSnapshot
         {
             Side=s.Side,ChunkSize=s.ChunkSize,Capacity=s.Capacity,OriginX=s.OriginX,OriginY=s.OriginY,Tick=s.Tick,
             Fields=s.Fields,Damage=s.Damage,Dirty=s.Dirty,Hull=s.Hull,ShipEnabled=s.ShipEnabled,
             Cells=(LooseCell[])s.Cells.Clone(),Counters=(uint[])s.Counters.Clone(),ShipPose=(Vector4[])s.ShipPose.Clone(),
-            FuelCells=(FuelCellState[])s.FuelCells.Clone(),NextIdentity=s.NextIdentity
+            Impact=(uint[])s.Impact.Clone(),Fragments=s.Fragments,FuelCells=(FuelCellState[])s.FuelCells.Clone(),NextIdentity=s.NextIdentity
         };
         public static Vector2 World(MatterSnapshot s,Vector2 local)
         {
@@ -35,7 +35,7 @@ namespace Debris.Simulation
         static void CargoStats(MatterSnapshot s,MaterialCatalog catalog)
         {
             if(!s.ShipEnabled)return;float count=0,mass=0;
-            foreach(var c in s.Cells)if((c.Flags&4)!=0){count++;mass+=catalog.DefinitionAt((ushort)c.Material).Density;}
+            foreach(var c in s.Cells)if((c.Flags&4)!=0&&c.Position.x>=-25.0001f&&c.Position.x<=24.0001f&&c.Position.y>=-25.0001f&&c.Position.y<=24.0001f){count++;mass+=catalog.DefinitionAt((ushort)c.Material).Density;}
             s.ShipPose[2]=new Vector4(count,mass,s.ShipPose[2].z,0);
         }
         public static FuelTransferResult Pump(MatterSnapshot original,TankInventory tank,MaterialCatalog catalog,Vector2 port,float radius,int limit=8)

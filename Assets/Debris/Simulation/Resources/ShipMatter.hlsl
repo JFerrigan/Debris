@@ -1,5 +1,7 @@
 // Shared world/ship collision. Ship matter is a local mask; cells keep universal volume.
 StructuredBuffer<uint> _Hull;
+RWStructuredBuffer<uint> _ShipImpact;
+RWStructuredBuffer<uint> _ShipSweep; // blocked flag, lowest local hull contact
 RWStructuredBuffer<int> _CargoOccupancy;
 RWStructuredBuffer<float4> _ShipPose; // [0] x,y,angle,enabled; [1] vx,vy,omega,collision; [2] cargo count,mass,door,reserved
 float4 _ShipMotion;
@@ -23,6 +25,7 @@ bool SquaresOverlap(float2 worldCenter,float2 localCenter,float4 pose)
     float extent=.5*(1+abs(cos(pose.z))+abs(sin(pose.z)))-.00001;
     return all(abs(delta)<extent)&&all(abs(Rotate(delta,-pose.z))<extent);
 }
+#include "FragmentMatter.hlsl"
 bool ShipBlocked(float2 worldPosition,uint self)
 {
     if(_ShipEnabled==0)return false;
@@ -39,6 +42,7 @@ bool ShipBlocked(float2 worldPosition,uint self)
 bool CargoFree(float2 target,uint self)
 {
     int2 p=(int2)floor(target);if(!LocalInside(p)||!LocalInside((int2)ceil(target)))return false;
+    int occupant=_CargoOccupancy[CargoIndex(p)];if(occupant>0&&occupant!=(int)self+1)return false;
     for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++)
     {
         int2 q=p+int2(x,y);if(!LocalInside(q))continue;
@@ -46,7 +50,7 @@ bool CargoFree(float2 target,uint self)
         int other=_CargoOccupancy[CargoIndex(q)];
         if(other>0&&other!=(int)self+1&&all(abs(target-_Cells[other-1].position)<.99999))return false;
     }
-    float4 pose=_ShipPose[0];float2 center=World(target+.5,pose);int2 wp=(int2)floor(center);
+    float4 pose=_ShipPose[0];float2 center=World(target+.5,pose);if(FragmentBlocked(center,pose.z,-1))return false;int2 wp=(int2)floor(center);
     for(int y=-2;y<=2;y++)for(int x=-2;x<=2;x++)
     {
         int2 q=wp+int2(x,y);if(!Inside(q))continue;
@@ -57,7 +61,7 @@ bool CargoFree(float2 target,uint self)
     return true;
 }
 [numthreads(1,1,1)]
-void MoveShip(uint3 id:SV_DispatchThreadID)
+void PrepareShip(uint3 id:SV_DispatchThreadID)
 {
     if(_ShipEnabled==0)return;
     float4 doorState=_ShipPose[2];doorState.z=_DoorOpen;_ShipPose[2]=doorState;
@@ -78,37 +82,54 @@ void MoveShip(uint3 id:SV_DispatchThreadID)
         }
         if(obstructed){doorState.z=1;_ShipPose[2]=doorState;}
     }
-    float4 old=_ShipPose[0], next=old;next.xy+=_ShipMotion.xy;next.z+=_ShipMotion.z;
-    bool blocked=false;
-    // Test candidate hull against nearby authoritative fixed and outside loose cells.
-    for(int y=-64;y<64&&!blocked;y++)for(int x=-64;x<64&&!blocked;x++)
+    _ShipSweep[0]=0;_ShipSweep[1]=0xffffffff;
+}
+[numthreads(64,1,1)]
+void CheckShipHull(uint3 id:SV_DispatchThreadID)
+{
+    if(id.x>=16384)return;
+    int2 p=int2(id.x%128,id.x/128)-64;if(!HullAt(p))return;
+    float4 next=_ShipPose[0];next.xyz+=_ShipMotion.xyz;
+    float2 center=World(float2(p)+.5,next);int2 at=(int2)floor(center);
+    if(!Inside(at)){InterlockedOr(_ShipSweep[0],1);return;}
+    bool blocked=FragmentBlocked(center,next.z,-1);
+    for(int dy=-2;dy<=2&&!blocked;dy++)for(int dx=-2;dx<=2&&!blocked;dx++)
     {
-        int2 p=int2(x,y);if(!HullAt(p))continue;
-        float2 center=World(float2(p)+.5,next);int2 at=(int2)floor(center);
-        if(!Inside(at)){blocked=true;break;}
-        for(int dy=-2;dy<=2&&!blocked;dy++)for(int dx=-2;dx<=2&&!blocked;dx++)
-        {
-            int2 q=at+int2(dx,dy);if(!Inside(q))continue;
-            if(_Field[Address(q)]>0&&SquaresOverlap(float2(q)+.5,float2(p)+.5,next))blocked=true;
-            int other=_Occupancy[Index(q)];
-            if(other>0&&SquaresOverlap(_Cells[other-1].position+.5,float2(p)+.5,next))blocked=true;
-        }
+        int2 q=at+int2(dx,dy);if(!Inside(q))continue;
+        if(_Field[Address(q)]>0&&SquaresOverlap(float2(q)+.5,float2(p)+.5,next))blocked=true;
+        int other=_Occupancy[Index(q)];
+        if(other>0&&SquaresOverlap(_Cells[other-1].position+.5,float2(p)+.5,next))blocked=true;
     }
-    // Cargo moves with its coordinate frame; ensure it cannot rotate through site matter.
-    for(uint i=0;i<_Counters[0]&&!blocked;i++)
+    if(blocked){InterlockedOr(_ShipSweep[0],1);InterlockedMin(_ShipSweep[1],id.x);}
+}
+[numthreads(64,1,1)]
+void CheckShipCargo(uint3 id:SV_DispatchThreadID)
+{
+    if(id.x>=_Counters[0])return;
+    Cell c=_Cells[id.x];if((c.flags&4)==0)return;
+    float4 next=_ShipPose[0];next.xyz+=_ShipMotion.xyz;
+    float2 center=World(c.position+.5,next);int2 at=(int2)floor(center);
+    bool blocked=FragmentBlocked(center,next.z,-1);
+    for(int dy=-2;dy<=2&&!blocked;dy++)for(int dx=-2;dx<=2&&!blocked;dx++)
     {
-        Cell c=_Cells[i];if((c.flags&4)==0)continue;
-        float2 center=World(c.position+.5,next);int2 at=(int2)floor(center);
-        for(int dy=-2;dy<=2&&!blocked;dy++)for(int dx=-2;dx<=2&&!blocked;dx++)
-        {
-            int2 q=at+int2(dx,dy);if(!Inside(q)){blocked=true;continue;}
-            if(_Field[Address(q)]>0&&SquaresOverlap(float2(q)+.5,c.position+.5,next))blocked=true;
-            int other=_Occupancy[Index(q)];if(other>0&&SquaresOverlap(_Cells[other-1].position+.5,c.position+.5,next))blocked=true;
-        }
+        int2 q=at+int2(dx,dy);if(!Inside(q)){blocked=true;continue;}
+        if(_Field[Address(q)]>0&&SquaresOverlap(float2(q)+.5,c.position+.5,next))blocked=true;
+        int other=_Occupancy[Index(q)];if(other>0&&SquaresOverlap(_Cells[other-1].position+.5,c.position+.5,next))blocked=true;
+    }
+    if(blocked)InterlockedOr(_ShipSweep[0],1);
+}
+[numthreads(1,1,1)]
+void MoveShip(uint3 id:SV_DispatchThreadID)
+{
+    float4 old=_ShipPose[0],next=old;next.xyz+=_ShipMotion.xyz;
+    bool blocked=_ShipSweep[0]!=0;
+    if(blocked&&_ShipSweep[1]!=0xffffffff&&_ShipImpact[3]==0)
+    {
+        int2 contact=int2(_ShipSweep[1]%128,_ShipSweep[1]/128)-64;
+        _ShipImpact[0]=contact.x+64;_ShipImpact[1]=contact.y+64;_ShipImpact[2]=asuint(length(_ShipMotion.xy+Rotate(float2(-contact.y,contact.x)*_ShipMotion.z,old.z))*60);_ShipImpact[3]=1;
     }
     if(!blocked)_ShipPose[0]=next;
     _ShipPose[1]=blocked?float4(0,0,0,1):float4(_ShipMotion.xyz*60,0);
-    
 }
 [numthreads(1,1,1)]
 void TransferCargo(uint3 id:SV_DispatchThreadID)
@@ -127,7 +148,7 @@ void TransferCargo(uint3 id:SV_DispatchThreadID)
                 c.position=local;c.flags=4;_CargoOccupancy[CargoIndex((int2)floor(local))]=(int)i+1;cargo=true;
             }
         }
-        if(cargo&&_ShipPose[2].z>0&&c.position.x<-30)
+        if(cargo&&(c.position.x<-30||c.position.x>30||c.position.y<-30||c.position.y>30))
         {
             float2 world=World(c.position+.5,pose)-.5;
             if(Free(world,i))
@@ -136,7 +157,7 @@ void TransferCargo(uint3 id:SV_DispatchThreadID)
                 c.position=world;c.flags=0;_Occupancy[Index((int2)floor(world))]=(int)i+1;cargo=false;
             }
         }
-        if(cargo){count++;mass+=_Properties[c.material].y;}
+        if(cargo&&all(c.position>=-25.0001)&&all(c.position<=24.0001)){count++;mass+=_Properties[c.material].y;}
         _Cells[i]=c;
     }
     _ShipPose[2]=float4(count,mass,_ShipPose[2].z,0);

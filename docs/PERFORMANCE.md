@@ -49,3 +49,9 @@ Mac standalone at explicitly requested 1440×900 window, Apple M4 Pro, Metal, Un
 End-to-end asynchronous spill/pump latency: 258/219 ms. Simulation is fenced during these explicit commands. These numbers include GPU readback waits and CPU occupancy verification; they are not suitable per-frame transfer costs. Moving bounded transfer admission onto GPU is a performance follow-up. `evidence/B-fuel-player.txt` and `evidence/B-fuel-tests.xml` (29/29) record this checkpoint.
 
 Correction to the earlier persistence standalone configuration: its inspected image was 3024×1890, inherited from player settings. Its measurements remain valid for that resolution; the fuel checkpoint explicitly pins 1440×900.
+
+## B.3 damaged starter checkpoint — 2026-09-07
+
+Same Mac/Metal development player at 1440×900. The preset seeds 576 cargo cells, severs three lower-rail cells to detach the lower thruster, then samples 300 rotating steps. Final state: 579 loose cells, one rigid fragment, 16 active chunks, 8,192 capacity, 38 dispatches and 4,654,876 explicit buffer bytes. Frame p95 17.584 ms, CPU p95 17.578 ms, GPU p95 9.254 ms. Serial candidate-hull scanning initially measured 23.388 ms/frame; parallel hull/cargo collision checks removed that bottleneck while retaining the same geometric tests.
+
+All matter is conserved/non-overlapping and fragment/cargo/fuel state survives disk restoration (26,358 bytes). Spill/pump transaction latency is 325/279 ms; these explicit snapshot waits are excluded from sampled movement. Four instanced matter draws plus UI. Screenshot inspected: severed lower rail/thruster is separated visibly and cargo is spilling from the open boundary. Evidence: `evidence/B-fragment-player.txt`, `B-fragment-showcase.png`, `B-fragment-tests.xml` (36/36). The full 2,500-cell cavity is correctness-tested, but its standalone frame-time budget and large-region streaming remain B.5.

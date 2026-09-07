@@ -36,10 +36,10 @@ namespace Debris.Ships
                 var copy=JsonUtility.FromJson<ShipSnapshot>(JsonUtility.ToJson(this));copy.Fuel.Validate();
                 var ship=new ShipRuntime(blueprint,Id){Fuel=copy.Fuel,Position=Position,Velocity=Velocity,Angle=Angle,AngularVelocity=AngularVelocity,CargoMass=CargoMass,DoorOpen=DoorOpen};
                 ship.Structure.Clear();foreach(var cell in copy.Structure)ship.Structure.Add(cell.Position,cell.Material);
-                ship.Units.Clear();ship.Units.AddRange(copy.Units);ship.Fragments.AddRange(copy.Fragments);
+                ship.Units.Clear();ship.Units.AddRange(copy.Units);foreach(var unit in ship.Units)if(string.IsNullOrEmpty(unit.OwnerId))unit.OwnerId=ship.Id;ship.Fragments.AddRange(copy.Fragments);
                 // Fragments refer to the stable unit registry, not duplicated machines.
                 foreach(var fragment in ship.Fragments)
-                    for(int i=0;i<fragment.Units.Count;i++)fragment.Units[i]=ship.Units.Single(u=>u.Placement.Id==fragment.Units[i].Placement.Id);
+                    for(int i=0;i<fragment.Units.Count;i++){fragment.Units[i]=ship.Units.Single(u=>u.Placement.Id==fragment.Units[i].Placement.Id);fragment.Units[i].OwnerId=fragment.Id;}
                 return ship;
             }
             catch{UnityEngine.Object.DestroyImmediate(blueprint);throw;}

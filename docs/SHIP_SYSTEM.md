@@ -16,7 +16,7 @@ IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
 - [x] B.1 Blueprint/starter ship.
 - [x] B.2 Flight/fuel.
-- [ ] B.3 Cargo/damage/fragments.
+- [x] B.3 Cargo/damage/fragments.
 - [ ] D.2 Automation.
 
 ## M4 data checkpoint
@@ -38,3 +38,7 @@ Three stable physical grades (`fuel-low`, `fuel-standard`, `fuel-dense`) provide
 Transfers are explicit snapshot-boundary proposals: copy authoritative records, validate occupancy/conservation, restore GPU state, then replace the tank inventory. No transfer changes volume or silently removes non-fuel cargo. GPU cutting uses a monotonic site-cell identity sequence after pool compaction. Tests cover mixed grades, partial burn, blocked outlets, tank/pool exhaustion, exact schema-2 fuel save/load and further cuts after pumping. 29/29 EditMode tests and a standalone eight-cell spill/recovery/save loop pass; see `evidence/B-fuel-*`.
 
 This proves B.2, not the remaining B.3 fragment/collision-damage gate. Transfers currently pause simulation for a snapshot boundary; measured latency is recorded in PERFORMANCE.
+
+## B.3 physical damage checkpoint — 2026-09-07
+
+B.3 is verified for the starter: moving-hull impact queues damage, unsupported regions and whole units detach into solid moving fragments, and cargo escapes breached walls. Full 2,500-cell rotating-cavity tests preserve non-overlap, with an extra incoming cell unable to create hidden capacity. Schema 3 retains fragment fields/transforms/motion and pending impacts; fragments and their units share stable registry identities after load. See STRUCTURAL_SIMULATION for supported budgets and limitations, and `evidence/B-fragment-*` for the 36-test suite and standalone proof. Larger masks/streaming remain B.5.

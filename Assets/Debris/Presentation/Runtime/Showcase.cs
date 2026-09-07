@@ -52,6 +52,12 @@ namespace Debris.Presentation
                 else if(input["PumpFuel"].WasPressedThisFrame())_ = TransferFuel(true);
                 else if(input["SpillFuel"].WasPressedThisFrame())_ = TransferFuel(false);
             }
+            if(!saveBusy&&!benchmark&&!shipBenchmark&&session.ImpactStats[3]!=0)
+            {
+                float speed=BitConverter.ToSingle(BitConverter.GetBytes(session.ImpactStats[2]),0);
+                var point=new Vector2Int((int)session.ImpactStats[0]-64,(int)session.ImpactStats[1]-64);
+                if(speed>6)_ = ApplyDamage(new[]{point},(speed-6)*10);else session.ClearImpact();
+            }
             if(input["Pause"].WasPressedThisFrame())paused=!paused;
             if(input["Reset"].WasPressedThisFrame()&&!benchmark&&!shipBenchmark&&!saveBusy)ResetSession(benchmark?2:4,8192);
             var pointer=input["Pointer"].ReadValue<Vector2>();pointerWorld=cameraView.ScreenToWorldPoint(new Vector3(pointer.x,pointer.y,10));
@@ -93,6 +99,23 @@ namespace Debris.Presentation
             if(FrameTimingManager.GetLatestTimings(1,timings)>0){if(benchmark||shipBenchmark){cpu.Add(timings[0].cpuFrameTime);if(timings[0].gpuFrameTime>0)gpu.Add(timings[0].gpuFrameTime);}}
             if(benchmark||shipBenchmark)frames.Add(Time.unscaledDeltaTime*1000);
         }
+        async Task<bool> ApplyDamage(IEnumerable<Vector2Int> positions,float unitDamage=0)
+        {
+            saveBusy=true;
+            try
+            {
+                var snapshot=await session.SnapshotAsync();
+                using(var damage=ShipDamage.CutHull(snapshot,ship,positions,unitDamage))
+                {
+                    session.Restore(damage.Matter);if(loadedBlueprint)Destroy(loadedBlueprint);
+                    ship=damage.Ship;loadedBlueprint=damage.Blueprint;damage.Blueprint=null;
+                    saveStatus=$"Impact damage: {damage.Released} hull cells released; {ship.Fragments.Count} detached regions.";
+                }
+                return true;
+            }
+            catch(Exception e){saveStatus="Damage admission deferred: "+e.Message;Debug.LogWarning(saveStatus);return false;}
+            finally{saveBusy=false;accumulator=0;}
+        }
         async Task<int> TransferFuel(bool pump)
         {
             if(ship==null||pump&&(!ship.Has(UnitKind.Tank)||!ship.Has(UnitKind.Suction))){saveStatus="Fuel pump requires a supported tank and suction unit.";return 0;}
@@ -120,7 +143,7 @@ namespace Debris.Presentation
             saveBusy=true;saveStatus="Saving site…";
             try
             {
-                var matter=await session.SnapshotAsync();var state=ShipSnapshot.Capture(ship);
+                var matter=await session.SnapshotAsync();ShipDamage.SynchronizeFragments(matter,ship);var state=ShipSnapshot.Capture(ship);
                 state.Position=new Vector2(matter.ShipPose[0].x,matter.ShipPose[0].y);state.Angle=matter.ShipPose[0].z;
                 if(matter.ShipPose[1].w>0){state.Velocity=Vector2.zero;state.AngularVelocity=0;}
                 var save=new SalvageSave{Matter=matter,Ship=state,MaterialKeys=SalvageSave.Keys(catalog)};
@@ -162,6 +185,9 @@ namespace Debris.Presentation
             for(int y=-24;y<24;y+=2)for(int x=-24;x<24;x+=2)cells.Add(new LooseCell{Position=new Vector2(x,y),Material=2,Identity=(uint)cells.Count+1,Flags=4});
             state.Cells=cells.ToArray();state.NextIdentity=(uint)cells.Count+1;state.Counters[0]=(uint)cells.Count;state.Counters[1]+=(uint)cells.Count;session.Restore(state);
             for(int i=0;i<60;i++){session.Step(shipMotion:new Vector3(0,.005f,.001f));yield return null;}
+            ship.Velocity=new Vector2(0,-3);
+            var damage=ApplyDamage(new[]{new Vector2Int(24,-28),new Vector2Int(24,-27),new Vector2Int(24,-26)});
+            while(!damage.IsCompleted)yield return null;if(!damage.Result)throw new InvalidOperationException("Fragment showcase damage failed.");
             cpu.Clear();gpu.Clear();frames.Clear();
             for(int i=0;i<300;i++){session.Step(shipMotion:new Vector3(0,.005f,.001f));yield return null;}
             double frame95=Percentile(frames,.95),cpu95=Percentile(cpu,.95),gpu95=Percentile(gpu,.95);int dispatches=session.Dispatches;
@@ -176,9 +202,11 @@ namespace Debris.Presentation
             var loaded=LoadCheckpoint();while(!loaded.IsCompleted)yield return null;if(!loaded.Result)throw new InvalidOperationException("Player load verification failed.");
             var revisited=session.SnapshotAsync();while(!revisited.IsCompleted)yield return null;
             var original=task.Result;var restored=revisited.Result;
+            if(original.Fragments.Length!=restored.Fragments.Length)throw new InvalidOperationException("Player fragment count changed.");
+            for(int f=0;f<original.Fragments.Length;f++)if(original.Fragments[f].Pose!=restored.Fragments[f].Pose||original.Fragments[f].Motion!=restored.Fragments[f].Motion||!System.Linq.Enumerable.SequenceEqual(original.Fragments[f].Hull,restored.Fragments[f].Hull))throw new InvalidOperationException("Player fragment state changed.");
             if(!System.Linq.Enumerable.SequenceEqual(original.Cells,restored.Cells)||!System.Linq.Enumerable.SequenceEqual(original.ShipPose,restored.ShipPose))throw new InvalidOperationException("Player disk resume changed cargo or ship pose.");
             for(int i=0;i<original.Fields.Length;i++)if(!System.Linq.Enumerable.SequenceEqual(original.Fields[i],restored.Fields[i])||!System.Linq.Enumerable.SequenceEqual(original.Damage[i],restored.Damage[i]))throw new InvalidOperationException("Player disk resume changed terrain.");
-            string line=$"preset=rotating-starter cells={task.Result.Cells.Length} chunks={session.Side*session.Side} capacity={session.Capacity} frame_p95={frame95:F3} cpu_p95={cpu95:F3} gpu_p95={gpu95:F3} buffers={session.BufferBytes} dispatches={dispatches} nonoverlap=true conserved=true disk_roundtrip=true fuel_roundtrip=true spill_ms={spillMs} pump_ms={pumpMs} save_bytes={new FileInfo(SavePath).Length} angle={task.Result.ShipPose[0].z:F3}";
+            string line=$"preset=damaged-rotating-starter fragments={session.FragmentCount} cells={task.Result.Cells.Length} chunks={session.Side*session.Side} capacity={session.Capacity} frame_p95={frame95:F3} cpu_p95={cpu95:F3} gpu_p95={gpu95:F3} buffers={session.BufferBytes} dispatches={dispatches} nonoverlap=true conserved=true disk_roundtrip=true fuel_roundtrip=true spill_ms={spillMs} pump_ms={pumpMs} save_bytes={new FileInfo(SavePath).Length} angle={task.Result.ShipPose[0].z:F3}";
             File.WriteAllText(Path.Combine(output,"ship-benchmark.txt"),SystemInfo.graphicsDeviceName+" / "+Application.unityVersion+"\n"+line);Debug.Log("DEBRIS_SHIP_BENCHMARK "+line);
             ScreenCapture.CaptureScreenshot(Path.Combine(output,"ship-showcase.png"));yield return null;yield return null;Application.Quit();
         }

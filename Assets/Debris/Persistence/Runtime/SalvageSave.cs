@@ -26,7 +26,7 @@ namespace Debris.Persistence
     // Versioned, compressed exact checkpoint. No Unity API is called by the disk worker.
     public static class SalvageSaveCodec
     {
-        public const int Schema=2;
+        public const int Schema=3;
         const int Magic=0x44534252,MaxBytes=256*1024*1024;
         public static byte[] Encode(SalvageSave save,string shipJson)
         {
@@ -45,6 +45,9 @@ namespace Debris.Persistence
                     foreach(var chunk in s.Damage)foreach(var v in chunk)w.Write(v);
                     w.Write(s.Cells.Length);foreach(var c in s.Cells){w.Write(c.Position.x);w.Write(c.Position.y);w.Write(c.Velocity.x);w.Write(c.Velocity.y);w.Write(c.Material);w.Write(c.Identity);w.Write(c.Step);w.Write(c.Flags);}
                     w.Write(s.NextIdentity);w.Write(s.FuelCells.Length);foreach(var fuel in s.FuelCells){w.Write(fuel.Identity);w.Write(fuel.Energy);}
+                    foreach(uint value in s.Impact)w.Write(value);
+                    w.Write(s.Fragments.Length);
+                    foreach(var f in s.Fragments){w.Write(f.Id);foreach(uint m in f.Hull)w.Write(m);w.Write(f.Pose.x);w.Write(f.Pose.y);w.Write(f.Pose.z);w.Write(f.Pose.w);w.Write(f.Motion.x);w.Write(f.Motion.y);w.Write(f.Motion.z);w.Write(f.Motion.w);}
                     w.Write(s.ShipEnabled);
                     if(s.ShipEnabled){foreach(var v in s.Hull)w.Write(v);foreach(var p in s.ShipPose){w.Write(p.x);w.Write(p.y);w.Write(p.z);w.Write(p.w);}}
                 }
@@ -63,7 +66,7 @@ namespace Debris.Persistence
             using(var input=new MemoryStream(bytes))using(var reader=new BinaryReader(input))
             {
                 if(reader.ReadInt32()!=Magic)throw new InvalidDataException("Not a Debris save.");
-                int version=reader.ReadInt32();if(version!=1&&version!=Schema)throw new NotSupportedException("Save schema "+version+" is not supported; original file retained.");
+                int version=reader.ReadInt32();if(version<1||version>Schema)throw new NotSupportedException("Save schema "+version+" is not supported; original file retained.");
                 int length=reader.ReadInt32();if(length<0||length>MaxBytes)throw new InvalidDataException("Save exceeds safe decode size.");
                 var expected=reader.ReadBytes(32);var raw=new byte[length];
                 using(var zip=new DeflateStream(input,CompressionMode.Decompress,true))
@@ -95,6 +98,18 @@ namespace Debris.Persistence
                         s.FuelCells=new FuelCellState[fuels];for(int i=0;i<fuels;i++)s.FuelCells[i]=new FuelCellState{Identity=r.ReadUInt32(),Energy=r.ReadDouble()};
                     }
                     else {uint maximum=0;foreach(var cell in s.Cells)maximum=Math.Max(maximum,cell.Identity);s.NextIdentity=checked(maximum+1);}
+                    if(version>=3)
+                    {
+                        for(int i=0;i<4;i++)s.Impact[i]=r.ReadUInt32();
+                        int fragments=r.ReadInt32();if(fragments<0||fragments>16)throw new InvalidDataException("Invalid active fragment count.");
+                        s.Fragments=new RigidFragmentSnapshot[fragments];
+                        for(int i=0;i<fragments;i++)
+                        {
+                            var f=new RigidFragmentSnapshot{Id=r.ReadString(),Hull=new uint[16384]};new StableId(f.Id);
+                            for(int j=0;j<f.Hull.Length;j++)f.Hull[j]=r.ReadUInt32();
+                            f.Pose=new Vector4(r.ReadSingle(),r.ReadSingle(),r.ReadSingle(),r.ReadSingle());f.Motion=new Vector4(r.ReadSingle(),r.ReadSingle(),r.ReadSingle(),r.ReadSingle());s.Fragments[i]=f;
+                        }
+                    }
                     s.ShipEnabled=r.ReadBoolean();s.Hull=new uint[16384];s.ShipPose=new Vector4[3];
                     if(s.ShipEnabled){for(int i=0;i<s.Hull.Length;i++)s.Hull[i]=r.ReadUInt32();for(int i=0;i<3;i++)s.ShipPose[i]=new Vector4(r.ReadSingle(),r.ReadSingle(),r.ReadSingle(),r.ReadSingle());}
                     if(stream.Position!=stream.Length)throw new InvalidDataException("Trailing save data.");
@@ -109,6 +124,7 @@ namespace Debris.Persistence
             uint Map(uint value){if(value>=map.Length)throw new InvalidDataException("Unknown saved material index.");return map[value];}
             var s=save.Matter;foreach(var f in s.Fields)for(int i=0;i<f.Length;i++)f[i]=Map(f[i]);
             for(int i=0;i<s.Cells.Length;i++)s.Cells[i].Material=Map(s.Cells[i].Material);
+            foreach(var f in s.Fragments)for(int i=0;i<f.Hull.Length;i++)f.Hull[i]=Map(f.Hull[i]);
             for(int i=0;i<s.Hull.Length;i++)if(s.Hull[i]!=uint.MaxValue)s.Hull[i]=Map(s.Hull[i]);
             if(!string.IsNullOrEmpty(shipJson))
             {

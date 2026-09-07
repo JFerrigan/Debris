@@ -28,6 +28,8 @@ namespace Debris.Simulation
         public bool ShipEnabled;
         public uint NextIdentity;
         public FuelCellState[] FuelCells=Array.Empty<FuelCellState>();
+        public RigidFragmentSnapshot[] Fragments=Array.Empty<RigidFragmentSnapshot>();
+        public uint[] Impact=new uint[4];
     }
     // Sole GPU resource owner; snapshots only at save/stream boundaries, compact async facts during play.
     public sealed class MatterSession : IDisposable
@@ -38,18 +40,23 @@ namespace Debris.Simulation
         public readonly RenderTexture Field, Damage;
         public readonly GraphicsBuffer Cells, Counters, Dirty, Properties, Palette, Shadows, Emissions;
         readonly GraphicsBuffer occupancy, upload, inspection, cargoOccupancy;
-        public readonly GraphicsBuffer Hull, ShipPose;
+        public readonly GraphicsBuffer Hull, ShipPose,FragmentHull,FragmentPose;
+        readonly GraphicsBuffer fragmentNextPose,impact,shipSweep;
+        public uint[] ImpactStats {get;private set;}=new uint[4];
+        bool impactPending;
+        RigidFragmentSnapshot[] fragments=Array.Empty<RigidFragmentSnapshot>();
+        public int FragmentCount=>fragments.Length;
         public bool ShipEnabled {get;private set;}
         uint[] hullData=new uint[128*128];
         public Vector4[] ShipStats {get;private set;}=new Vector4[3];
         readonly ComputeShader shader;
-        readonly int uploadKernel,cutKernel,integrateKernel,inspectKernel,restoreKernel,damageKernel,moveShipKernel,transferKernel;
+        readonly int uploadKernel,cutKernel,integrateKernel,inspectKernel,restoreKernel,damageKernel,moveShipKernel,transferKernel,fragmentKernel,prepareShipKernel,checkShipHullKernel,checkShipCargoKernel;
         bool disposed,statsPending,inspectionPending,snapshotPending,shipStatsPending;
         int tick;uint identityBase;FuelCellState[] fuelCells=Array.Empty<FuelCellState>();
         public uint[] Stats {get;private set;}=new uint[4];
         public int Dispatches {get;private set;}
         public int ReadbackQueue {get;private set;}
-        public long BufferBytes => (long)Width*Width*12+(long)Capacity*CellStride+Side*Side*4+ChunkSize*ChunkSize*4+(Properties.count*64)+20+128*128*8+48;
+        public long BufferBytes => (long)Width*Width*12+(long)Capacity*CellStride+Side*Side*4+ChunkSize*ChunkSize*4+(Properties.count*64)+20+128*128*8+48+16*16384*4+32*16*2+24;
         public MatterSession(MaterialCatalog catalog,AsteroidProfile profile,int side=2,int chunkSize=128,int capacity=8192,ulong seed=42,StableId? site=null)
         {
             if(side<2||side>16||side%2!=0||chunkSize<8||chunkSize>256||capacity<1)throw new ArgumentOutOfRangeException();
@@ -60,6 +67,11 @@ namespace Debris.Simulation
             Field=Texture(GraphicsFormat.R32_UInt);Damage=Texture(GraphicsFormat.R32_SFloat);
             Cells=Buffer(capacity,CellStride);Counters=Buffer(4,4);Dirty=Buffer(side*side,4);
             Hull=Buffer(128*128,4);cargoOccupancy=Buffer(128*128,4);ShipPose=Buffer(3,16);
+            shipSweep=Buffer(2,4);impact=Buffer(4,4);impact.SetData(new uint[4]);
+            FragmentHull=Buffer(16*16384,4);
+            FragmentPose=new GraphicsBuffer(GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.CopyDestination,32,16);
+            fragmentNextPose=new GraphicsBuffer(GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.CopySource,32,16);
+            FragmentHull.SetData(new uint[16*16384]);FragmentPose.SetData(new Vector4[32]);fragmentNextPose.SetData(new Vector4[32]);
             Hull.SetData(hullData);cargoOccupancy.SetData(new int[128*128]);ShipPose.SetData(ShipStats);
             occupancy=Buffer(Width*Width,4);upload=Buffer(chunkSize*chunkSize,4);inspection=Buffer(1,4);
             Properties=Buffer(catalog.Count+1,16);Palette=Buffer(catalog.Count+1,16);Shadows=Buffer(catalog.Count+1,16);Emissions=Buffer(catalog.Count+1,16);
@@ -68,10 +80,12 @@ namespace Debris.Simulation
             Properties.SetData(properties);Palette.SetData(palette);Shadows.SetData(shadows);Emissions.SetData(emissions);
             Cells.SetData(new LooseCell[capacity]);Counters.SetData(new uint[4]);Dirty.SetData(new uint[side*side]);occupancy.SetData(new int[Width*Width]);
             uploadKernel=shader.FindKernel("Upload");cutKernel=shader.FindKernel("Cut");integrateKernel=shader.FindKernel("Integrate");inspectKernel=shader.FindKernel("Inspect");restoreKernel=shader.FindKernel("RestoreOccupancy");
-            damageKernel=shader.FindKernel("UploadDamage");moveShipKernel=shader.FindKernel("MoveShip");transferKernel=shader.FindKernel("TransferCargo");
+            prepareShipKernel=shader.FindKernel("PrepareShip");checkShipHullKernel=shader.FindKernel("CheckShipHull");checkShipCargoKernel=shader.FindKernel("CheckShipCargo");
+            damageKernel=shader.FindKernel("UploadDamage");moveShipKernel=shader.FindKernel("MoveShip");transferKernel=shader.FindKernel("TransferCargo");fragmentKernel=shader.FindKernel("MoveFragment");
             shader.SetInt("_ChunkSize",chunkSize);shader.SetInt("_Side",side);shader.SetInt("_Width",Width);shader.SetInt("_Capacity",capacity);shader.SetInts("_Origin",Origin.x,Origin.y);
-            foreach(int kernel in new[]{uploadKernel,cutKernel,integrateKernel,inspectKernel,restoreKernel,damageKernel,moveShipKernel,transferKernel})
+            foreach(int kernel in new[]{uploadKernel,cutKernel,integrateKernel,inspectKernel,restoreKernel,damageKernel,moveShipKernel,transferKernel,fragmentKernel,prepareShipKernel,checkShipHullKernel,checkShipCargoKernel})
             {
+                shader.SetBuffer(kernel,"_ShipSweep",shipSweep);shader.SetBuffer(kernel,"_ShipImpact",impact);shader.SetBuffer(kernel,"_FragmentHull",FragmentHull);shader.SetBuffer(kernel,"_FragmentPose",FragmentPose);shader.SetBuffer(kernel,"_FragmentNextPose",fragmentNextPose);
                 shader.SetBuffer(kernel,"_Hull",Hull);shader.SetBuffer(kernel,"_CargoOccupancy",cargoOccupancy);shader.SetBuffer(kernel,"_ShipPose",ShipPose);
                 shader.SetTexture(kernel,"_Field",Field);shader.SetTexture(kernel,"_Damage",Damage);
                 shader.SetBuffer(kernel,"_Cells",Cells);shader.SetBuffer(kernel,"_Counters",Counters);shader.SetBuffer(kernel,"_Dirty",Dirty);
@@ -107,6 +121,27 @@ namespace Debris.Simulation
             ShipStats=new[]{new Vector4(position.x,position.y,angle,1),Vector4.zero,Vector4.zero};ShipPose.SetData(ShipStats);
             shader.SetInt("_ShipEnabled",1);
         }
+        public void UpdateHull(uint[] hull)
+        {
+            if(snapshotPending||disposed)throw new InvalidOperationException("Session unavailable.");
+            if(hull==null||hull.Length!=16384)throw new ArgumentException("Invalid local hull.");
+            hullData=(uint[])hull.Clone();Hull.SetData(hullData);
+        }
+        public void ConfigureFragments(RigidFragmentSnapshot[] values)
+        {
+            if(snapshotPending||disposed)throw new InvalidOperationException("Session unavailable.");
+            if(values==null||values.Length>16)throw new ArgumentException("Active fragment budget exceeded; retain unloaded records before admitting more.");
+            var mask=new uint[16*16384];var poses=new Vector4[32];var owned=new RigidFragmentSnapshot[values.Length];var ids=new HashSet<string>();
+            for(int i=0;i<values.Length;i++)
+            {
+                var f=values[i];new StableId(f.Id);
+                if(!ids.Add(f.Id)||f.Hull==null||f.Hull.Length!=16384)throw new ArgumentException("Invalid fragment identity/field.");
+                Array.Copy(f.Hull,0,mask,i*16384,16384);poses[i*2]=f.Pose;poses[i*2+1]=f.Motion;
+                if(!float.IsFinite(f.Motion.x)||!float.IsFinite(f.Motion.y)||!float.IsFinite(f.Motion.z)||Mathf.Abs(f.Motion.x)>96||Mathf.Abs(f.Motion.y)>96||Mathf.Abs(f.Motion.z)>1.44f)throw new ArgumentException("Fragment motion exceeds bounded substeps.");
+                owned[i]=new RigidFragmentSnapshot{Id=f.Id,Hull=(uint[])f.Hull.Clone(),Pose=f.Pose,Motion=f.Motion};
+            }
+            fragments=owned;FragmentHull.SetData(mask);FragmentPose.SetData(poses);shader.SetInt("_FragmentCount",values.Length);
+        }
         public void Step(SiteCommand? command=null,float force=0,Vector2 forcePosition=default,Vector3 shipMotion=default,bool doorOpen=false,bool mountedCut=false,bool mountedSuction=false)
         {
             if(disposed)throw new ObjectDisposedException(nameof(MatterSession));
@@ -115,7 +150,7 @@ namespace Debris.Simulation
             const float delta=1f/60;Dispatches=0;
             shader.SetInt("_MountedCut",mountedCut&&ShipEnabled?1:0);shader.SetInt("_MountedSuction",mountedSuction&&ShipEnabled?1:0);
             shader.SetInt("_DoorOpen",doorOpen?1:0);
-            if(ShipEnabled){shader.SetVector("_ShipMotion",shipMotion);shader.Dispatch(moveShipKernel,1,1,1);Dispatches++;}
+            if(ShipEnabled){shader.SetVector("_ShipMotion",shipMotion);shader.Dispatch(prepareShipKernel,1,1,1);shader.Dispatch(checkShipHullKernel,256,1,1);shader.Dispatch(checkShipCargoKernel,(Capacity+63)/64,1,1);shader.Dispatch(moveShipKernel,1,1,1);Dispatches+=4;}
             if(command.HasValue)
             {
                 var c=command.Value;
@@ -130,9 +165,22 @@ namespace Debris.Simulation
                 for(int color=0;color<16;color++){shader.SetInt("_Color",color);shader.Dispatch(integrateKernel,(Capacity+63)/64,1,1);Dispatches++;}
             }
             if(ShipEnabled){shader.Dispatch(transferKernel,1,1,1);Dispatches++;}
+            for(int f=0;f<fragments.Length;f++)
+            {
+                shader.SetInt("_MovingFragment",f);var motion=fragments[f].Motion;
+                int steps=Mathf.Max(1,Mathf.CeilToInt(Mathf.Max(Mathf.Max(Mathf.Abs(motion.x),Mathf.Abs(motion.y))/12,Mathf.Abs(motion.z)/.18f)));
+                shader.SetFloat("_FragmentDelta",delta/steps);
+                for(int substep=0;substep<steps;substep++){shader.Dispatch(fragmentKernel,1,1,1);Graphics.CopyBuffer(fragmentNextPose,FragmentPose);Dispatches++;}
+            }
         }
+        public void ClearImpact(){impact.SetData(new uint[4]);ImpactStats=new uint[4];}
         public void PollStats()
         {
+            if(ShipEnabled&&!impactPending&&!disposed)
+            {
+                impactPending=true;ReadbackQueue++;
+                AsyncGPUReadback.Request(impact,r=>{impactPending=false;ReadbackQueue--;if(!disposed&&!r.hasError)ImpactStats=r.GetData<uint>().ToArray();});
+            }
             if(ShipEnabled&&!shipStatsPending&&!disposed)
             {
                 shipStatsPending=true;ReadbackQueue++;
@@ -157,7 +205,13 @@ namespace Debris.Simulation
             var counts=await Read<uint>(Counters);
             var cells=await Read<LooseCell>(Cells);Array.Resize(ref cells,(int)counts[0]);
             var fields=await ReadTexture<uint>(Field);var damage=await ReadTexture<float>(Damage);
-            return new MatterSnapshot{Side=Side,ChunkSize=ChunkSize,Capacity=Capacity,OriginX=Origin.x,OriginY=Origin.y,Tick=tick,Cells=cells,NextIdentity=identityBase+counts[0]+1,FuelCells=(FuelCellState[])fuelCells.Clone(),Hull=(uint[])hullData.Clone(),ShipEnabled=ShipEnabled,ShipPose=await Read<Vector4>(ShipPose),Counters=counts,Dirty=await Read<uint>(Dirty),Fields=fields,Damage=damage};
+            var fragmentStates=new RigidFragmentSnapshot[fragments.Length];
+            if(fragments.Length>0)
+            {
+                var poses=await Read<Vector4>(FragmentPose);
+                for(int i=0;i<fragments.Length;i++)fragmentStates[i]=new RigidFragmentSnapshot{Id=fragments[i].Id,Hull=(uint[])fragments[i].Hull.Clone(),Pose=poses[i*2],Motion=poses[i*2+1]};
+            }
+            return new MatterSnapshot{Side=Side,ChunkSize=ChunkSize,Capacity=Capacity,OriginX=Origin.x,OriginY=Origin.y,Tick=tick,Impact=await Read<uint>(impact),Fragments=fragmentStates,Cells=cells,NextIdentity=identityBase+counts[0]+1,FuelCells=(FuelCellState[])fuelCells.Clone(),Hull=(uint[])hullData.Clone(),ShipEnabled=ShipEnabled,ShipPose=await Read<Vector4>(ShipPose),Counters=counts,Dirty=await Read<uint>(Dirty),Fields=fields,Damage=damage};
             }
             finally {snapshotPending=false;}
         }
@@ -167,6 +221,7 @@ namespace Debris.Simulation
             if(snapshot.Side!=Side||snapshot.ChunkSize!=ChunkSize||snapshot.Capacity!=Capacity||snapshot.OriginX!=Origin.x||snapshot.OriginY!=Origin.y||snapshot.Cells.Length>Capacity)
                 throw new ArgumentException("Snapshot geometry/capacity mismatch.");
             CpuCutReference.Validate(snapshot);
+            ConfigureFragments(snapshot.Fragments);impact.SetData(snapshot.Impact);ImpactStats=(uint[])snapshot.Impact.Clone();
             uint maximum=0;foreach(var cell in snapshot.Cells)maximum=Math.Max(maximum,cell.Identity);
             uint next=snapshot.NextIdentity==0?checked(maximum+1):snapshot.NextIdentity;
             if(next<=maximum||(ulong)next+(uint)(Capacity-snapshot.Cells.Length)>uint.MaxValue)throw new InvalidOperationException("Cell identity range exhausted or invalid.");
@@ -199,7 +254,7 @@ namespace Debris.Simulation
         public void Dispose()
         {
             if(disposed)return;disposed=true;AsyncGPUReadback.WaitAllRequests();
-            foreach(var b in new[]{Cells,Counters,Dirty,Properties,Palette,Shadows,Emissions,occupancy,upload,inspection,Hull,ShipPose,cargoOccupancy})b.Dispose();
+            foreach(var b in new[]{Cells,Counters,Dirty,Properties,Palette,Shadows,Emissions,occupancy,upload,inspection,Hull,ShipPose,cargoOccupancy,FragmentHull,FragmentPose,fragmentNextPose,impact,shipSweep})b.Dispose();
             Field.Release();Damage.Release();UnityEngine.Object.DestroyImmediate(Field);UnityEngine.Object.DestroyImmediate(Damage);UnityEngine.Object.DestroyImmediate(shader);
         }
     }

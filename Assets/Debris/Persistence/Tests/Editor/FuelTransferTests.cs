@@ -64,7 +64,7 @@ namespace Debris.Persistence.Tests
                 Assert.That(ship.Fuel.Count,Is.EqualTo(250));Assert.That(ship.Fuel.Energy,Is.EqualTo(500));
                 Assert.That(loaded.Matter.Cells.Length,Is.EqualTo(576));Assert.That(loaded.Matter.NextIdentity,Is.EqualTo(577));Assert.That(loaded.Matter.FuelCells,Is.Empty);
                 var current=SalvageSaveCodec.Encode(loaded,JsonUtility.ToJson(ShipSnapshot.Capture(ship)));
-                Assert.That(BitConverter.ToInt32(current,4),Is.EqualTo(2));Assert.DoesNotThrow(()=>SalvageSaveCodec.Decode(current,out _));
+                Assert.That(BitConverter.ToInt32(current,4),Is.EqualTo(SalvageSaveCodec.Schema));Assert.DoesNotThrow(()=>SalvageSaveCodec.Decode(current,out _));
                 var partial=new TankInventory{Capacity=3,Low=1,Standard=1,Dense=1,BurnRemainder=.75};partial.MigrateLegacy();
                 Assert.That(partial.Energy,Is.EqualTo(6.25));Assert.That(partial.Contents[0].Energy,Is.EqualTo(.25));
                 partial.Add("dense",0);Assert.That(partial.Energy,Is.EqualTo(6.25));partial.Validate();

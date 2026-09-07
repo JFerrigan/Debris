@@ -1,6 +1,6 @@
 # Implementation status
 
-Current phase: Phase B / M4. Phase A gate passed. Planning baseline d46f7a9 is pushed. Current commit: `git log -1`.
+Current phase: Phase B / M6. Phase A gate passed. Planning baseline d46f7a9 is pushed. Current commit: `git log -1`.
 
 ## Documented
 
@@ -24,7 +24,9 @@ Unity MCP remains unavailable; direct editor works. Windows/Linux execution and 
 
 ## Exact next task
 
-B.3: integrate hull damage and physical fragment collision/motion/rendering, release cargo through damaged boundaries, and verify full rotating-cavity saturation. Then B.4 sparse dirty-only saves and multi-site leave/revisit; B.5 paged larger ship masks and active-region streaming.
+B.4: sparse dirty-only chunk files and atomic multi-site leave/revisit with portable cargo/fuel separated from deposited site debris. Then B.5 paged larger ship masks and active-region streaming.
+
+B.3 verified: 36/36 EditMode tests, Mac build and standalone damaged rotating starter. Frame p95 17.584 ms, GPU p95 9.254 ms; 579 cells and one solid fragment survive fuel transfers and exact disk resume. Full 2,500-cell rotating cavity and anchor-only unit detachment pass geometric tests. See STRUCTURAL_SIMULATION for the 16-fragment/128² starter limits and deferred stress/further-fragment-cutting work.
 
 B.2 verified: 29/29 EditMode tests, Mac build and standalone partial-fuel spill/recovery/save loop. Schema 2 preserves residual fuel and the next unused cell identity; schema-1 migration uses a retained actual standalone save. B.1/B.2 are checked, the full Phase B gate remains open.
 

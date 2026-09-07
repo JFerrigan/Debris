@@ -61,5 +61,13 @@ Deterministic fixtures cover: cutting a thin bridge, severing a thruster anchor,
 
 IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
-- [ ] B.3 Connectivity/detachment.
+- [x] B.3 Connectivity/detachment.
 - [ ] B.5 Large structures.
+
+## B.3 verified starter implementation — 2026-09-07
+
+Explicit damage transactions extract unsupported structural regions and their whole machinery into independently transformed rigid material masks. Removing an anchor itself retains the machine as a unit-only fragment. Stable owner IDs prevent detached components from reattaching during later cuts or duplicating during restoration. Destroyed machines retain their physical footprint; destroyed tanks retain fuel until bounded spill admission succeeds.
+
+The GPU resolves hull candidates with parallel cell/cargo checks and a deterministic minimum contact index. Impact facts remain queued through snapshot/save until applied. Fragment movement uses bounded substeps and ordered collision against terrain, ship, loose cells and other fragments. Rendering uses instanced material fields, without per-cell objects. Released wall cells and cargo cross breached boundaries without overlap; occupancy ownership and relative-velocity contact response preserve packed convoys.
+
+36/36 EditMode tests and a Mac player damage/fuel/disk loop pass. Tests cover a severed thruster, destruction of its anchor alone, whole-unit impact, exact fragment resume, terrain collision, a breached cargo wall and a completely packed rotating cavity. Evidence: `evidence/B-fragment-*`. B.3 covers starter connectivity/detachment; paged masks, more than 16 active fragments, further fragment cutting and stress propagation remain later structural work. Exhausted active budgets reject damage admission without deleting its source cells. Current collision response stops bodies; it does not model full momentum exchange or bond stress.
