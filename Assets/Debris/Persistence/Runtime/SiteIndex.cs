@@ -67,6 +67,10 @@ namespace Debris.Persistence
             }
             entry=default;return false;
         }
+        public IEnumerable<SiteIndexEntry> Entries()
+        {
+            for(long i=0;i<Count;i++){SiteIndexEntry entry;lock(file)entry=At(i);yield return entry;}
+        }
         public static void Merge(string path,IEnumerable<SiteIndexEntry> changes)
         {
             var updates=changes.OrderBy(e=>e.Id,StringComparer.Ordinal).ToArray();

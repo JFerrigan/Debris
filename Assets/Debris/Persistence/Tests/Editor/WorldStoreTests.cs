@@ -104,10 +104,16 @@ namespace Debris.Persistence.Tests
                         session.Restore(finalLoaded.Matter);task=session.SnapshotAsync();while(!task.IsCompleted)yield return null;ExactSite(finalLoaded.Matter,task.Result);
                         var bSleeping=SparseSiteStore.Reconstruct(WorldStore.ReadSite(root,final,other.SiteId),catalog,profile);ExactSite(returning.Site.Matter,bSleeping.Matter);
                         var allIds=finalLoaded.Matter.Cells.Concat(bSleeping.Matter.Cells).Select(c=>c.Identity).ToArray();Assert.That(allIds.Distinct().Count(),Is.EqualTo(allIds.Length));
+                        string note=Path.Combine(root,"sites","notes.txt");File.WriteAllText(note,"retain unrelated user notes");
+                        var collection=WorldStore.CollectUnreferenced(root);Assert.That(collection.Deferred,Is.False);Assert.That(collection.DeletedFiles,Is.GreaterThan(0));Assert.That(File.Exists(note),Is.True);
+                        ExactSite(finalLoaded.Matter,SparseSiteStore.Reconstruct(WorldStore.ReadSite(root,WorldStore.Read(root),back.SiteId),catalog,profile).Matter);
+                        Assert.That(WorldStore.ReadSite(root,travelled,other.SiteId),Is.Not.Null);
+                        Debug.Log($"DEBRIS_WORLD_COLLECTION kept_site_records={collection.KeptSites} deleted_files={collection.DeletedFiles} deleted_bytes={collection.DeletedBytes} both_roots_preserved=true");
                         string activeRecord=SparseSiteStore.RecordPath(root,back.SiteId,final.Revision);var activeBytes=File.ReadAllBytes(activeRecord);
                         File.WriteAllBytes(activeRecord,new byte[]{1,2,3});Assert.That(WorldStore.Read(root).RecoveredBackup,Is.True);File.WriteAllBytes(activeRecord,activeBytes);
                         string inactiveRecord=SparseSiteStore.RecordPath(root,other.SiteId,final.Revision);var inactiveBytes=File.ReadAllBytes(inactiveRecord);
-                        File.WriteAllBytes(inactiveRecord,new byte[]{1,2,3});Assert.That(WorldStore.Read(root).RecoveredBackup,Is.False);Assert.Throws<InvalidDataException>(()=>WorldStore.ReadSite(root,final,other.SiteId));File.WriteAllBytes(inactiveRecord,inactiveBytes);
+                        File.WriteAllBytes(inactiveRecord,new byte[]{1,2,3});Assert.That(WorldStore.Read(root).RecoveredBackup,Is.False);Assert.Throws<InvalidDataException>(()=>WorldStore.ReadSite(root,final,other.SiteId));
+                        int filesBefore=Directory.GetFiles(root,"*",SearchOption.AllDirectories).Length;Assert.That(WorldStore.CollectUnreferenced(root).Deferred,Is.True);Assert.That(Directory.GetFiles(root,"*",SearchOption.AllDirectories).Length,Is.EqualTo(filesBefore));File.WriteAllBytes(inactiveRecord,inactiveBytes);
                         File.WriteAllBytes(WorldStore.ManifestPath(root),new byte[]{1,2,3});Assert.That(WorldStore.Read(root).RecoveredBackup,Is.True);Assert.That(WorldStore.Read(root).Revision,Is.EqualTo(travelled.Revision));
                         Debug.Log($"DEBRIS_WORLD sparse_chunks={prepared.Chunks.Count} initial_blobs={blobs} first_save_ms={saveMs} files={Directory.GetFiles(root,"*",SearchOption.AllDirectories).Length} bytes={Directory.GetFiles(root,"*",SearchOption.AllDirectories).Sum(p=>new FileInfo(p).Length)} leave_revisit=true no_duplicates=true interrupted=true recovered=true");
                     }

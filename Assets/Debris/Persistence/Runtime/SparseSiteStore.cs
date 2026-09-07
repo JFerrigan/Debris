@@ -80,7 +80,7 @@ namespace Debris.Persistence
         internal static string Digest(byte[] bytes){using(var hash=SHA256.Create())return Hex(hash.ComputeHash(bytes));}
         internal static void Flush(string path,byte[] bytes)
         {Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));using(var f=new FileStream(path,FileMode.Create,FileAccess.Write,FileShare.None)){f.Write(bytes,0,bytes.Length);f.Flush(true);}}
-        static string BlobPath(string root,string hash)
+        internal static string BlobPath(string root,string hash)
         {
             if(hash==null||hash.Length!=64||hash.Any(c=>!(c>='0'&&c<='9'||c>='a'&&c<='f')))throw new InvalidDataException("Invalid blob address.");
             return Path.Combine(root,"blobs",hash.Substring(0,2),hash+".blob");
@@ -134,6 +134,22 @@ namespace Debris.Persistence
                     SpatialCellCodec.Decode(save.Matter,buckets);
                 }
                 if(stream.Position!=stream.Length)throw new InvalidDataException("Trailing site metadata.");return result;
+            }
+        }
+        internal static string[] ReferencedBlobs(string root,string id,long revision)
+        {
+            using(var stream=new MemoryStream(Unseal(File.ReadAllBytes(RecordPath(root,id,revision)))))using(var r=new BinaryReader(stream))
+            {
+                if(r.ReadInt32()!=Magic)throw new InvalidDataException("Invalid sparse site record.");int schema=r.ReadInt32();if(schema<1||schema>2)throw new NotSupportedException("Unsupported sparse site schema.");
+                r.ReadString();var paths=new List<string>{BlobPath(root,r.ReadString())};int chunks=r.ReadInt32();
+                if(chunks<0||chunks>256)throw new InvalidDataException("Invalid changed chunk count.");
+                var indices=new HashSet<int>();for(int i=0;i<chunks;i++){int index=r.ReadInt32();if(index<0||index>=256||!indices.Add(index))throw new InvalidDataException("Invalid changed chunk index.");paths.Add(BlobPath(root,r.ReadString()));}
+                if(schema>=2)
+                {
+                    int buckets=r.ReadInt32();if(buckets<0||buckets>1000000)throw new InvalidDataException("Invalid spatial bucket count.");
+                    var keys=new HashSet<string>();for(int i=0;i<buckets;i++){if(!keys.Add(r.ReadString()))throw new InvalidDataException("Duplicate spatial bucket.");paths.Add(BlobPath(root,r.ReadString()));}
+                }
+                if(stream.Position!=stream.Length)throw new InvalidDataException("Trailing site metadata.");return paths.ToArray();
             }
         }
         internal static byte[] Seal(byte[] bytes){using(var hash=SHA256.Create())return bytes.Concat(hash.ComputeHash(bytes)).ToArray();}

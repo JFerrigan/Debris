@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Collections.Generic;
 using Debris.Core;
 namespace Debris.Persistence
 {
@@ -10,6 +11,12 @@ namespace Debris.Persistence
         public string ActiveSiteId;
         public uint NextIdentity;
         public bool RecoveredBackup;
+    }
+    public sealed class WorldCollectionResult
+    {
+        public long KeptSites,DeletedFiles,DeletedBytes;
+        public bool Deferred;
+        public string Reason;
     }
     public static class WorldStore
     {
@@ -60,6 +67,49 @@ namespace Debris.Persistence
             {
                 if(index.RecoveredBackup)throw new InvalidDataException("Committed index is damaged.");
                 return index.TryGet(id,out var entry)?SparseSiteStore.Read(root,id,entry.Revision):null;
+            }
+        }
+        // Mark both complete roots before deleting anything. A damaged record defers the entire collection.
+        public static WorldCollectionResult CollectUnreferenced(string root)
+        {
+            lock(Gate)
+            {
+                var result=new WorldCollectionResult();if(!Exists(root))return result;
+                using(var lease=new FileStream(Path.Combine(root,"writer.lock"),FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None))
+                {
+                    var keep=new HashSet<string>(StringComparer.Ordinal);var blobs=new HashSet<string>(StringComparer.Ordinal);
+                    try
+                    {
+                        foreach(string path in new[]{ManifestPath(root),ManifestPath(root)+".backup"})
+                        {
+                            if(!File.Exists(path)){if(path==ManifestPath(root))throw new InvalidDataException("Primary root missing.");continue;}
+                            var manifest=ReadGeneration(root,path);string indexPath=IndexPath(root,manifest.Revision);keep.Add(indexPath);
+                            using(var index=new SiteIndex(indexPath))foreach(var entry in index.Entries())
+                            {
+                                string record=SparseSiteStore.RecordPath(root,entry.Id,entry.Revision);
+                                if(!keep.Add(record))continue;result.KeptSites++;
+                                foreach(string blob in SparseSiteStore.ReferencedBlobs(root,entry.Id,entry.Revision))blobs.Add(blob);
+                            }
+                        }
+                        // Missing/corrupt live dependencies must remain available for explicit recovery or repair.
+                        foreach(string blob in blobs)
+                        {if(SparseSiteStore.Digest(File.ReadAllBytes(blob))!=Path.GetFileNameWithoutExtension(blob))throw new InvalidDataException("Live world blob checksum failed.");keep.Add(blob);}
+                    }
+                    catch(Exception e)when(e is IOException||e is InvalidDataException||e is NotSupportedException)
+                    {result.Deferred=true;result.Reason=e.Message;return result;}
+                    foreach(string directory in new[]{"indices","sites","blobs"})
+                    {
+                        string path=Path.Combine(root,directory);if(!Directory.Exists(path))continue;
+                        foreach(string file in Directory.EnumerateFiles(path,"*",SearchOption.AllDirectories))
+                        {
+                            // Restrict deletion to files owned by this store; retain any unrelated user files.
+                            if(keep.Contains(file)||!(file.EndsWith(".index",StringComparison.Ordinal)||file.EndsWith(".index.backup",StringComparison.Ordinal)||file.EndsWith(".site",StringComparison.Ordinal)||file.EndsWith(".blob",StringComparison.Ordinal)||file.EndsWith(".pending",StringComparison.Ordinal)))continue;
+                            long bytes=new FileInfo(file).Length;File.Delete(file);result.DeletedFiles++;result.DeletedBytes+=bytes;
+                        }
+                    }
+                    string pending=ManifestPath(root)+".pending";if(File.Exists(pending)){result.DeletedBytes+=new FileInfo(pending).Length;File.Delete(pending);result.DeletedFiles++;}
+                    return result;
+                }
             }
         }
         // Write all immutable dependencies first; atomically publishing this root commits both sides of travel.

@@ -24,7 +24,9 @@ Unity MCP remains unavailable; direct editor works. Windows/Linux execution and 
 
 ## Exact next task
 
-B.5: paged larger ship/fragment masks, active-region streaming, prolonged cutting/full-cavity frame measurements, mixed 100,000-site payload stress and unreachable-generation cleanup. Then execute the earned mine → collect → spill → save/reload → revisit B.GATE; do not enter Phase C before it passes.
+B.5: paged larger ship/fragment masks, active-region streaming, prolonged cutting/full-cavity frame measurements, mixed 100,000-site payload stress and mixed-world save-maintenance scheduling. Then execute the earned mine → collect → spill → save/reload → revisit B.GATE; do not enter Phase C before it passes.
+
+B.5 save-growth checkpoint: 38/38 tests verify reclaiming unreachable records while preserving every site reachable from either recovery generation. Full large-world maintenance timing remains outstanding.
 
 B.4 verified: 38/38 EditMode tests, Mac build and standalone two-site departure/resume/revisit. Sparse changed chunks/spatial loose buckets, exact cargo/fuel/fragment ownership, legacy import, immutable dependencies and atomic root recovery pass. Frame p95 18.602 ms; travel/resume/return 1,269 ms; two-site directory 54,104 bytes. F5/F9 now use the World directory, T changes sites, R restores saved state. Old salvage.debris is imported through F9 when no world exists. See PERSISTENCE/SAVE_FORMAT/PERFORMANCE for tested scope and B.5 limitations.
 

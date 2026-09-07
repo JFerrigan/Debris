@@ -161,7 +161,14 @@ namespace Debris.Presentation
             var profile=Resources.Load<AsteroidProfile>("Asteroid");
             var inputs=changes.Select(save=>(save,json:save.Ship==null?"":JsonUtility.ToJson(save.Ship),baseline:SparseSiteStore.Baseline(save,catalog,profile))).ToArray();
             long expected=worldManifest?.Revision??0;string root=worldRoot;
-            return await Task.Run(()=>WorldStore.Commit(root,expected,active.SiteId,active.Matter.NextIdentity,inputs.Select(p=>SparseSiteStore.Prepare(p.save,p.json,p.baseline)).ToArray()));
+            return await Task.Run(()=>
+            {
+                var committed=WorldStore.Commit(root,expected,active.SiteId,active.Matter.NextIdentity,inputs.Select(p=>SparseSiteStore.Prepare(p.save,p.json,p.baseline)).ToArray());
+                // Maintenance never changes the outcome of an already published gameplay transaction.
+                try{var cleanup=WorldStore.CollectUnreferenced(root);if(cleanup.Deferred)Debug.LogWarning("World maintenance deferred: "+cleanup.Reason);}
+                catch(Exception e){Debug.LogWarning("World maintenance deferred: "+e.Message);}
+                return committed;
+            });
         }
         async Task<bool> SaveCheckpoint()
         {

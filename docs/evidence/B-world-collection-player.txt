@@ -1,0 +1,2 @@
+Apple M4 Pro / 6000.3.11f1
+preset=damaged-rotating-starter fragments=1 cells=579 chunks=16 capacity=8192 frame_p95=18.613 cpu_p95=18.621 gpu_p95=10.721 buffers=4654876 dispatches=38 nonoverlap=true conserved=true disk_roundtrip=true fuel_roundtrip=true leave_revisit=true sites=2 spill_ms=324 pump_ms=280 travel_resume_return_ms=1318 save_bytes=38382 angle=0.359
