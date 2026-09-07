@@ -67,3 +67,9 @@ The current vertical slice uses one `salvage.debris` checkpoint plus `.backup` a
 The decoder bounds payload sizes and validates dimensions, accounting and occupancy before upload. Schema/generator incompatibility reports an error while retaining source files. There is no older production schema to migrate yet. The final sparse chunk/loose-bucket layout and multi-site manifest remain outstanding under B.4.
 
 The standalone site index is schema 1: 16-byte header (magic, schema, 64-bit count), sorted 40-byte records (32 ASCII ID bytes, 64-bit revision), then SHA-256. Index updates stream the old records into an atomic replacement; lookup seeks directly to records and never opens site payloads. Snapshot and index integration into a world transaction is still pending.
+
+## Schema 2 migration and physical fuel
+
+Schema 2 adds the next unused site-cell identity and a sparse `(cell identity, remaining energy)` table before the ship-enabled flag. Physical cell records remain 32 bytes on GPU; fuel state is consumed only at explicit inventory-transfer boundaries. The CPU tank DTO now stores one grade/residual-energy record per occupied tank cell, preserving partially used cells separately.
+
+The decoder accepts schema 1 and infers its next identity from the maximum saved identity. Legacy tank Low/Standard/Dense counts and BurnRemainder migrate once into exact per-cell energy records. A real schema-1 standalone checkpoint is retained at `Assets/Debris/Persistence/Tests/Fixtures/schema1.debris.bytes`; tests load its 576 cargo cells/250 tank cells and rewrite schema 2 without refilling fuel. Unknown future schemas still fail visibly. Sparse chunk files and world/site transitions remain B.4 work.

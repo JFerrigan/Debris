@@ -41,3 +41,11 @@ Mac EditMode evidence (`evidence/B-persistence-tests.xml`): 100,000-site index i
 The mixed damaged-site save fixture encodes 112 released cells (five cargo cells), 16 chunks, ship/finite fuel and partial damage into 18,423 bytes. Encode time is not separately measured. Exact IEEE-754 GPU restoration, content-table reordering and interrupted/corrupt-write recovery pass. Do not infer final cloud quotas or save-growth budgets from this single preset.
 
 Standalone save/load verification (`evidence/B-persistence-player.txt`): 576 rotating cargo cells, 16 chunks, 25,891-byte checkpoint, exact disk roundtrip. Sampled movement frame p95 17.068 ms, CPU p95 17.067 ms, GPU p95 16.576 ms; save/load wait frames excluded. Screenshot inspected after the restored session rendered.
+
+## B.2 fuel/identity checkpoint — 2026-09-07
+
+Mac standalone at explicitly requested 1440×900 window, Apple M4 Pro, Metal, Unity 6000.3.11f1. Same 576-cell rotating starter, 16 chunks/8,192 capacity: frame p95 17.572 ms, CPU p95 17.560 ms, GPU p95 16.309 ms; 3,605,252 explicit GPU-buffer bytes, 34 dispatches. A partly consumed tank released and recovered eight cells without changing remaining energy, then saved and loaded the site exactly (25,998 bytes, schema 2).
+
+End-to-end asynchronous spill/pump latency: 258/219 ms. Simulation is fenced during these explicit commands. These numbers include GPU readback waits and CPU occupancy verification; they are not suitable per-frame transfer costs. Moving bounded transfer admission onto GPU is a performance follow-up. `evidence/B-fuel-player.txt` and `evidence/B-fuel-tests.xml` (29/29) record this checkpoint.
+
+Correction to the earlier persistence standalone configuration: its inspected image was 3024×1890, inherited from player settings. Its measurements remain valid for that resolution; the fuel checkpoint explicitly pins 1440×900.

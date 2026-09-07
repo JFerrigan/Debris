@@ -15,7 +15,7 @@ namespace Debris.Presentation
 {
     public sealed class Showcase : MonoBehaviour
     {
-        ShipRuntime ship;ShipBlueprint loadedBlueprint;bool saveBusy;string saveStatus="F5 save • F9 load";
+        ShipRuntime ship;ShipBlueprint loadedBlueprint;bool saveBusy;string saveStatus="F5 save • F9 load • P pump fuel • J release fuel";
         string SavePath=>Path.Combine(shipBenchmark?Application.temporaryCachePath:Application.persistentDataPath,shipBenchmark?"DebrisVerification":"Saves","salvage.debris");
         MatterSession session;MatterView view;MaterialCatalog catalog;
         InputActionAsset input;Camera cameraView;bool paused,benchmark,shipBenchmark;
@@ -49,6 +49,8 @@ namespace Debris.Presentation
             {
                 if(input["Save"].WasPressedThisFrame())_ = SaveCheckpoint();
                 else if(input["Load"].WasPressedThisFrame())_ = LoadCheckpoint();
+                else if(input["PumpFuel"].WasPressedThisFrame())_ = TransferFuel(true);
+                else if(input["SpillFuel"].WasPressedThisFrame())_ = TransferFuel(false);
             }
             if(input["Pause"].WasPressedThisFrame())paused=!paused;
             if(input["Reset"].WasPressedThisFrame()&&!benchmark&&!shipBenchmark&&!saveBusy)ResetSession(benchmark?2:4,8192);
@@ -83,11 +85,35 @@ namespace Debris.Presentation
                 }
             }
             statsTime+=Time.unscaledDeltaTime;
-            if(statsTime>.2f){statsTime=0;session.PollStats();session.Inspect(Vector2Int.FloorToInt(pointerWorld),m=>inspected=m);}
+            if(statsTime>.2f){statsTime=0;
+                if(!saveBusy&&!benchmark&&!shipBenchmark&&ship!=null&&ship.Fuel.Count>0&&ship.Units.Exists(u=>u.Placement.Definition.Kind==UnitKind.Tank&&(u.Destroyed||!u.Supported)))_ = TransferFuel(false);
+                session.PollStats();session.Inspect(Vector2Int.FloorToInt(pointerWorld),m=>inspected=m);}
             view.Draw();
             FrameTimingManager.CaptureFrameTimings();
             if(FrameTimingManager.GetLatestTimings(1,timings)>0){if(benchmark||shipBenchmark){cpu.Add(timings[0].cpuFrameTime);if(timings[0].gpuFrameTime>0)gpu.Add(timings[0].gpuFrameTime);}}
             if(benchmark||shipBenchmark)frames.Add(Time.unscaledDeltaTime*1000);
+        }
+        async Task<int> TransferFuel(bool pump)
+        {
+            if(ship==null||pump&&(!ship.Has(UnitKind.Tank)||!ship.Has(UnitKind.Suction))){saveStatus="Fuel pump requires a supported tank and suction unit.";return 0;}
+            saveBusy=true;
+            try
+            {
+                var state=await session.SnapshotAsync();var port=FuelTransfers.World(state,new Vector2(35,32));
+                FuelTransferResult proposal;
+                if(pump)proposal=FuelTransfers.Pump(state,ship.Fuel,catalog,port,40);
+                else
+                {
+                    var outlets=new List<Vector2>();
+                    for(int y=0;y<8;y++)for(int x=0;x<8;x++)outlets.Add((Vector2)Vector2Int.FloorToInt(port+new Vector2(x*2,y*2)));
+                    proposal=FuelTransfers.Spill(state,ship.Fuel,catalog,outlets,ship.Velocity);
+                }
+                if(proposal.Count>0){session.Restore(proposal.Matter);ship.Fuel=proposal.Tank;}
+                saveStatus=proposal.Count>0?$"{(pump?"Recovered":"Released")} {proposal.Count} fuel cells.":pump?"No recoverable fuel in pump range, or tank full.":"Fuel retained: tank empty, outlet blocked, or debris capacity full.";
+                return proposal.Count;
+            }
+            catch(Exception e){saveStatus="Fuel transfer failed: "+e.Message;Debug.LogException(e);return 0;}
+            finally{saveBusy=false;accumulator=0;}
         }
         async Task<bool> SaveCheckpoint()
         {
@@ -134,11 +160,16 @@ namespace Debris.Presentation
             // Controlled loaded-cavity workload, explicitly separate from earned salvage.
             var state=initial.Result;var cells=new List<LooseCell>();
             for(int y=-24;y<24;y+=2)for(int x=-24;x<24;x+=2)cells.Add(new LooseCell{Position=new Vector2(x,y),Material=2,Identity=(uint)cells.Count+1,Flags=4});
-            state.Cells=cells.ToArray();state.Counters[0]=(uint)cells.Count;state.Counters[1]+=(uint)cells.Count;session.Restore(state);
+            state.Cells=cells.ToArray();state.NextIdentity=(uint)cells.Count+1;state.Counters[0]=(uint)cells.Count;state.Counters[1]+=(uint)cells.Count;session.Restore(state);
             for(int i=0;i<60;i++){session.Step(shipMotion:new Vector3(0,.005f,.001f));yield return null;}
             cpu.Clear();gpu.Clear();frames.Clear();
             for(int i=0;i<300;i++){session.Step(shipMotion:new Vector3(0,.005f,.001f));yield return null;}
             double frame95=Percentile(frames,.95),cpu95=Percentile(cpu,.95),gpu95=Percentile(gpu,.95);int dispatches=session.Dispatches;
+            ship.Fuel.Consume(.75);double energyBefore=ship.Fuel.Energy;
+            var transferWatch=System.Diagnostics.Stopwatch.StartNew();
+            var release=TransferFuel(false);while(!release.IsCompleted)yield return null;long spillMs=transferWatch.ElapsedMilliseconds;
+            transferWatch.Restart();var recovery=TransferFuel(true);while(!recovery.IsCompleted)yield return null;long pumpMs=transferWatch.ElapsedMilliseconds;
+            if(release.Result!=8||recovery.Result!=8||Math.Abs(ship.Fuel.Energy-energyBefore)>1e-9)throw new InvalidOperationException("Player fuel transfer changed energy or cell count.");
             var task=session.SnapshotAsync();while(!task.IsCompleted)yield return null;if(task.IsFaulted)throw task.Exception;
             CpuCutReference.Validate(task.Result);
             var saved=SaveCheckpoint();while(!saved.IsCompleted)yield return null;if(!saved.Result)throw new InvalidOperationException("Player save verification failed.");
@@ -147,7 +178,7 @@ namespace Debris.Presentation
             var original=task.Result;var restored=revisited.Result;
             if(!System.Linq.Enumerable.SequenceEqual(original.Cells,restored.Cells)||!System.Linq.Enumerable.SequenceEqual(original.ShipPose,restored.ShipPose))throw new InvalidOperationException("Player disk resume changed cargo or ship pose.");
             for(int i=0;i<original.Fields.Length;i++)if(!System.Linq.Enumerable.SequenceEqual(original.Fields[i],restored.Fields[i])||!System.Linq.Enumerable.SequenceEqual(original.Damage[i],restored.Damage[i]))throw new InvalidOperationException("Player disk resume changed terrain.");
-            string line=$"preset=rotating-starter cells={task.Result.Cells.Length} chunks={session.Side*session.Side} capacity={session.Capacity} frame_p95={frame95:F3} cpu_p95={cpu95:F3} gpu_p95={gpu95:F3} buffers={session.BufferBytes} dispatches={dispatches} nonoverlap=true conserved=true disk_roundtrip=true save_bytes={new FileInfo(SavePath).Length} angle={task.Result.ShipPose[0].z:F3}";
+            string line=$"preset=rotating-starter cells={task.Result.Cells.Length} chunks={session.Side*session.Side} capacity={session.Capacity} frame_p95={frame95:F3} cpu_p95={cpu95:F3} gpu_p95={gpu95:F3} buffers={session.BufferBytes} dispatches={dispatches} nonoverlap=true conserved=true disk_roundtrip=true fuel_roundtrip=true spill_ms={spillMs} pump_ms={pumpMs} save_bytes={new FileInfo(SavePath).Length} angle={task.Result.ShipPose[0].z:F3}";
             File.WriteAllText(Path.Combine(output,"ship-benchmark.txt"),SystemInfo.graphicsDeviceName+" / "+Application.unityVersion+"\n"+line);Debug.Log("DEBRIS_SHIP_BENCHMARK "+line);
             ScreenCapture.CaptureScreenshot(Path.Combine(output,"ship-showcase.png"));yield return null;yield return null;Application.Quit();
         }

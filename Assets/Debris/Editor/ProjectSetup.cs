@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using Debris.Materials;
 using Debris.Sites;
 using Debris.Ships;
@@ -32,9 +33,9 @@ namespace Debris.Editor
             pipeline.msaaSampleCount = 1; pipeline.supportsHDR = true;
             GraphicsSettings.defaultRenderPipeline = pipeline; QualitySettings.renderPipeline = pipeline;
             QualitySettings.vSyncCount = 0;
-            string[] keys = {"rock","iron","copper","ice","carbon","arcanium"};
-            Color[] colors = { new Color(.3f,.34f,.39f),new Color(.5f,.59f,.62f),new Color(.8f,.4f,.22f),new Color(.34f,.77f,.87f),new Color(.2f,.22f,.25f),new Color(.2f,.96f,.75f) };
-            int[] values = {1,5,9,4,3,40};
+            string[] keys = {"rock","iron","copper","ice","carbon","arcanium","fuel-low","fuel-standard","fuel-dense"};
+            Color[] colors = { new Color(.3f,.34f,.39f),new Color(.5f,.59f,.62f),new Color(.8f,.4f,.22f),new Color(.34f,.77f,.87f),new Color(.2f,.22f,.25f),new Color(.2f,.96f,.75f),new Color(.68f,.75f,.26f),new Color(.82f,.62f,.2f),new Color(.9f,.33f,.15f) };
+            int[] values = {1,5,9,4,3,40,10,18,32};
             var definitions = new MaterialDefinition[keys.Length];
             for(int i=0;i<keys.Length;i++)
             {
@@ -44,6 +45,9 @@ namespace Debris.Editor
             }
             var catalog=AssetDatabase.LoadAssetAtPath<MaterialCatalog>("Assets/Content/Resources/Materials.asset");
             if (!catalog) { catalog=ScriptableObject.CreateInstance<MaterialCatalog>(); catalog.Configure(definitions); AssetDatabase.CreateAsset(catalog,"Assets/Content/Resources/Materials.asset"); }
+            var current=Enumerable.Range(1,catalog.Count).Select(i=>catalog.DefinitionAt((ushort)i)).ToList();
+            foreach(var definition in definitions)if(!current.Any(d=>d.MaterialKey==definition.MaterialKey))current.Add(definition);
+            if(current.Count!=catalog.Count){catalog.Configure(current.ToArray());EditorUtility.SetDirty(catalog);}
             var profile=AssetDatabase.LoadAssetAtPath<AsteroidProfile>("Assets/Content/Resources/Asteroid.asset");
             if (!profile) { profile=ScriptableObject.CreateInstance<AsteroidProfile>(); profile.Configure(70,90,new[]{new MaterialBand{MaterialKey="rock",Weight=.5f},new MaterialBand{MaterialKey="iron",Weight=.22f},new MaterialBand{MaterialKey="copper",Weight=.14f},new MaterialBand{MaterialKey="ice",Weight=.08f},new MaterialBand{MaterialKey="carbon",Weight=.05f},new MaterialBand{MaterialKey="arcanium",Weight=.01f}}); AssetDatabase.CreateAsset(profile,"Assets/Content/Resources/Asteroid.asset"); }
             if (!File.Exists("Assets/Content/Resources/Debris.inputactions"))
@@ -63,7 +67,7 @@ namespace Debris.Editor
             {
                 var map=actions.FindActionMap("Salvage");bool changed=false;
                 if(map.FindAction("Turn")==null){map.AddAction("Turn",InputActionType.Value,expectedControlLayout:"Axis").AddCompositeBinding("1DAxis").With("Negative","<Keyboard>/q").With("Positive","<Keyboard>/e");changed=true;}
-                foreach(var binding in new[]{("CargoDoor","<Keyboard>/g"),("Suction","<Mouse>/rightButton"),("Save","<Keyboard>/f5"),("Load","<Keyboard>/f9")})
+                foreach(var binding in new[]{("CargoDoor","<Keyboard>/g"),("Suction","<Mouse>/rightButton"),("Save","<Keyboard>/f5"),("Load","<Keyboard>/f9"),("PumpFuel","<Keyboard>/p"),("SpillFuel","<Keyboard>/j")})
                     if(map.FindAction(binding.Item1)==null){map.AddAction(binding.Item1,InputActionType.Button,binding.Item2);changed=true;}
                 if(changed)File.WriteAllText("Assets/Content/Resources/Debris.inputactions",actions.ToJson());
             }

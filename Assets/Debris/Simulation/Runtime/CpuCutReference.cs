@@ -22,7 +22,7 @@ namespace Debris.Simulation
                 float damage=state.Damage[slice][index]+command.Strength/60;
                 if(damage<catalog.DefinitionAt((ushort)m).Durability) {state.Damage[slice][index]=damage;if(state.Dirty[slice]==0){state.Dirty[slice]=1;state.Counters[3]++;}continue;}
                 if(cells.Count>=state.Capacity){state.Counters[2]++;continue;}
-                cells.Add(new LooseCell{Position=new Vector2(x,y),Velocity=command.Direction,Material=m,Identity=(uint)cells.Count+1});
+                cells.Add(new LooseCell{Position=new Vector2(x,y),Velocity=command.Direction,Material=m,Identity=state.NextIdentity==0?(uint)cells.Count+1:state.NextIdentity++});
                 state.Fields[slice][index]=0;state.Damage[slice][index]=0;
                 if(state.Dirty[slice]==0){state.Dirty[slice]=1;state.Counters[3]++;}
             }
@@ -59,6 +59,8 @@ namespace Debris.Simulation
                 if(bins.ContainsKey(bin))throw new InvalidOperationException("Overlapping occupancy bucket.");bins.Add(bin,cell);
                 if(cargo?(bin.x<-64||bin.y<-64||cell.Position.x>63||cell.Position.y>63):(bin.x<state.OriginX||bin.y<state.OriginY||cell.Position.x>state.OriginX+width-1||cell.Position.y>state.OriginY+width-1))throw new InvalidOperationException("Cell outside active domain.");
             }
+            var fuelIds=new HashSet<uint>();
+            foreach(var fuel in state.FuelCells)if(!identities.Contains(fuel.Identity)||!fuelIds.Add(fuel.Identity)||!double.IsFinite(fuel.Energy)||fuel.Energy<=0||fuel.Energy>4)throw new InvalidOperationException("Invalid physical fuel state.");
             foreach(var cell in state.Cells)
             {
                 bool cargo=(cell.Flags&4)!=0;Vector2 center=cargo?World(cell.Position+Vector2.one*.5f):cell.Position+Vector2.one*.5f;

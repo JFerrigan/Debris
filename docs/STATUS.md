@@ -24,7 +24,9 @@ Unity MCP remains unavailable; direct editor works. Windows/Linux execution and 
 
 ## Exact next task
 
-B.2: physical fuel-grade pumping and spills with conservation, including partially consumed fuel and full-pool backpressure. Then B.3 physical fragment motion/damage and breach release. B.4 still needs dirty-only saves, real schema migration and multi-site transitions; B.5 still needs paged ship masks/streaming.
+B.3: integrate hull damage and physical fragment collision/motion/rendering, release cargo through damaged boundaries, and verify full rotating-cavity saturation. Then B.4 sparse dirty-only saves and multi-site leave/revisit; B.5 paged larger ship masks and active-region streaming.
+
+B.2 verified: 29/29 EditMode tests, Mac build and standalone partial-fuel spill/recovery/save loop. Schema 2 preserves residual fuel and the next unused cell identity; schema-1 migration uses a retained actual standalone save. B.1/B.2 are checked, the full Phase B gate remains open.
 
 Persistence checkpoint: 27/27 EditMode tests; Mac build; standalone save/load retains all 576 cargo cells, ship pose, fixed cells and partial damage. Standalone save size 25,891 bytes. Index-only fixture verifies 100,000 sites without loading payloads. See PERSISTENCE, SAVE_FORMAT, PERFORMANCE and evidence/B-persistence-* for exact scope. Full B.GATE is still unchecked.
 

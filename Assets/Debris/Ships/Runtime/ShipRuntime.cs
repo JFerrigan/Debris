@@ -11,28 +11,6 @@ namespace Debris.Ships
         public bool Supported=true,Destroyed;
         public bool Operational=>Supported&&!Destroyed&&Health>0;
     }
-    [Serializable] public sealed class TankInventory
-    {
-        public int Capacity=300;
-        public int Low,Standard,Dense;
-        public double BurnRemainder;
-        public int Count=>Low+Standard+Dense;
-        public double Energy=>Low+Standard*2+Dense*4-BurnRemainder;
-        public bool Add(string grade,int count)
-        {
-            if(count<0||count>Capacity-Count)return false;
-            switch(grade){case "low":Low+=count;break;case "standard":Standard+=count;break;case "dense":Dense+=count;break;default:return false;}return true;
-        }
-        public bool Consume(double energy)
-        {
-            if(double.IsNaN(energy)||double.IsInfinity(energy)||energy<0||energy>Energy)return false;
-            BurnRemainder+=energy;
-            while(Low>0&&BurnRemainder>=1){Low--;BurnRemainder-=1;}
-            while(Low==0&&Standard>0&&BurnRemainder>=2){Standard--;BurnRemainder-=2;}
-            while(Low==0&&Standard==0&&Dense>0&&BurnRemainder>=4){Dense--;BurnRemainder-=4;}
-            return true;
-        }
-    }
     [Serializable] public sealed class ShipFragment
     {
         public string Id=StableId.New().Value;

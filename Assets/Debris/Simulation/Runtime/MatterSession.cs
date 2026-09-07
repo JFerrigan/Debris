@@ -16,6 +16,7 @@ namespace Debris.Simulation
         public Vector2 Position, Velocity;
         public uint Material, Identity, Step, Flags;
     }
+    [Serializable] public struct FuelCellState { public uint Identity;public double Energy; }
     public sealed class MatterSnapshot
     {
         public int Side, ChunkSize, Capacity, OriginX, OriginY, Tick;
@@ -25,6 +26,8 @@ namespace Debris.Simulation
         public uint[] Counters, Dirty, Hull;
         public Vector4[] ShipPose;
         public bool ShipEnabled;
+        public uint NextIdentity;
+        public FuelCellState[] FuelCells=Array.Empty<FuelCellState>();
     }
     // Sole GPU resource owner; snapshots only at save/stream boundaries, compact async facts during play.
     public sealed class MatterSession : IDisposable
@@ -42,7 +45,7 @@ namespace Debris.Simulation
         readonly ComputeShader shader;
         readonly int uploadKernel,cutKernel,integrateKernel,inspectKernel,restoreKernel,damageKernel,moveShipKernel,transferKernel;
         bool disposed,statsPending,inspectionPending,snapshotPending,shipStatsPending;
-        int tick;
+        int tick;uint identityBase;FuelCellState[] fuelCells=Array.Empty<FuelCellState>();
         public uint[] Stats {get;private set;}=new uint[4];
         public int Dispatches {get;private set;}
         public int ReadbackQueue {get;private set;}
@@ -154,7 +157,7 @@ namespace Debris.Simulation
             var counts=await Read<uint>(Counters);
             var cells=await Read<LooseCell>(Cells);Array.Resize(ref cells,(int)counts[0]);
             var fields=await ReadTexture<uint>(Field);var damage=await ReadTexture<float>(Damage);
-            return new MatterSnapshot{Side=Side,ChunkSize=ChunkSize,Capacity=Capacity,OriginX=Origin.x,OriginY=Origin.y,Tick=tick,Cells=cells,Hull=(uint[])hullData.Clone(),ShipEnabled=ShipEnabled,ShipPose=await Read<Vector4>(ShipPose),Counters=counts,Dirty=await Read<uint>(Dirty),Fields=fields,Damage=damage};
+            return new MatterSnapshot{Side=Side,ChunkSize=ChunkSize,Capacity=Capacity,OriginX=Origin.x,OriginY=Origin.y,Tick=tick,Cells=cells,NextIdentity=identityBase+counts[0]+1,FuelCells=(FuelCellState[])fuelCells.Clone(),Hull=(uint[])hullData.Clone(),ShipEnabled=ShipEnabled,ShipPose=await Read<Vector4>(ShipPose),Counters=counts,Dirty=await Read<uint>(Dirty),Fields=fields,Damage=damage};
             }
             finally {snapshotPending=false;}
         }
@@ -164,6 +167,11 @@ namespace Debris.Simulation
             if(snapshot.Side!=Side||snapshot.ChunkSize!=ChunkSize||snapshot.Capacity!=Capacity||snapshot.OriginX!=Origin.x||snapshot.OriginY!=Origin.y||snapshot.Cells.Length>Capacity)
                 throw new ArgumentException("Snapshot geometry/capacity mismatch.");
             CpuCutReference.Validate(snapshot);
+            uint maximum=0;foreach(var cell in snapshot.Cells)maximum=Math.Max(maximum,cell.Identity);
+            uint next=snapshot.NextIdentity==0?checked(maximum+1):snapshot.NextIdentity;
+            if(next<=maximum||(ulong)next+(uint)(Capacity-snapshot.Cells.Length)>uint.MaxValue)throw new InvalidOperationException("Cell identity range exhausted or invalid.");
+            identityBase=next-(uint)snapshot.Cells.Length-1;shader.SetInt("_IdentityBase",unchecked((int)identityBase));
+            fuelCells=(FuelCellState[])snapshot.FuelCells.Clone();
             ShipEnabled=snapshot.ShipEnabled;shader.SetInt("_ShipEnabled",ShipEnabled?1:0);
             if(snapshot.Hull!=null){hullData=(uint[])snapshot.Hull.Clone();Hull.SetData(hullData);}
             if(snapshot.ShipPose!=null){ShipStats=(Vector4[])snapshot.ShipPose.Clone();ShipPose.SetData(ShipStats);shader.SetInt("_DoorOpen",ShipStats[2].z>0?1:0);}

@@ -44,4 +44,6 @@ F5/F9 save and restore the playable site under `Application.persistentDataPath/S
 
 `SiteIndex` independently proves 100,000 modified-site identities with sorted fixed-size records, streamed merges, checksum/backup recovery and binary-search lookup. No site payloads are loaded by lookup. It is not yet wired to a world/site transition manager.
 
-Verified: 27/27 EditMode tests, exact disk/GPU restoration with cargo and partial terrain damage, catalog reordering, interrupted replacement, corrupt-primary recovery, future-schema rejection and the 100,000-site fixture. B.4 remains open for dirty-only per-chunk files, actual older-schema migrations and multi-site leave/revisit integration. B.5 remains open for large ships and active-region streaming. Full fragment physics is not established by serializing fragment records.
+Verified: 27/27 EditMode tests, exact disk/GPU restoration with cargo and partial terrain damage, catalog reordering, interrupted replacement, corrupt-primary recovery, future-schema rejection and the 100,000-site fixture. B.4 remains open for dirty-only per-chunk files, multi-site leave/revisit integration. B.5 remains open for large ships and active-region streaming. Full fragment physics is not established by serializing fragment records.
+
+Schema-1 → schema-2 migration and physical fuel state are now verified with a retained prior standalone save. The next unused cell identity survives pumping, spilling, pool compaction and save/load. B.4 remains unchecked for sparse dirty-only files and actual multi-site leave/revisit transitions.

@@ -16,7 +16,7 @@ namespace Debris.Simulation.Tests
         {
             foreach(var f in s.Fields)Array.Clear(f,0,f.Length);
             foreach(var f in s.Damage)Array.Clear(f,0,f.Length);
-            s.Cells=cells;s.Counters=new[]{(uint)cells.Length,(uint)cells.Length,0u,0u};Array.Clear(s.Dirty,0,s.Dirty.Length);
+            s.Cells=cells;s.NextIdentity=(uint)cells.Length+1;s.Counters=new[]{(uint)cells.Length,(uint)cells.Length,0u,0u};Array.Clear(s.Dirty,0,s.Dirty.Length);
         }
         [UnityTest] public IEnumerator RotatingCargoConservesVolumeAndResumesExactly()
         {

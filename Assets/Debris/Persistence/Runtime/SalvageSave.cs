@@ -26,7 +26,7 @@ namespace Debris.Persistence
     // Versioned, compressed exact checkpoint. No Unity API is called by the disk worker.
     public static class SalvageSaveCodec
     {
-        public const int Schema=1;
+        public const int Schema=2;
         const int Magic=0x44534252,MaxBytes=256*1024*1024;
         public static byte[] Encode(SalvageSave save,string shipJson)
         {
@@ -44,6 +44,7 @@ namespace Debris.Persistence
                     foreach(var chunk in s.Fields)foreach(var v in chunk)w.Write(v);
                     foreach(var chunk in s.Damage)foreach(var v in chunk)w.Write(v);
                     w.Write(s.Cells.Length);foreach(var c in s.Cells){w.Write(c.Position.x);w.Write(c.Position.y);w.Write(c.Velocity.x);w.Write(c.Velocity.y);w.Write(c.Material);w.Write(c.Identity);w.Write(c.Step);w.Write(c.Flags);}
+                    w.Write(s.NextIdentity);w.Write(s.FuelCells.Length);foreach(var fuel in s.FuelCells){w.Write(fuel.Identity);w.Write(fuel.Energy);}
                     w.Write(s.ShipEnabled);
                     if(s.ShipEnabled){foreach(var v in s.Hull)w.Write(v);foreach(var p in s.ShipPose){w.Write(p.x);w.Write(p.y);w.Write(p.z);w.Write(p.w);}}
                 }
@@ -62,7 +63,7 @@ namespace Debris.Persistence
             using(var input=new MemoryStream(bytes))using(var reader=new BinaryReader(input))
             {
                 if(reader.ReadInt32()!=Magic)throw new InvalidDataException("Not a Debris save.");
-                int version=reader.ReadInt32();if(version!=Schema)throw new NotSupportedException("Save schema "+version+" is not supported; original file retained.");
+                int version=reader.ReadInt32();if(version!=1&&version!=Schema)throw new NotSupportedException("Save schema "+version+" is not supported; original file retained.");
                 int length=reader.ReadInt32();if(length<0||length>MaxBytes)throw new InvalidDataException("Save exceeds safe decode size.");
                 var expected=reader.ReadBytes(32);var raw=new byte[length];
                 using(var zip=new DeflateStream(input,CompressionMode.Decompress,true))
@@ -88,6 +89,12 @@ namespace Debris.Persistence
                     for(int i=0;i<chunks;i++){s.Damage[i]=new float[area];for(int j=0;j<area;j++)s.Damage[i][j]=r.ReadSingle();}
                     int count=r.ReadInt32();if(count<0||count>s.Capacity)throw new InvalidDataException("Invalid loose count.");
                     s.Cells=new LooseCell[count];for(int i=0;i<count;i++)s.Cells[i]=new LooseCell{Position=new Vector2(r.ReadSingle(),r.ReadSingle()),Velocity=new Vector2(r.ReadSingle(),r.ReadSingle()),Material=r.ReadUInt32(),Identity=r.ReadUInt32(),Step=r.ReadUInt32(),Flags=r.ReadUInt32()};
+                    if(version>=2)
+                    {
+                        s.NextIdentity=r.ReadUInt32();int fuels=r.ReadInt32();if(fuels<0||fuels>count)throw new InvalidDataException("Invalid fuel state count.");
+                        s.FuelCells=new FuelCellState[fuels];for(int i=0;i<fuels;i++)s.FuelCells[i]=new FuelCellState{Identity=r.ReadUInt32(),Energy=r.ReadDouble()};
+                    }
+                    else {uint maximum=0;foreach(var cell in s.Cells)maximum=Math.Max(maximum,cell.Identity);s.NextIdentity=checked(maximum+1);}
                     s.ShipEnabled=r.ReadBoolean();s.Hull=new uint[16384];s.ShipPose=new Vector4[3];
                     if(s.ShipEnabled){for(int i=0;i<s.Hull.Length;i++)s.Hull[i]=r.ReadUInt32();for(int i=0;i<3;i++)s.ShipPose[i]=new Vector4(r.ReadSingle(),r.ReadSingle(),r.ReadSingle(),r.ReadSingle());}
                     if(stream.Position!=stream.Length)throw new InvalidDataException("Trailing save data.");

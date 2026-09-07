@@ -15,7 +15,7 @@ Fuel is held as an inventory inside atomic fuel-tank units. Loose fuel remains a
 IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
 - [x] B.1 Blueprint/starter ship.
-- [ ] B.2 Flight/fuel.
+- [x] B.2 Flight/fuel.
 - [ ] B.3 Cargo/damage/fragments.
 - [ ] D.2 Automation.
 
@@ -29,4 +29,12 @@ Verified data evidence: `docs/evidence/B-ship-tests.xml` (8/8 passed, 2026-09-06
 
 Starter hull and whole units render from a local cell mask. GPU collision uses separating-axis tests across world and rotated ship cells, separate occupancy domains, bounded integration and identity-preserving intake/spill. An obstructed door remains open. Mounted drilling follows the ship transform; suction pulls towards the rear intake. 25/25 EditMode tests pass (`evidence/B-gpu-tests.xml`), including 240 rotating steps with 100 cargo cells and exact snapshot resume. The Mac player benchmark with 576 cargo cells conserves matter and passes geometric validation.
 
-B.2 remains open for physical fuel pumping/spills. B.3 remains open for moving/damageable fragments, hull breach release and full cavity saturation. The current 128² ship mask explicitly rejects larger structures; paged ship masks and large-ship stress remain B.5. Snapshot resume is currently memory-only; durable disk saves are next.
+B.2 fuel pumping/spills are verified in the subsequent checkpoint below. B.3 remains open for moving/damageable fragments, hull breach release and full cavity saturation. The current 128² ship mask explicitly rejects larger structures; paged ship masks and large-ship stress remain B.5. Snapshot resume is currently memory-only; durable disk saves are next.
+
+## B.2 fuel checkpoint — 2026-09-07
+
+Three stable physical grades (`fuel-low`, `fuel-standard`, `fuel-dense`) provide 1/2/4 energy per fresh cell. Tanks retain individual residual-energy records, so partially used cells cannot become fresh fuel by spilling and pumping. P recovers up to eight nearby fuel cells through the tank/suction equipment; J releases up to eight into valid non-overlapping outlet positions. A failed outlet/full GPU pool retains the fuel in the tank. Destroyed/unsupported tanks request bounded spill batches while preserving any fuel that cannot yet be represented.
+
+Transfers are explicit snapshot-boundary proposals: copy authoritative records, validate occupancy/conservation, restore GPU state, then replace the tank inventory. No transfer changes volume or silently removes non-fuel cargo. GPU cutting uses a monotonic site-cell identity sequence after pool compaction. Tests cover mixed grades, partial burn, blocked outlets, tank/pool exhaustion, exact schema-2 fuel save/load and further cuts after pumping. 29/29 EditMode tests and a standalone eight-cell spill/recovery/save loop pass; see `evidence/B-fuel-*`.
+
+This proves B.2, not the remaining B.3 fragment/collision-damage gate. Transfers currently pause simulation for a snapshot boundary; measured latency is recorded in PERFORMANCE.

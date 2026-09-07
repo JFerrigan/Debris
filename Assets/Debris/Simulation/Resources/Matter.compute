@@ -21,6 +21,7 @@ int2 _Origin;
 float2 _CutPosition, _Impulse, _ForcePosition;
 float _Radius, _Power, _Delta, _Force;
 int _Color, _Tick;
+uint _IdentityBase;
 int2 _InspectPosition;
 int3 Address(int2 p) { int2 q=p-_Origin; return int3(q%_ChunkSize,(q.y/_ChunkSize)*_Side+q.x/_ChunkSize); }
 bool Inside(int2 p) { int2 q=p-_Origin;return all(q>=0)&&all(q<_Width); }
@@ -58,7 +59,7 @@ void Cut(uint3 id:SV_DispatchThreadID)
         if(damage<_Properties[m].x) { _Damage[a]=damage; if(_Dirty[a.z]==0){_Dirty[a.z]=1;dirtyCount++;} continue; }
         uint slot=allocated;
         if(slot>=(uint)_Capacity) { throttled++; continue; }
-        Cell c;c.position=float2(p);c.velocity=impulse;c.material=m;c.identity=slot+1;c.step=0;c.flags=0;
+        Cell c;c.position=float2(p);c.velocity=impulse;c.material=m;c.identity=_IdentityBase+slot+1;c.step=0;c.flags=0;
         _Cells[slot]=c;_Occupancy[Index(p)]=(int)slot+1;
         allocated=slot+1;_Field[a]=0;_Damage[a]=0;
         if(_Dirty[a.z]==0){_Dirty[a.z]=1;dirtyCount++;}

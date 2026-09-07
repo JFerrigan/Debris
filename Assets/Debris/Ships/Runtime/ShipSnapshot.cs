@@ -33,7 +33,7 @@ namespace Debris.Ships
             try
             {
                 JsonUtility.FromJsonOverwrite(BlueprintJson,blueprint);blueprint.Validate();
-                var copy=JsonUtility.FromJson<ShipSnapshot>(JsonUtility.ToJson(this));
+                var copy=JsonUtility.FromJson<ShipSnapshot>(JsonUtility.ToJson(this));copy.Fuel.Validate();
                 var ship=new ShipRuntime(blueprint,Id){Fuel=copy.Fuel,Position=Position,Velocity=Velocity,Angle=Angle,AngularVelocity=AngularVelocity,CargoMass=CargoMass,DoorOpen=DoorOpen};
                 ship.Structure.Clear();foreach(var cell in copy.Structure)ship.Structure.Add(cell.Position,cell.Material);
                 ship.Units.Clear();ship.Units.AddRange(copy.Units);ship.Fragments.AddRange(copy.Fragments);
