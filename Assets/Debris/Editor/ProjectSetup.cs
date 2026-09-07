@@ -57,6 +57,16 @@ namespace Debris.Editor
                 map.AddAction("Move",InputActionType.Value,expectedControlLayout:"Vector2").AddCompositeBinding("2DVector").With("Up","<Keyboard>/w").With("Down","<Keyboard>/s").With("Left","<Keyboard>/a").With("Right","<Keyboard>/d");
                 File.WriteAllText("Assets/Content/Resources/Debris.inputactions", input.ToJson()); UnityEngine.Object.DestroyImmediate(input);
             }
+            // Upgrade action assets created by earlier checkpoints without replacing user bindings.
+            var actions=AssetDatabase.LoadAssetAtPath<InputActionAsset>("Assets/Content/Resources/Debris.inputactions");
+            if(actions)
+            {
+                var map=actions.FindActionMap("Salvage");bool changed=false;
+                if(map.FindAction("Turn")==null){map.AddAction("Turn",InputActionType.Value,expectedControlLayout:"Axis").AddCompositeBinding("1DAxis").With("Negative","<Keyboard>/q").With("Positive","<Keyboard>/e");changed=true;}
+                foreach(var binding in new[]{("CargoDoor","<Keyboard>/g"),("Suction","<Mouse>/rightButton"),("Save","<Keyboard>/f5"),("Load","<Keyboard>/f9")})
+                    if(map.FindAction(binding.Item1)==null){map.AddAction(binding.Item1,InputActionType.Button,binding.Item2);changed=true;}
+                if(changed)File.WriteAllText("Assets/Content/Resources/Debris.inputactions",actions.ToJson());
+            }
             if (!AssetDatabase.LoadAssetAtPath<ShipBlueprint>("Assets/Content/Resources/StarterShip.asset"))
                 AssetDatabase.CreateAsset(ShipBlueprint.Starter(catalog.IndexOf("iron")),"Assets/Content/Resources/StarterShip.asset");
             string[] scenes={"Bootstrap","DevShowcase"};

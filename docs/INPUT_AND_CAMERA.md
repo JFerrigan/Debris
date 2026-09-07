@@ -60,3 +60,5 @@ IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 ## Starter playable checkpoint
 
 W/S forward/reverse thrust, A/D strafe, Q/E turn, left mouse mounted drill, right mouse suction, G rear cargo door, scroll zoom, Escape pause, R reset. Camera follows the ship. The HUD shows finite fuel energy, physical cargo count and actual door state. Controller/rebinding remains unverified.
+
+F5 saves the current site and ship; F9 restores the checkpoint. These, turn, suction and door controls are semantic Input System actions. Save/load status appears at the bottom of the screen; failed loads preserve the active session.

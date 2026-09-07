@@ -108,6 +108,7 @@ namespace Debris.Simulation
         {
             if(disposed)throw new ObjectDisposedException(nameof(MatterSession));
             if(snapshotPending)throw new InvalidOperationException("Snapshot owns the mutation fence.");
+            if(!float.IsFinite(shipMotion.x)||!float.IsFinite(shipMotion.y)||!float.IsFinite(shipMotion.z)||Mathf.Abs(shipMotion.x)>.4f||Mathf.Abs(shipMotion.y)>.4f||Mathf.Abs(shipMotion.z)>.006f||!float.IsFinite(force)||force<0||!float.IsFinite(forcePosition.x)||!float.IsFinite(forcePosition.y))throw new ArgumentException("Invalid or unbounded motion/force command.");
             const float delta=1f/60;Dispatches=0;
             shader.SetInt("_MountedCut",mountedCut&&ShipEnabled?1:0);shader.SetInt("_MountedSuction",mountedSuction&&ShipEnabled?1:0);
             shader.SetInt("_DoorOpen",doorOpen?1:0);

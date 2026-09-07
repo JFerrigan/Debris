@@ -1,0 +1,1 @@
+{"name":"Debris.Persistence.Tests","references":["Debris.Core","Debris.Materials","Debris.Sites","Debris.Simulation","Debris.Ships","Debris.Persistence"],"optionalUnityReferences":["TestAssemblies"],"includePlatforms":["Editor"]}

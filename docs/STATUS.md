@@ -8,7 +8,7 @@ Phases A–E and locked interpretations are recorded in [EXECUTION_PLAN](EXECUTI
 
 ## Implemented, unverified
 
-Phase B blueprint/runtime foundation is implemented; moving hull/cargo integration is in progress. Phases C–E are not implemented yet. Large-world dirty-chunk streaming, ship physics, and player career progression remain unchecked.
+Phase B blueprint/runtime foundation is implemented; starter moving hull/cargo and active-site disk checkpoints are verified. Phases C–E are not implemented yet. Large-world dirty-chunk streaming, ship physics, and player career progression remain unchecked.
 
 ## Verified
 
@@ -24,11 +24,13 @@ Unity MCP remains unavailable; direct editor works. Windows/Linux execution and 
 
 ## Exact next task
 
-B.4: persist the verified GPU snapshots and ship runtime with integrity checks, atomic replacement and previous-save recovery; expose save/load in the playable showcase. Continue B.2 fuel transfers and B.3 physical fragment/breach behavior, then B.5 paged large-ship/streaming/index stress. Do not advance to Phase C until B.GATE passes.
+B.2: physical fuel-grade pumping and spills with conservation, including partially consumed fuel and full-pool backpressure. Then B.3 physical fragment motion/damage and breach release. B.4 still needs dirty-only saves, real schema migration and multi-site transitions; B.5 still needs paged ship masks/streaming.
 
-B.1 GPU checkpoint: 25/25 EditMode tests, Mac build and standalone rotating starter benchmark pass. See SHIP_SYSTEM/PERFORMANCE and evidence/B-* for measurements. B.1 is checked; B.2/B.3 are only partially implemented.
+Persistence checkpoint: 27/27 EditMode tests; Mac build; standalone save/load retains all 576 cargo cells, ship pose, fixed cells and partial damage. Standalone save size 25,891 bytes. Index-only fixture verifies 100,000 sites without loading payloads. See PERSISTENCE, SAVE_FORMAT, PERFORMANCE and evidence/B-persistence-* for exact scope. Full B.GATE is still unchecked.
 
-Commands: `bash tools/unity.sh test`, `build`, `open`. Player preset: `Builds/Debris.app/Contents/MacOS/Debris -debrisShipBenchmark -logFile /private/tmp/debris-ship-player.log`. Benchmark artifacts write under Builds/Logs. Close only the Debris editor before batch execution.
+Commands: `bash tools/unity.sh test`, `build`, `open`. Player preset: `Builds/Debris.app/Contents/MacOS/Debris -debrisShipBenchmark -logFile /private/tmp/debris-save-player.log`. Benchmark saves use a temporary verification slot; ordinary F5/F9 uses the persistent player slot. Close only the Debris editor before batch execution.
+
+Pre-existing package/Unity-assistant settings, GraphicsSettings/QualitySettings edits and the untracked `DebrisV1.app` are preserved separately from implementation commits.
 
 ## Resumption
 

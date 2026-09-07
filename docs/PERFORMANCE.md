@@ -30,6 +30,14 @@ Evidence: [raw report](evidence/A-mac-benchmark.txt), [inspected screenshot](evi
 
 ## Phase B starter GPU checkpoint — 2026-09-06
 
-Same Mac/Metal development configuration as Phase A. Controlled preset seeds 576 cargo cells, warms 60 steps, then samples 300 rotating steps (0.001 rad/step), 16 active chunks, 8,192 loose capacity. This is a cargo workload, not proof of an earned mining trip. Frame p95 17.581 ms, CPU p95 17.580 ms, GPU p95 16.291 ms; 3,605,060 explicit buffer bytes, 34 simulation dispatches, three matter draw calls plus UI. Snapshot validates conservation and non-overlap at 0.360 radians. The 16-chunk starter preset fits 60 FPS here, but does not establish a large-ship/full-cargo budget.
+Same Mac/Metal development configuration as Phase A. Controlled preset seeds 576 cargo cells, warms 60 steps, then samples 300 rotating steps (0.001 rad/step), 16 active chunks, 8,192 loose capacity. This is a cargo workload, not proof of an earned mining trip. Frame p95 17.576 ms, CPU p95 17.570 ms, GPU p95 16.408 ms; 3,605,060 explicit buffer bytes, 34 simulation dispatches, three matter draw calls plus UI. Snapshot validates conservation and non-overlap at 0.360 radians. The 16-chunk starter preset fits 60 FPS here, but does not establish a large-ship/full-cargo budget.
 
 Evidence: `evidence/B-ship-benchmark.txt`, `evidence/B-ship-showcase.png` (inspected), `evidence/B-gpu-tests.xml` (25/25). No Windows/Linux execution claim.
+
+## Persistence/index checkpoint — 2026-09-07
+
+Mac EditMode evidence (`evidence/B-persistence-tests.xml`): 100,000-site index is 4,000,048 bytes; initial streamed write 154 ms; integrity-checked open 19 ms; 1,031 binary-search lookups 22 ms. Payloads loaded: zero. The fixture also updates existing/new entries, rejects revision rollback and recovers a corrupt index from backup. This is an index-only measurement, not 100,000 heavy site payloads or an active-world streaming result.
+
+The mixed damaged-site save fixture encodes 112 released cells (five cargo cells), 16 chunks, ship/finite fuel and partial damage into 18,423 bytes. Encode time is not separately measured. Exact IEEE-754 GPU restoration, content-table reordering and interrupted/corrupt-write recovery pass. Do not infer final cloud quotas or save-growth budgets from this single preset.
+
+Standalone save/load verification (`evidence/B-persistence-player.txt`): 576 rotating cargo cells, 16 chunks, 25,891-byte checkpoint, exact disk roundtrip. Sampled movement frame p95 17.068 ms, CPU p95 17.067 ms, GPU p95 16.576 ms; save/load wait frames excluded. Screenshot inspected after the restored session rendered.

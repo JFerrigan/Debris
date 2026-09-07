@@ -1,0 +1,634 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="27" result="Passed" total="27" passed="27" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:07Z" duration="6.1179747">
+  <test-suite type="TestSuite" id="1000" name="Debris" fullname="Debris" runstate="Runnable" testcasecount="27" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:07Z" duration="6.117975" total="27" passed="27" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="1013" name="Debris.Core.Tests.dll" fullname="/Users/jakeferrigan/Documents/Debris/Library/ScriptAssemblies/Debris.Core.Tests.dll" runstate="Runnable" testcasecount="9" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:01Z" duration="0.337932" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="4541" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="1014" name="Debris" fullname="Debris" runstate="Runnable" testcasecount="9" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:01Z" duration="0.337709" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1015" name="Core" fullname="Debris.Core" runstate="Runnable" testcasecount="9" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:01Z" duration="0.337451" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="1016" name="Tests" fullname="Debris.Core.Tests" runstate="Runnable" testcasecount="9" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:01Z" duration="0.337254" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1001" name="ContentTests" fullname="Debris.Core.Tests.ContentTests" classname="Debris.Core.Tests.ContentTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:01Z" duration="0.331676" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1004" name="GeneratedChunkMatchesSubchunksAndSiteIdentityChangesGeometry" fullname="Debris.Core.Tests.ContentTests.GeneratedChunkMatchesSubchunksAndSiteIdentityChangesGeometry" methodname="GeneratedChunkMatchesSubchunksAndSiteIdentityChangesGeometry" classname="Debris.Core.Tests.ContentTests" runstate="Runnable" seed="416869219" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:01Z" duration="0.117106" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1003" name="IdAndCoordinateValidation" fullname="Debris.Core.Tests.ContentTests.IdAndCoordinateValidation" methodname="IdAndCoordinateValidation" classname="Debris.Core.Tests.ContentTests" runstate="Runnable" seed="1810320416" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:01Z" duration="0.002196" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1005" name="InvalidCatalogAndWeightsFailBeforeGeneration" fullname="Debris.Core.Tests.ContentTests.InvalidCatalogAndWeightsFailBeforeGeneration" methodname="InvalidCatalogAndWeightsFailBeforeGeneration" classname="Debris.Core.Tests.ContentTests" runstate="Runnable" seed="519622330" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:01Z" duration="0.001733" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1002" name="RandomRangeNeverIncludesUpperBound" fullname="Debris.Core.Tests.ContentTests.RandomRangeNeverIncludesUpperBound" methodname="RandomRangeNeverIncludesUpperBound" classname="Debris.Core.Tests.ContentTests" runstate="Runnable" seed="468836019" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:01Z" duration="0.203354" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1006" name="DeterministicFoundationTests" fullname="Debris.Core.Tests.DeterministicFoundationTests" classname="Debris.Core.Tests.DeterministicFoundationTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:01Z" duration="0.005021" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-suite type="ParameterizedMethod" id="1012" name="ChunkCoordinates_FloorDivideNegativeCells" fullname="Debris.Core.Tests.DeterministicFoundationTests.ChunkCoordinates_FloorDivideNegativeCells" classname="Debris.Core.Tests.DeterministicFoundationTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:01Z" duration="0.003614" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <properties />
+                <test-case id="1008" name="ChunkCoordinates_FloorDivideNegativeCells(-1,-1)" fullname="Debris.Core.Tests.DeterministicFoundationTests.ChunkCoordinates_FloorDivideNegativeCells(-1,-1)" methodname="ChunkCoordinates_FloorDivideNegativeCells" classname="Debris.Core.Tests.DeterministicFoundationTests" runstate="Runnable" seed="1607479813" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:01Z" duration="0.000132" asserts="0">
+                  <properties>
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1009" name="ChunkCoordinates_FloorDivideNegativeCells(-128,-1)" fullname="Debris.Core.Tests.DeterministicFoundationTests.ChunkCoordinates_FloorDivideNegativeCells(-128,-1)" methodname="ChunkCoordinates_FloorDivideNegativeCells" classname="Debris.Core.Tests.DeterministicFoundationTests" runstate="Runnable" seed="1594193840" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:01Z" duration="0.000030" asserts="0">
+                  <properties>
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1010" name="ChunkCoordinates_FloorDivideNegativeCells(-129,-2)" fullname="Debris.Core.Tests.DeterministicFoundationTests.ChunkCoordinates_FloorDivideNegativeCells(-129,-2)" methodname="ChunkCoordinates_FloorDivideNegativeCells" classname="Debris.Core.Tests.DeterministicFoundationTests" runstate="Runnable" seed="1822986549" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:01Z" duration="0.000023" asserts="0">
+                  <properties>
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+                <test-case id="1011" name="ChunkCoordinates_FloorDivideNegativeCells(128,1)" fullname="Debris.Core.Tests.DeterministicFoundationTests.ChunkCoordinates_FloorDivideNegativeCells(128,1)" methodname="ChunkCoordinates_FloorDivideNegativeCells" classname="Debris.Core.Tests.DeterministicFoundationTests" runstate="Runnable" seed="1318786580" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:01Z" duration="0.000018" asserts="0">
+                  <properties>
+                    <property name="retryIteration" value="0" />
+                    <property name="repeatIteration" value="0" />
+                  </properties>
+                </test-case>
+              </test-suite>
+              <test-case id="1007" name="PurposeSeed_IsStableAndPurposeScoped" fullname="Debris.Core.Tests.DeterministicFoundationTests.PurposeSeed_IsStableAndPurposeScoped" methodname="PurposeSeed_IsStableAndPurposeScoped" classname="Debris.Core.Tests.DeterministicFoundationTests" runstate="Runnable" seed="2046818464" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:01Z" duration="0.000282" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+    <test-suite type="Assembly" id="1021" name="Debris.Persistence.Tests.dll" fullname="/Users/jakeferrigan/Documents/Debris/Library/ScriptAssemblies/Debris.Persistence.Tests.dll" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:03Z" duration="1.907420" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="4541" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="1022" name="Debris" fullname="Debris" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:03Z" duration="1.907272" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1023" name="Persistence" fullname="Debris.Persistence" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:03Z" duration="1.907168" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="1024" name="Tests" fullname="Debris.Persistence.Tests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:03Z" duration="1.907035" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1017" name="SalvageSaveTests" fullname="Debris.Persistence.Tests.SalvageSaveTests" classname="Debris.Persistence.Tests.SalvageSaveTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:03Z" duration="1.426588" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1018" name="DiskReloadPreservesCutsDamageFuelShipAndEveryCell" fullname="Debris.Persistence.Tests.SalvageSaveTests.DiskReloadPreservesCutsDamageFuelShipAndEveryCell" methodname="DiskReloadPreservesCutsDamageFuelShipAndEveryCell" classname="Debris.Persistence.Tests.SalvageSaveTests" runstate="Runnable" seed="938406391" result="Passed" start-time="2026-09-06 18:20:01Z" end-time="2026-09-06 18:20:03Z" duration="1.426150" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel TransferCargo at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel TransferCargo at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel TransferCargo at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel TransferCargo at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+DEBRIS_SAVE bytes=18423 loose=112 schema=1 exact=true interrupted=true recovered=true
+]]></output>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1019" name="SiteIndexTests" fullname="Debris.Persistence.Tests.SiteIndexTests" classname="Debris.Persistence.Tests.SiteIndexTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.480273" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1020" name="HundredThousandSitesRemainAddressableWithoutLoadingPayloads" fullname="Debris.Persistence.Tests.SiteIndexTests.HundredThousandSitesRemainAddressableWithoutLoadingPayloads" methodname="HundredThousandSitesRemainAddressableWithoutLoadingPayloads" classname="Debris.Persistence.Tests.SiteIndexTests" runstate="Runnable" seed="642291152" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.477971" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[DEBRIS_INDEX sites=100000 bytes=4000048 write_ms=154 open_ms=19 lookups=1031 lookup_ms=22 payloads_loaded=0
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+    <test-suite type="Assembly" id="1035" name="Debris.Ships.Tests.dll" fullname="/Users/jakeferrigan/Documents/Debris/Library/ScriptAssemblies/Debris.Ships.Tests.dll" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.023562" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="4541" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="1036" name="Debris" fullname="Debris" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.023150" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1037" name="Ships" fullname="Debris.Ships" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.023056" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="1038" name="Tests" fullname="Debris.Ships.Tests" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.022918" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1025" name="CargoGridTests" fullname="Debris.Ships.Tests.CargoGridTests" classname="Debris.Ships.Tests.CargoGridTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.001762" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1026" name="CargoStoresOnlyOneMaterialPerVisibleCavityCell" fullname="Debris.Ships.Tests.CargoGridTests.CargoStoresOnlyOneMaterialPerVisibleCavityCell" methodname="CargoStoresOnlyOneMaterialPerVisibleCavityCell" classname="Debris.Ships.Tests.CargoGridTests" runstate="Runnable" seed="269048268" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.001467" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1027" name="ShipTests" fullname="Debris.Ships.Tests.ShipTests" classname="Debris.Ships.Tests.ShipTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.020988" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1030" name="CargoMassReducesAccelerationAndFuelCannotUnderflow" fullname="Debris.Ships.Tests.ShipTests.CargoMassReducesAccelerationAndFuelCannotUnderflow" methodname="CargoMassReducesAccelerationAndFuelCannotUnderflow" classname="Debris.Ships.Tests.ShipTests" runstate="Runnable" seed="1957585690" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.002137" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1033" name="DestroyedTankStopsFuelSupplyAndInvalidTimeCannotPoisonMotion" fullname="Debris.Ships.Tests.ShipTests.DestroyedTankStopsFuelSupplyAndInvalidTimeCannotPoisonMotion" methodname="DestroyedTankStopsFuelSupplyAndInvalidTimeCannotPoisonMotion" classname="Debris.Ships.Tests.ShipTests" runstate="Runnable" seed="1695464058" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.002251" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1031" name="DetachedStructurePersistsAndSeveredThrusterStops" fullname="Debris.Ships.Tests.ShipTests.DetachedStructurePersistsAndSeveredThrusterStops" methodname="DetachedStructurePersistsAndSeveredThrusterStops" classname="Debris.Ships.Tests.ShipTests" runstate="Runnable" seed="1089037732" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.009234" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1029" name="FailedPrefabPlacementIsAtomic" fullname="Debris.Ships.Tests.ShipTests.FailedPrefabPlacementIsAtomic" methodname="FailedPrefabPlacementIsAtomic" classname="Debris.Ships.Tests.ShipTests" runstate="Runnable" seed="1938320612" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.001682" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1032" name="LostCommandPreservesInertiaButDisablesControl" fullname="Debris.Ships.Tests.ShipTests.LostCommandPreservesInertiaButDisablesControl" methodname="LostCommandPreservesInertiaButDisablesControl" classname="Debris.Ships.Tests.ShipTests" runstate="Runnable" seed="1858816074" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.001798" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1034" name="RotatingTransformRoundTripsWithoutScalingCells" fullname="Debris.Ships.Tests.ShipTests.RotatingTransformRoundTripsWithoutScalingCells" methodname="RotatingTransformRoundTripsWithoutScalingCells" classname="Debris.Ships.Tests.ShipTests" runstate="Runnable" seed="265098361" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.001740" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1028" name="StarterBlueprintHasRealCavityAndWholeMachinery" fullname="Debris.Ships.Tests.ShipTests.StarterBlueprintHasRealCavityAndWholeMachinery" methodname="StarterBlueprintHasRealCavityAndWholeMachinery" classname="Debris.Ships.Tests.ShipTests" runstate="Runnable" seed="65281224" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.001611" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+    <test-suite type="Assembly" id="1049" name="Debris.Simulation.Tests.dll" fullname="/Users/jakeferrigan/Documents/Debris/Library/ScriptAssemblies/Debris.Simulation.Tests.dll" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:07Z" duration="3.845952" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="4541" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="1050" name="Debris" fullname="Debris" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:07Z" duration="3.845846" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1051" name="Simulation" fullname="Debris.Simulation" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:07Z" duration="3.845729" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="1052" name="Tests" fullname="Debris.Simulation.Tests" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:07Z" duration="3.845594" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1039" name="MatterTests" fullname="Debris.Simulation.Tests.MatterTests" classname="Debris.Simulation.Tests.MatterTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:04Z" duration="0.162551" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1041" name="CuttingMatchesCpuReferenceAndSaturationRetainsMatter" fullname="Debris.Simulation.Tests.MatterTests.CuttingMatchesCpuReferenceAndSaturationRetainsMatter" methodname="CuttingMatchesCpuReferenceAndSaturationRetainsMatter" classname="Debris.Simulation.Tests.MatterTests" runstate="Runnable" seed="1703880500" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.052247" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+REFERENCE 31,22400,1947,2 ACTUAL 31,22400,1947,2
+]]></output>
+              </test-case>
+              <test-case id="1044" name="InspectionIsAsynchronousAndReturnsMaterial" fullname="Debris.Simulation.Tests.MatterTests.InspectionIsAsynchronousAndReturnsMaterial" methodname="InspectionIsAsynchronousAndReturnsMaterial" classname="Debris.Simulation.Tests.MatterTests" runstate="Runnable" seed="359645147" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:03Z" duration="0.009011" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Inspect at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Inspect at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Inspect at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Inspect at Matter.compute(25) (on metal)
+]]></output>
+              </test-case>
+              <test-case id="1042" name="MovingCellsDoNotOverlapTerrainOrEachOther" fullname="Debris.Simulation.Tests.MatterTests.MovingCellsDoNotOverlapTerrainOrEachOther" methodname="MovingCellsDoNotOverlapTerrainOrEachOther" classname="Debris.Simulation.Tests.MatterTests" runstate="Runnable" seed="1787537264" result="Passed" start-time="2026-09-06 18:20:03Z" end-time="2026-09-06 18:20:04Z" duration="0.036757" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+]]></output>
+              </test-case>
+              <test-case id="1043" name="PageEvictionAndResumePreservesDamageAndEveryCell" fullname="Debris.Simulation.Tests.MatterTests.PageEvictionAndResumePreservesDamageAndEveryCell" methodname="PageEvictionAndResumePreservesDamageAndEveryCell" classname="Debris.Simulation.Tests.MatterTests" runstate="Runnable" seed="2051491422" result="Passed" start-time="2026-09-06 18:20:04Z" end-time="2026-09-06 18:20:04Z" duration="0.063764" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+]]></output>
+              </test-case>
+              <test-case id="1040" name="ShaderLayoutIsExactly32Bytes" fullname="Debris.Simulation.Tests.MatterTests.ShaderLayoutIsExactly32Bytes" methodname="ShaderLayoutIsExactly32Bytes" classname="Debris.Simulation.Tests.MatterTests" runstate="Runnable" seed="2137386635" result="Passed" start-time="2026-09-06 18:20:04Z" end-time="2026-09-06 18:20:04Z" duration="0.000145" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1045" name="ShipMatterTests" fullname="Debris.Simulation.Tests.ShipMatterTests" classname="Debris.Simulation.Tests.ShipMatterTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-09-06 18:20:04Z" end-time="2026-09-06 18:20:07Z" duration="3.682873" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1047" name="IntakeSpillAndObstructedDoorNeverDuplicateOrOverlap" fullname="Debris.Simulation.Tests.ShipMatterTests.IntakeSpillAndObstructedDoorNeverDuplicateOrOverlap" methodname="IntakeSpillAndObstructedDoorNeverDuplicateOrOverlap" classname="Debris.Simulation.Tests.ShipMatterTests" runstate="Runnable" seed="112198990" result="Passed" start-time="2026-09-06 18:20:04Z" end-time="2026-09-06 18:20:04Z" duration="0.493341" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel TransferCargo at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel TransferCargo at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel TransferCargo at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel TransferCargo at Matter.compute(25) (on metal)
+]]></output>
+              </test-case>
+              <test-case id="1048" name="MountedDrillCutsOnlyInFrontOfShip" fullname="Debris.Simulation.Tests.ShipMatterTests.MountedDrillCutsOnlyInFrontOfShip" methodname="MountedDrillCutsOnlyInFrontOfShip" classname="Debris.Simulation.Tests.ShipMatterTests" runstate="Runnable" seed="1844029909" result="Passed" start-time="2026-09-06 18:20:04Z" end-time="2026-09-06 18:20:04Z" duration="0.025835" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel TransferCargo at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Cut at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel TransferCargo at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel TransferCargo at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Cut at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel TransferCargo at Matter.compute(25) (on metal)
+]]></output>
+              </test-case>
+              <test-case id="1046" name="RotatingCargoConservesVolumeAndResumesExactly" fullname="Debris.Simulation.Tests.ShipMatterTests.RotatingCargoConservesVolumeAndResumesExactly" methodname="RotatingCargoConservesVolumeAndResumesExactly" classname="Debris.Simulation.Tests.ShipMatterTests" runstate="Runnable" seed="631063165" result="Passed" start-time="2026-09-06 18:20:04Z" end-time="2026-09-06 18:20:07Z" duration="3.163130" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel TransferCargo at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel TransferCargo at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel TransferCargo at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel TransferCargo at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel TransferCargo at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'x': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Integrate at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel MoveShip at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel RestoreOccupancy at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel TransferCargo at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel Upload at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': 'y': loop control variable conflicts with a previous declaration in the outer scope; most recent declaration will be used at kernel UploadDamage at Assets/Debris/Simulation/Resources/ShipMatter.hlsl(50) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer divides may be much slower, try using uints if possible. at kernel TransferCargo at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel Integrate at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel MoveShip at Matter.compute(25) (on metal)
+Shader warning in 'Matter(Clone)': integer modulus may be much slower, try using uints if possible. at kernel TransferCargo at Matter.compute(25) (on metal)
+Saving results to: /Users/jakeferrigan/Library/Application Support/JFerrigan/Debris/TestResults.xml
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

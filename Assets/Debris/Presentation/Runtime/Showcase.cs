@@ -6,6 +6,8 @@ using Debris.Materials;
 using Debris.Simulation;
 using Debris.Sites;
 using Debris.Ships;
+using Debris.Persistence;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Profiling;
@@ -13,7 +15,8 @@ namespace Debris.Presentation
 {
     public sealed class Showcase : MonoBehaviour
     {
-        ShipRuntime ship;
+        ShipRuntime ship;ShipBlueprint loadedBlueprint;bool saveBusy;string saveStatus="F5 save • F9 load";
+        string SavePath=>Path.Combine(shipBenchmark?Application.temporaryCachePath:Application.persistentDataPath,shipBenchmark?"DebrisVerification":"Saves","salvage.debris");
         MatterSession session;MatterView view;MaterialCatalog catalog;
         InputActionAsset input;Camera cameraView;bool paused,benchmark,shipBenchmark;
         float accumulator,statsTime;ushort inspected;Vector2 pointerWorld;
@@ -33,7 +36,7 @@ namespace Debris.Presentation
         }
         void ResetSession(int side,int capacity)
         {
-            view?.Dispose();session?.Dispose();
+            view?.Dispose();session?.Dispose();if(loadedBlueprint){Destroy(loadedBlueprint);loadedBlueprint=null;}
             session=new MatterSession(catalog,Resources.Load<AsteroidProfile>("Asteroid"),side,128,capacity);
             ship=benchmark?null:new ShipRuntime(Resources.Load<ShipBlueprint>("StarterShip"));
             if(ship!=null){session.ConfigureShip(ship.CollisionMask(),ship.Position);cameraView.orthographicSize=180;}
@@ -42,19 +45,25 @@ namespace Debris.Presentation
         void Update()
         {
             if(session==null)return;
+            if(!benchmark&&!shipBenchmark&&!saveBusy)
+            {
+                if(input["Save"].WasPressedThisFrame())_ = SaveCheckpoint();
+                else if(input["Load"].WasPressedThisFrame())_ = LoadCheckpoint();
+            }
             if(input["Pause"].WasPressedThisFrame())paused=!paused;
-            if(input["Reset"].WasPressedThisFrame()&&!benchmark)ResetSession(benchmark?2:4,8192);
+            if(input["Reset"].WasPressedThisFrame()&&!benchmark&&!shipBenchmark&&!saveBusy)ResetSession(benchmark?2:4,8192);
             var pointer=input["Pointer"].ReadValue<Vector2>();pointerWorld=cameraView.ScreenToWorldPoint(new Vector3(pointer.x,pointer.y,10));
             var movement=input["Move"].ReadValue<Vector2>();if(ship==null)cameraView.transform.position+=(Vector3)(movement*(cameraView.orthographicSize*Time.unscaledDeltaTime));
             else
             {
-                if(Keyboard.current!=null&&Keyboard.current.gKey.wasPressedThisFrame&&ship.Has(UnitKind.Door))ship.DoorOpen=!ship.DoorOpen;
+                if(!saveBusy&&input["CargoDoor"].WasPressedThisFrame()&&ship.Has(UnitKind.Door))ship.DoorOpen=!ship.DoorOpen;
                 var pose=session.ShipStats[0];cameraView.transform.position=Vector3.Lerp(cameraView.transform.position,new Vector3(pose.x+50,pose.y,-10),1-Mathf.Exp(-4*Time.unscaledDeltaTime));
                 ship.CargoMass=session.ShipStats[2].y;
+                ship.Angle=session.ShipStats[0].z;
                 if(session.ShipStats[1].w>0){ship.Velocity=Vector2.zero;ship.AngularVelocity=0;}
             }
             cameraView.orthographicSize=Mathf.Clamp(cameraView.orthographicSize-input["Zoom"].ReadValue<float>()*.025f,30,400);
-            if(!paused&&!benchmark&&!shipBenchmark)
+            if(!paused&&!benchmark&&!shipBenchmark&&!saveBusy)
             {
                 accumulator=Mathf.Min(accumulator+Time.deltaTime,4f/60);
                 while(accumulator>=1f/60)
@@ -62,11 +71,11 @@ namespace Debris.Presentation
                     SiteCommand? command=null;
                     if(ship!=null)
                     {
-                        float turn=Keyboard.current==null?0:(Keyboard.current.eKey.isPressed?1:0)-(Keyboard.current.qKey.isPressed?1:0);
+                        float turn=input["Turn"].ReadValue<float>();
                         var old=ship.Position;float angle=ship.Angle;ship.Tick(new Vector2(movement.y,-movement.x),-turn,1f/60);
                         bool cut=input["Cut"].IsPressed()&&ship.Has(UnitKind.Drill);
                         if(cut)command=new SiteCommand(SiteCommandType.CutterStroke,Vector2.zero,Vector2.zero,6,120,1);
-                        bool suction=Mouse.current!=null&&Mouse.current.rightButton.isPressed&&ship.Has(UnitKind.Suction);
+                        bool suction=input["Suction"].IsPressed()&&ship.Has(UnitKind.Suction);
                         session.Step(command,suction?40:0,default,new Vector3(ship.Position.x-old.x,ship.Position.y-old.y,ship.Angle-angle),ship.DoorOpen,cut,suction);
                     }
                     else session.Step(command);
@@ -80,21 +89,65 @@ namespace Debris.Presentation
             if(FrameTimingManager.GetLatestTimings(1,timings)>0){if(benchmark||shipBenchmark){cpu.Add(timings[0].cpuFrameTime);if(timings[0].gpuFrameTime>0)gpu.Add(timings[0].gpuFrameTime);}}
             if(benchmark||shipBenchmark)frames.Add(Time.unscaledDeltaTime*1000);
         }
+        async Task<bool> SaveCheckpoint()
+        {
+            saveBusy=true;saveStatus="Saving site…";
+            try
+            {
+                var matter=await session.SnapshotAsync();var state=ShipSnapshot.Capture(ship);
+                state.Position=new Vector2(matter.ShipPose[0].x,matter.ShipPose[0].y);state.Angle=matter.ShipPose[0].z;
+                if(matter.ShipPose[1].w>0){state.Velocity=Vector2.zero;state.AngularVelocity=0;}
+                var save=new SalvageSave{Matter=matter,Ship=state,MaterialKeys=SalvageSave.Keys(catalog)};
+                string json=JsonUtility.ToJson(state),path=SavePath;
+                await Task.Run(()=>AtomicSalvageStore.Write(path,SalvageSaveCodec.Encode(save,json)));
+                saveStatus="Site saved. F9 returns to this checkpoint.";return true;
+            }
+            catch(Exception e){saveStatus="Save failed: "+e.Message;Debug.LogException(e);return false;}
+            finally{saveBusy=false;accumulator=0;}
+        }
+        async Task<bool> LoadCheckpoint()
+        {
+            saveBusy=true;saveStatus="Loading site…";MatterSession candidate=null;ShipBlueprint blueprint=null;
+            try
+            {
+                string path=SavePath;
+                var result=await Task.Run(()=>{var save=AtomicSalvageStore.Read(path,out var json);return (save,json);});
+                var saved=result.save;
+                if(saved.GeneratorKey!="asteroid"||saved.GeneratorRevision!=1)throw new NotSupportedException("This site's generator revision is unavailable.");
+                SalvageSaveCodec.ResolveContent(saved,result.json,catalog);
+                if(saved.Ship==null)throw new InvalidDataException("This checkpoint has no player ship.");
+                var restored=saved.Ship.Restore(out blueprint);var m=saved.Matter;
+                candidate=new MatterSession(catalog,Resources.Load<AsteroidProfile>("Asteroid"),m.Side,m.ChunkSize,m.Capacity,saved.GeneratorSeed,new Debris.Core.StableId(saved.SiteId));
+                candidate.Restore(m);var replacement=new MatterView(candidate);
+                view.Dispose();session.Dispose();if(loadedBlueprint)Destroy(loadedBlueprint);
+                ship=restored;loadedBlueprint=blueprint;blueprint=null;session=candidate;candidate=null;view=replacement;
+                saveStatus=saved.RecoveredBackup?"Recovered previous verified save; latest file was unavailable or damaged.":"Site restored, including cargo, fuel and damage.";return true;
+            }
+            catch(Exception e){saveStatus="Load failed: "+e.Message;Debug.LogWarning(saveStatus);return false;}
+            finally{candidate?.Dispose();if(blueprint)Destroy(blueprint);saveBusy=false;accumulator=0;}
+        }
         IEnumerator ShipBenchmark()
         {
             string output=Path.GetFullPath(Path.Combine(Application.dataPath,"../../Logs"));Directory.CreateDirectory(output);
             var initial=session.SnapshotAsync();while(!initial.IsCompleted)yield return null;
             if(initial.IsFaulted)throw initial.Exception;
-            // Controlled full-cavity workload, explicitly separate from earned salvage.
+            // Controlled loaded-cavity workload, explicitly separate from earned salvage.
             var state=initial.Result;var cells=new List<LooseCell>();
             for(int y=-24;y<24;y+=2)for(int x=-24;x<24;x+=2)cells.Add(new LooseCell{Position=new Vector2(x,y),Material=2,Identity=(uint)cells.Count+1,Flags=4});
             state.Cells=cells.ToArray();state.Counters[0]=(uint)cells.Count;state.Counters[1]+=(uint)cells.Count;session.Restore(state);
             for(int i=0;i<60;i++){session.Step(shipMotion:new Vector3(0,.005f,.001f));yield return null;}
             cpu.Clear();gpu.Clear();frames.Clear();
             for(int i=0;i<300;i++){session.Step(shipMotion:new Vector3(0,.005f,.001f));yield return null;}
+            double frame95=Percentile(frames,.95),cpu95=Percentile(cpu,.95),gpu95=Percentile(gpu,.95);int dispatches=session.Dispatches;
             var task=session.SnapshotAsync();while(!task.IsCompleted)yield return null;if(task.IsFaulted)throw task.Exception;
             CpuCutReference.Validate(task.Result);
-            string line=$"preset=rotating-starter cells={task.Result.Cells.Length} chunks={session.Side*session.Side} capacity={session.Capacity} frame_p95={Percentile(frames,.95):F3} cpu_p95={Percentile(cpu,.95):F3} gpu_p95={Percentile(gpu,.95):F3} buffers={session.BufferBytes} dispatches={session.Dispatches} nonoverlap=true conserved=true angle={task.Result.ShipPose[0].z:F3}";
+            var saved=SaveCheckpoint();while(!saved.IsCompleted)yield return null;if(!saved.Result)throw new InvalidOperationException("Player save verification failed.");
+            var loaded=LoadCheckpoint();while(!loaded.IsCompleted)yield return null;if(!loaded.Result)throw new InvalidOperationException("Player load verification failed.");
+            var revisited=session.SnapshotAsync();while(!revisited.IsCompleted)yield return null;
+            var original=task.Result;var restored=revisited.Result;
+            if(!System.Linq.Enumerable.SequenceEqual(original.Cells,restored.Cells)||!System.Linq.Enumerable.SequenceEqual(original.ShipPose,restored.ShipPose))throw new InvalidOperationException("Player disk resume changed cargo or ship pose.");
+            for(int i=0;i<original.Fields.Length;i++)if(!System.Linq.Enumerable.SequenceEqual(original.Fields[i],restored.Fields[i])||!System.Linq.Enumerable.SequenceEqual(original.Damage[i],restored.Damage[i]))throw new InvalidOperationException("Player disk resume changed terrain.");
+            string line=$"preset=rotating-starter cells={task.Result.Cells.Length} chunks={session.Side*session.Side} capacity={session.Capacity} frame_p95={frame95:F3} cpu_p95={cpu95:F3} gpu_p95={gpu95:F3} buffers={session.BufferBytes} dispatches={dispatches} nonoverlap=true conserved=true disk_roundtrip=true save_bytes={new FileInfo(SavePath).Length} angle={task.Result.ShipPose[0].z:F3}";
             File.WriteAllText(Path.Combine(output,"ship-benchmark.txt"),SystemInfo.graphicsDeviceName+" / "+Application.unityVersion+"\n"+line);Debug.Log("DEBRIS_SHIP_BENCHMARK "+line);
             ScreenCapture.CaptureScreenshot(Path.Combine(output,"ship-showcase.png"));yield return null;yield return null;Application.Quit();
         }
@@ -149,8 +202,8 @@ namespace Debris.Presentation
             GUI.Label(new Rect(x,610,225,95),s[2]>0?"POOL SATURATED\nCutter throttled. Unreleased material remains in the asteroid.":"All released matter remains physical. Cells retain their mass and volume.",small);
             if(paused)GUI.Label(new Rect(Screen.width/2-80,145,180,30),"SIMULATION PAUSED",label);
             if(!paused&&Event.current.type==EventType.Repaint){var p=input["Pointer"].ReadValue<Vector2>();GUI.color=new Color(.25f,.95f,.75f);GUI.DrawTexture(new Rect(p.x-10,Screen.height-p.y,20,1),solid);GUI.DrawTexture(new Rect(p.x,Screen.height-p.y-10,1,20),solid);GUI.color=Color.white;}
-            GUI.Label(new Rect(30,Screen.height-35,800,24),"DEVELOPMENT SHOWCASE   •   CHUNKED GPU MATTER   •   1 CELL = 1 PHYSICAL UNIT",small);
+            GUI.Label(new Rect(30,Screen.height-35,1050,24),saveStatus,small);
         }
-        void OnDestroy(){view?.Dispose();session?.Dispose();if(input){input.Disable();Destroy(input);}if(solid)Destroy(solid);}
+        void OnDestroy(){if(loadedBlueprint)Destroy(loadedBlueprint);view?.Dispose();session?.Dispose();if(input){input.Disable();Destroy(input);}if(solid)Destroy(solid);}
     }
 }

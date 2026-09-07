@@ -59,3 +59,11 @@ IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
 - [ ] B.4 Codecs/migration/interrupted writes.
 - [ ] D.GATE Encounter session snapshot.
+
+## Executable checkpoint format (schema 1)
+
+The current vertical slice uses one `salvage.debris` checkpoint plus `.backup` and `.pending`, rather than the final world/delta directory layout above. Header: 32-bit magic `0x44534252`, 32-bit schema, 32-bit uncompressed byte length, 32-byte SHA-256 of the uncompressed body, then Deflate bytes. BinaryWriter fields use little-endian encoding. Cells retain their IEEE-754 position/velocity bits exactly; this prototype does not quantize them to fixed point. A stable material-key table remaps fields, cargo, hull and fragments across catalog ordering changes. Whole ship state is captured into an owned JSON DTO before worker encoding.
+
+The decoder bounds payload sizes and validates dimensions, accounting and occupancy before upload. Schema/generator incompatibility reports an error while retaining source files. There is no older production schema to migrate yet. The final sparse chunk/loose-bucket layout and multi-site manifest remain outstanding under B.4.
+
+The standalone site index is schema 1: 16-byte header (magic, schema, 64-bit count), sorted 40-byte records (32 ASCII ID bytes, 64-bit revision), then SHA-256. Index updates stream the old records into an atomic replacement; lookup seeks directly to records and never opens site payloads. Snapshot and index integration into a world transaction is still pending.
