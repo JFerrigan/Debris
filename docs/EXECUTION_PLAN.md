@@ -1,6 +1,6 @@
 # Continuous implementation contract
 
-Authorized scope: implement phases A–E in order through playable alien-drone escalation. Continue automatically when each gate passes. Final story resolution is outside this run. Latest priority: document the requested contact-physics correction and efficient workflow, then resume B.3R before B.5. Follow [AGENTS.md](../AGENTS.md) for validation and concise context loading. Preserve existing work, make coherent subsystem commits, and push ordinary commits to origin/main.
+Authorized scope: implement phases A–E in order through playable alien-drone escalation. Continue automatically when each gate passes. Final story resolution is outside this run. Latest priority: record feature-batch efficiency and implement B.3R before B.5. Follow [AGENTS.md](../AGENTS.md) for validation and concise context loading. Preserve existing work, make coherent subsystem commits, and push ordinary commits to origin/main.
 
 ## Locked design interpretations
 

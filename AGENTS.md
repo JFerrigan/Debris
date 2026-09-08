@@ -36,7 +36,8 @@
 - Do not silently change the user's model, effort or account configuration. AGENTS.md cannot set those controls. Use the selected model efficiently; model/effort suggestions and their limits are in `docs/WORKFLOW.md`.
 - Keep STATUS a short current handoff: next task, exact failure, unfinished files and latest relevant evidence. Historical detail belongs in git and evidence, not repeated status appendices.
 - At completion report behavior changed, validation, commit and remaining limitation. During work give concise updates on findings and decisions, not narration of every tool call.
-- Track checks/builds repeated and why, elapsed time and the feature delivered. Record actual token usage only when exposed by the client; never invent savings or equate tool waiting time with token cost.
+- Record each completed feature batch in `docs/evidence/feature-batches.csv`: behavior, commit range, UTC times/elapsed minutes, focused/full tests, builds/player runs, every expensive rerun reason, acceptance and unresolved defects. Record actual client-reported usage or `unavailable`; never invent savings or equate waiting time with token cost.
+- Review the first three B.3R batch records once: compare accepted behavior, elapsed time, rework and validation cost. Every expensive rerun needs evidence; fewer checks alone are not an improvement. Adjust the workflow once from those observations, then continue.
 
 ## Simulation invariants
 

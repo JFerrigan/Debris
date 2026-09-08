@@ -1,0 +1,2 @@
+batch_id,phase,observable_result,starting_commit,ending_commit,start_utc,end_utc,elapsed_minutes,focused_test_runs,full_suite_runs,builds,player_runs,expensive_rerun_reasons,acceptance_result,unresolved_defects,client_usage
+EFF.1,workflow,Batch measurement format and validation controls ready,47fff4437030536d71fe82b84d25fa8abf3416b6,subject: docs: record feature batch efficiency,2026-09-08T03:52:10+00:00,2026-09-08T03:53:51.641173+00:00,1.69,0,0,0,0,none,"PASS: local links, diff and phase checklist reviewed",none,unavailable

@@ -4,7 +4,7 @@ Current priority: **B.3R mass-based contact physics**, before further B.5 scale 
 
 ## Next implementation batch
 
-Read [CONTACT_PHYSICS](CONTACT_PHYSICS.md). Implement B.3R.1–B.3R.2: body mass/inertia and force commands, analytical reference tests, GPU ship–cell impulses, and removal of CPU collision-flag velocity resets. Then complete piles/cargo/fragments/anchors and physics save/resume under B.3R.3–B.3R.4. Use [AGENTS.md](../AGENTS.md) for a focused implementation/validation batch. The latest user request was research and plan/workflow updates; this documentation does not implement the new physics.
+Read [CONTACT_PHYSICS](CONTACT_PHYSICS.md). Implement B.3R.1–B.3R.2: body mass/inertia and force commands, analytical reference tests, GPU ship–cell impulses, and removal of CPU collision-flag velocity resets. Then complete piles/cargo/fragments/anchors and physics save/resume under B.3R.3–B.3R.4. Use [AGENTS.md](../AGENTS.md) for a focused implementation/validation batch. The current run documents batch measurements, then immediately implements the physics correction. Historical efficiency measurements live in `evidence/feature-batches.csv`.
 
 ## Latest verified baseline
 
