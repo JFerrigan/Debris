@@ -16,7 +16,7 @@ IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
 - [x] B.1 Blueprint/starter ship.
 - [x] B.2 Flight/fuel.
-- [x] B.3 Cargo/damage/fragments.
+- [ ] B.3 Cargo/damage/fragments and mass-based contacts (reopened for B.3R).
 - [ ] D.2 Automation.
 
 ## M4 data checkpoint
@@ -42,3 +42,9 @@ This proves B.2, not the remaining B.3 fragment/collision-damage gate. Transfers
 ## B.3 physical damage checkpoint — 2026-09-07
 
 B.3 is verified for the starter: moving-hull impact queues damage, unsupported regions and whole units detach into solid moving fragments, and cargo escapes breached walls. Full 2,500-cell rotating-cavity tests preserve non-overlap, with an extra incoming cell unable to create hidden capacity. Schema 3 retains fragment fields/transforms/motion and pending impacts; fragments and their units share stable registry identities after load. See STRUCTURAL_SIMULATION for supported budgets and limitations, and `evidence/B-fragment-*` for the 36-test suite and standalone proof. Larger masks/streaming remain B.5.
+
+## Contact-response correction — current priority
+
+The earlier B.3 evidence verifies geometry, detachment and persistence, not physically correct impact response. B.3 is reopened under [CONTACT_PHYSICS](CONTACT_PHYSICS.md): thrust is a force, ships/fragments have mass and rotational inertia, loose cells receive equal/opposite impulses, and only explicitly anchored bodies resist with infinite effective mass. Replace the GPU rejection/zero-velocity path and the CPU collision-flag hard reset together.
+
+Free cargo mass belongs to its independently simulated cells. The new solver must not both add that cargo to rigid hull mass and apply its full reaction impulses. Revise the earlier direct CargoMass acceleration penalty/tests to measure the physically coupled load through contacts. Whole units, tank contents and attached hull retain their appropriate rigid mass. Anchored home/planet/giant-site definitions and sleeping dynamic objects have distinct persisted policies. These changes are planned, not implemented by this documentation update.

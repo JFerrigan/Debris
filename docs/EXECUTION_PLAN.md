@@ -1,10 +1,11 @@
 # Continuous implementation contract
 
-Authorized scope: implement phases A–E in order through playable alien-drone escalation. Continue automatically when each gate passes. Final story resolution is outside this run. Preserve existing work, make coherent subsystem commits, and push ordinary commits to origin/main.
+Authorized scope: implement phases A–E in order through playable alien-drone escalation. Continue automatically when each gate passes. Final story resolution is outside this run. Latest priority: document the requested contact-physics correction and efficient workflow, then resume B.3R before B.5. Follow [AGENTS.md](../AGENTS.md) for validation and concise context loading. Preserve existing work, make coherent subsystem commits, and push ordinary commits to origin/main.
 
 ## Locked design interpretations
 
 - Physical commodity cargo is simulated cells. Fuel-tank and capacity-limited misc-storage inventories are explicit menu exceptions.
+- Dynamic ships, fragments and loose cells exchange momentum through finite mass/inertia. Anchoring is an explicit persistent policy for planets, home bases and designated giant bodies; sleeping and budget limits never turn a free cell into an immovable obstacle.
 - Machinery has whole-component damage. Structural prefabs instantiate individually destructible cells.
 - The starter ship is unpressurized. Pressure requires an upgrade/unit and a sealed compartment. No spoilage, refrigeration, or special cargo handling.
 - Landed sales remove selected cells atomically, without unloading animation. Organizers may snap cells into valid non-overlapping positions within capacity.
@@ -33,10 +34,14 @@ Authorized scope: implement phases A–E in order through playable alien-drone e
 
 - [x] B.1 / M4 Blueprint free-drawing, structural prefabs, whole units, starter command/propulsion/tank/drill/suction/cavity/rear door.
 - [x] B.2 / M4 Inertial flight, cargo mass, fuel grades/inventory, spill/pump transfers.
-- [x] B.3 / M5 Moving-hull collision, tumbling cargo, spills, component support loss, fragments.
+- [ ] B.3 / M5 Moving-hull contact physics, tumbling cargo, spills, component support loss, fragments. Reopened: the verified admission-only solver hard-stops on tiny debris.
+- [ ] B.3R.1 Body mass/inertia/mobility, force commands and analytical contact oracle.
+- [ ] B.3R.2 GPU ship–cell momentum exchange; eliminate ordinary pixel hard stops and CPU velocity resets.
+- [ ] B.3R.3 Dense piles, cargo mass counted once, fragment torque, anchored bodies and dynamic chips.
+- [ ] B.3R.4 Physics save migration/resume, bounded contacts and measured player acceptance. See [CONTACT_PHYSICS](CONTACT_PHYSICS.md).
 - [x] B.4 / M6 Dirty chunks, loose/fragment records, atomic saves, migrations, interrupted-write recovery.
 - [ ] B.5 / M6 Large ships, prolonged cutting, streaming, 100,000-site index stress.
-- [ ] B.GATE Mine → collect → spill → save → reload → revisit preserves authoritative state. Controllable ship; no transfer duplication.
+- [ ] B.GATE Mine → collect → spill → save → reload → revisit preserves authoritative state. Controllable force-driven ship; isolated cells barely affect it, piles transfer mass-dependent impulses, anchored bodies remain fixed, and transfers never duplicate matter.
 
 ## Phase C — contractor career, home, freedom
 
@@ -72,6 +77,6 @@ Authoritative gameplay is independent of scene objects, through commands/session
 
 Verify conservation/non-overlap/exhaustion/rotating cavities; pumping/spilling/welding/sales/loans/capture; interrupted saves/revisits/encounter resume/expiry; debt freedom/recruitment/refusal/drones/destroyed-hub alternatives. Report Windows/Linux only when executed there.
 
-For each task: run relevant checks, update the owning design checklist in the implementation commit, record evidence/preset/benchmark, update STATUS with exact next task and failure, explicitly stage intended files, commit and push. `[x]` means verified; code without verification stays unchecked. Diagnose failing gates before advancement. Document external blocks and continue independent work. Stop only for unavailable authority/tooling or material new product decisions.
+For each coherent feature batch: run checks proportionate to the change under AGENTS.md, update the owning checklist and concise STATUS, preserve one canonical evidence result, explicitly stage intended files, commit and push. Run the fast suite once for a stable shared-code batch; build and run the player when GPU/runtime integration needs it. Repeat passing checks only for a relevant change, failure or unresolved concern. Markdown-only work uses local consistency/link checks, not Unity. Slow scale fixtures remain explicit and separate. `[x]` means verified; code without verification stays unchecked. Diagnose failing gates before advancement. Document external blocks and continue independent work. Stop only for unavailable authority/tooling or material new product decisions.
 
-Resume by reading PROJECT_PLAN, this file, STATUS, TECHNICAL_ROADMAP, then the current subsystem documents. STATUS records last checkpoint, exact next task, working commands, and blockers. `git log -1` is the authoritative current commit.
+Resume from AGENTS.md, STATUS and the current block of this file. Read PROJECT_PLAN once per fresh context; open only the relevant roadmap/subsystem sections afterward. STATUS records last checkpoint, exact next task, working commands, and blockers. `git log -1` is the authoritative current commit.

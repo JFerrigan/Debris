@@ -14,6 +14,7 @@ Debris is a 2D industrial space-salvage game in which Scavenger Arcturus B-2328 
 - Persistent sites reconstruct exactly after revisits. There is no player-facing site limit; design capacity is at least 100,000 indexed modified sites.
 - Fixed hull/terrain is chunked material-field data; loose matter is bounded GPU data. No cell is a GameObject or Rigidbody.
 - Components have real footprint and support requirements. Whole unit components fail as units; structural prefabs and free-drawn hull remain cell-destructible.
+- Ships and loose material exchange forces and momentum according to mass and inertia. A free pixel at ordinary salvage speeds cannot hard-stop a much heavier ship. Planets, home bases and designated giant bodies use explicit persistent anchoring; sleeping/budget limits do not make debris immovable.
 - The player sees simple hull-connected power, not cable-routing busywork.
 - Arcturus can operate personally in vacuum with a booster; they do not need oxygen. Pressurized spaces matter for other life, fire, and equipment.
 - Ship loss is recoverable through EE Inc., but cargo is forfeited. Stations, including home, can be permanently damaged or made unusable.
@@ -31,9 +32,9 @@ Authoritative detail: [Game Design](GAME_DESIGN.md), [Architecture](ARCHITECTURE
 
 ### Phase B — the physical salvage loop
 
-**Milestones M4–M6.** Build the starter ship from blueprint data; prove flight, fuel, mounted drill, suction, cargo door/cavity, loose-cell cargo, structural support failure, and lossless leave/revisit saving.
+**Milestones M4–M6.** Build the starter ship from blueprint data; prove flight, fuel, mounted drill, suction, cargo door/cavity, loose-cell cargo, structural support failure, mass-based contact response, and lossless leave/revisit saving. **B.3R contact physics is the immediate corrective priority**, before further B.5 scaling; see [Contact Physics](docs/CONTACT_PHYSICS.md).
 
-**Gate:** the player can cut an asteroid, collect physical cargo, spill it, leave, load, and return to the same altered site with matching authoritative state. This is the first internal playable.
+**Gate:** the player can cut an asteroid, collect physical cargo, spill it, leave, load, and return to the same altered site with matching authoritative state. A single free material cell is pushed aside with negligible ship slowdown, piles resist according to coupled mass, and anchored bodies remain fixed. This is the first internal playable.
 
 ### Phase C — contractor loop and home hub
 
@@ -57,10 +58,10 @@ Authoritative detail: [Game Design](GAME_DESIGN.md), [Architecture](ARCHITECTURE
 
 Each autonomous implementation run follows this sequence:
 
-1. Start from a clean, committed design baseline.
+1. Start from the committed baseline while preserving unrelated working changes. Use [AGENTS.md](AGENTS.md) for concise working instructions and [Workflow](docs/WORKFLOW.md) for validation/cost policy.
 2. Work only through the next unresolved phase gate—never silently jump to a later feature because it is interesting.
-3. Make small coherent commits: project/configuration, deterministic data/tests, rendering/simulation, gameplay loop, persistence, and documentation. Each commit must build or have a clearly recorded environmental blocker.
-4. Run the narrowest relevant tests and the matching deterministic showcase after each subsystem milestone.
+3. Commit coherent feature batches with relevant tests and completion notes. Code commits must remain buildable; execute builds according to the AGENTS validation matrix. Documentation-only commits need consistency checks, not a fresh build.
+4. Run focused checks during iteration, then the applicable regression/build/showcase once per stable feature batch. Repeat only after a relevant change or failure; markdown-only changes do not launch Unity.
 5. Record actual measurements in `docs/PERFORMANCE.md`; do not replace benchmarks with estimates.
 6. After each verified phase gate, commit/push, record evidence and next task, then continue automatically to the next authorized phase through Phase E.
 
@@ -77,6 +78,8 @@ Basic hub walking and ship exit/return are Phase C requirements; advanced EVA re
 | Milestones, tests, diagnostics | [Technical Roadmap](docs/TECHNICAL_ROADMAP.md) |
 | GPU representation and benchmark risks | [GPU Simulation](docs/GPU_SIMULATION.md), [Implementation Research](docs/IMPLEMENTATION_RESEARCH.md) |
 | Saves and 100,000-site target | [Persistence](docs/PERSISTENCE.md), [Save Format](docs/SAVE_FORMAT.md) |
+| Forces, mass, collision response and anchoring | [Contact Physics](docs/CONTACT_PHYSICS.md) |
+| Working instructions and session efficiency | [AGENTS.md](AGENTS.md), [Workflow](docs/WORKFLOW.md) |
 | Ships, components, structures | [Ship System](docs/SHIP_SYSTEM.md), [Component System](docs/COMPONENT_SYSTEM.md) |
 | Debt, market, recovery | [Economy and Logistics](docs/ECONOMY_AND_LOGISTICS.md) |
 | Hub cast and dialogue | [Home Station Characters](docs/HOME_STATION_CHARACTERS.md) |

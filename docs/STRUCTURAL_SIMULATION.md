@@ -61,7 +61,8 @@ Deterministic fixtures cover: cutting a thin bridge, severing a thruster anchor,
 
 IDs refer to [EXECUTION_PLAN](EXECUTION_PLAN.md); only verified work is checked.
 
-- [x] B.3 Connectivity/detachment.
+- [x] B.3 Connectivity/detachment data and geometric admission.
+- [ ] B.3R Finite-mass fragment/contact response; overall B.3 reopened.
 - [ ] B.5 Large structures.
 
 ## B.3 verified starter implementation — 2026-09-07
@@ -71,3 +72,5 @@ Explicit damage transactions extract unsupported structural regions and their wh
 The GPU resolves hull candidates with parallel cell/cargo checks and a deterministic minimum contact index. Impact facts remain queued through snapshot/save until applied. Fragment movement uses bounded substeps and ordered collision against terrain, ship, loose cells and other fragments. Rendering uses instanced material fields, without per-cell objects. Released wall cells and cargo cross breached boundaries without overlap; occupancy ownership and relative-velocity contact response preserve packed convoys.
 
 36/36 EditMode tests and a Mac player damage/fuel/disk loop pass. Tests cover a severed thruster, destruction of its anchor alone, whole-unit impact, exact fragment resume, terrain collision, a breached cargo wall and a completely packed rotating cavity. Evidence: `evidence/B-fragment-*`. B.3 covers starter connectivity/detachment; paged masks, more than 16 active fragments, further fragment cutting and stress propagation remain later structural work. Exhausted active budgets reject damage admission without deleting its source cells. Current collision response stops bodies; it does not model full momentum exchange or bond stress.
+
+Contact physics now takes priority over further scale work: [CONTACT_PHYSICS](CONTACT_PHYSICS.md). Body impulses, torque and energy-based impact damage are required in Phase B; full bond-stress propagation remains a separate later solver layer. An anchored parent's cut cells and detached regions become dynamic rather than inheriting an infinite-mass collision policy. Preserve mass/momentum through detachment, and keep oversized pending fragments losslessly represented until activation is possible.

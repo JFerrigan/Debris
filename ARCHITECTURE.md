@@ -12,14 +12,14 @@ The first prototype is deliberately a narrow implementation of these production 
 |---|---|---|
 | `Core` | composition root, game state transitions, service interfaces | `IGameState`, events only |
 | `World` | seed, persistent IDs, coordinate conversion | `WorldId`, `SiteId`, conversion APIs |
-| `Strategic` | contacts, Frontier Count, arcade flight, physical fuel/cargo mass, station position | `IStrategicWorld`, `EnterSiteRequest` |
+| `Strategic` | contacts, Frontier Count, travel/fuel estimates, station position | `IStrategicWorld`, `EnterSiteRequest` |
 | `Sites` | loaded site lifecycle and chunk streaming | `ISiteSession`, commands, read-only snapshots |
 | `Materials` | material definitions and packed GPU lookup table | `MaterialDefinition`, `MaterialCatalog` |
-| `PixelSimulation` | material fields, damage, debris cells, active chunks | batched `SiteCommand`, sampled readback |
+| `PixelSimulation` | material fields, dynamic body/contact solving, damage, debris cells, active chunks | batched `SiteCommand`, sampled readback |
 | `Rendering` | terrain/debris draw resources and camera culling | read-only GPU resources |
 | `Effects` | GPU particles, semantic audio/effect cues | `EffectEvent`/`AudioCue` stream |
 | `Audio` | FMOD bank lifecycle, cue playback, mix/snapshots, accessibility | `IAudioService`; presentation only |
-| `Ships` | structure field, component placement, cargo topology | `ShipDefinition`, `ShipRuntime` |
+| `Ships` | structure field, components, rigid mass/inertia inputs, thrust commands, cargo topology | `ShipDefinition`, `ShipRuntime` |
 | `Components` | component behavior/data | component command producers |
 | `Player` | Arcturus body, zero-g booster, equipment, boarding, misc inventory | `IPlayerRuntime`, semantic field commands |
 | `Encounters` | temporal contacts, crew/trader profiles, expiry, capture conversion | `IEncounterService`, durable outcome events |
@@ -105,3 +105,7 @@ The [continuous execution contract](docs/EXECUTION_PLAN.md) governs phases A–E
 - [ ] C.GATE Contractor career and freedom.
 - [ ] D.GATE Field careers and encounters.
 - [ ] E.GATE Alien-drone escalation.
+
+## Mass-based contacts — required Phase B correction
+
+[CONTACT_PHYSICS](docs/CONTACT_PHYSICS.md) defines the replacement for the current hard-stop collision prototype. The GPU owns dynamic ship/fragment poses and velocities as well as loose matter; CPU components submit force/torque and lifecycle commands. Finite-mass contacts exchange momentum and rotational impulses. Anchored planets, home bases and designated giant bodies have explicit persistent mobility policies. Rendering/storage class, sleeping state and resource exhaustion do not determine whether a loose object is immovable. Independent cargo contributes mass once through its dynamics; it cannot simultaneously be counted as rigid hull mass. This boundary supersedes the current CPU-prescribed translation path when B.3R is implemented.
