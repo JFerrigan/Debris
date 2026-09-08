@@ -4,11 +4,11 @@ Current priority: **B.3R mass-based contact physics**, before further B.5 scale 
 
 ## Next implementation batch
 
-Continue B.3R.3: coupled piles, free cargo, fragment torque, anchored contacts and wake-up. Then B.3R.4 physics persistence/migration, bounded contacts and the full measured player gate. B.3R.1–B.3R.2 passed isolated ship–cell acceptance. Historical efficiency records: `evidence/feature-batches.csv`.
+Continue B.3R.4. Immediate failure: combined 100-cell pile + 100-cell cargo + fragment workload takes **324.505 ms GPU p95** (20 ms gate) and records 29 pose fallbacks. Replace repeated neighborhood searches inside iterations with compact gathered contacts, then complete physics persistence/migration, bounded high-speed/contact handling and final player acceptance. B.3R.1–B.3R.3 scoped physics acceptance passed; B.GATE stays open. Historical efficiency records: `evidence/feature-batches.csv`.
 
 ## Latest verified checkpoint
 
-43 tests passed; explicit scale fixture skipped. Mac build/player passed: mass-1 pixel reduces starter speed 10 → 9.994825; thrust continues; zero pose fallbacks; non-overlap and moving save/load pass. Frame p95 17.595 ms, GPU p95 2.394 ms. Evidence: `evidence/B3R-single-cell-tests.xml`, `evidence/B3R-single-cell-player.txt`. This does not validate dense piles, rotating free cargo, fragment/anchor impulses or high-speed/budget handling. The legacy displacement API remains for historical fixtures; normal gameplay submits forces.
+49 tests passed; explicit scale fixture skipped. Mac build/player physics passed: combined workload preserves 201 cells/non-overlap, momentum error 0.323917, energy decreases, fragment spins; frame p95 324.382 ms / GPU p95 324.505 ms **fails performance**. Evidence: `evidence/B3R-island-tests.xml`, `evidence/B3R-island-player.txt`. Isolated pixel response remains covered. Fragment mass/mobility and pending solver phase are not yet serialized; legacy displacement fixtures remain. No claim of full B.3R completion.
 
 ## Unfinished work to preserve
 

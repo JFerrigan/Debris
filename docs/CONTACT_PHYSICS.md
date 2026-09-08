@@ -1,6 +1,6 @@
 # Contact physics — Phase B correction
 
-Status: B.3R.1–B.3R.2 verified for isolated ship–cell contacts; B.3R.3–B.3R.4 remain open ahead of B.5 expansion. The user's 2026-09-07 report supersedes the earlier conclusion that collision admission alone completed B.3.
+Status: B.3R.1–B.3R.3 physics acceptance verified. B.3R.4 remains open: the combined workload fails performance, and persistence/budgets need completion before B.5. The user's 2026-09-07 report supersedes the earlier conclusion that collision admission alone completed B.3.
 
 ## Problem and decision
 
@@ -72,3 +72,9 @@ Attached mass uses material density, whole-machine mass once, and fuel-grade den
 The GPU single-writer solver wakes and exchanges equal/opposite impulses with free cells before integration. Four substeps and a 0.0001-cell geometric skin avoid the observed translated starter-hull rounding fallback; skin correction does not change velocities. This is a bounded first contact proof, not the final island/budget solver. The legacy displacement API remains for historical fixtures.
 
 Canonical evidence: [43 passing tests](evidence/B3R-single-cell-tests.xml), [standalone acceptance and rerun reasons](evidence/B3R-single-cell-player.txt). A mass-1 pixel reduced starter speed from 10 to 9.994825; thrust continued, zero fallbacks, no overlap, motion survived save/load. Mac frame p95 17.595 ms; GPU p95 2.394 ms. Remaining work: cell chains, free-cargo coupling, fragment/anchor impulses, high-speed substeps and physics persistence/migration.
+
+## B.3R.3 checkpoint
+
+Cell pairs/piles now exchange equal/opposite impulses; serial retries advance packed trailing cells after leaders. Free cargo uses an exact next-pose frame conversion with world velocity unchanged; contacts supply load, without adding cargo to hull mass. Fragments have finite material/unit mass and inertia, exchange impulses with cells/ship/anchors, and inherit surface motion. Anchored walls remove approaching normal velocity while preserving tangent; cutter-released cells remain dynamic. Damage/save synchronization no longer zeroes motion from collision flags.
+
+[49 tests](evidence/B3R-island-tests.xml) and the [combined Mac player](evidence/B3R-island-player.txt) pass scoped physics acceptance. The 201-cell workload conserved momentum within 0.323917 mass-cell/s, reduced energy, rotated the impacted fragment and remained non-overlapping. **Performance fails:** frame p95 324.382 ms; GPU p95 324.505 ms. It also records 29 pose fallbacks during convergence. B.3R.4 must gather bounded contacts once per substep rather than repeating neighborhood searches inside every solver iteration, then complete persistence/high-speed/budget acceptance and rerun the measured gate.

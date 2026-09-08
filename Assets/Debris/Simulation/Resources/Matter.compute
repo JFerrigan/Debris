@@ -1,8 +1,12 @@
 #pragma kernel ApplyShipForce
 #pragma kernel SolveShipCells
+#pragma kernel GatherShipAnchors
+#pragma kernel GatherFragmentContacts
+#pragma kernel SolveFragmentContacts
 #pragma kernel Upload
 #pragma kernel Cut
 #pragma kernel Integrate
+#pragma kernel IntegratePhysical
 #pragma kernel Inspect
 #pragma kernel RestoreOccupancy
 #pragma kernel UploadDamage
@@ -111,18 +115,17 @@ bool CellContact(float2 target,uint self,bool cargo,out float2 normal,out float2
     }
     return false;
 }
-[numthreads(64,1,1)]
-void Integrate(uint3 id:SV_DispatchThreadID)
+void IntegrateCell(uint i,bool serialMode)
 {
-    uint i=id.x;if(i>=_Counters[0])return;
-    Cell c=_Cells[i];bool cargo=(c.flags&4)!=0;if((cargo?1:0)!=_Domain)return;
+    if(i>=_Counters[0])return;
+    Cell c=_Cells[i];bool cargo=(c.flags&4)!=0;if(!serialMode&&(cargo?1:0)!=_Domain)return;
     int2 old=(int2)floor(c.position);
     int2 color=(old-_Origin)&3;
-    if(color.y*4+color.x!=_Color || c.step==(uint)_Tick)return;
+    if((!serialMode&&color.y*4+color.x!=_Color) || c.step==(uint)_Tick)return;
     c.step=_Tick;
     float2 forcePosition=_MountedSuction!=0?World(float2(-12,0),_ShipPose[0]):_ForcePosition;
     float2 worldPosition=cargo?World(c.position+.5,_ShipPose[0])-.5:c.position;
-    if(_Force>0 && distance(worldPosition,forcePosition)<80) { c.velocity+=normalize(forcePosition-worldPosition+float2(.0001,0))*_Force*_Delta;c.flags=cargo?4:0; }
+    if(_PhysicalShip==0&&_Force>0 && distance(worldPosition,forcePosition)<80) { c.velocity+=normalize(forcePosition-worldPosition+float2(.0001,0))*_Force*_Delta;c.flags=cargo?4:0; }
     if(c.flags==1) { _Cells[i]=c;return; }
     // A substep never crosses more than .2 cell: disjoint 4x4 colors have disjoint read/write neighborhoods.
     float2 velocity=c.velocity;
@@ -133,8 +136,13 @@ void Integrate(uint3 id:SV_DispatchThreadID)
     }
     float2 motion=clamp(velocity*_Delta,-.2,.2);
     float2 target=c.position+motion;
+    if(_PhysicalShip!=0&&cargo)
+    {
+        float4 nextPose=_ShipPose[0];nextPose.xyz+=ShipDisplacement();
+        target=Local(World(c.position+.5,_ShipPose[0])+c.velocity*_Delta,nextPose)-.5;motion=target-c.position;
+    }
     bool admitted=cargo?CargoFree(target,i):Free(target,i);
-    if(!admitted)
+    if(!admitted&&_PhysicalShip==0)
     {
         // Slide along an unblocked axis. A tiny sideways force must not jam a packed column.
         bool verticalFirst=abs(motion.y)>=abs(motion.x);
@@ -171,7 +179,8 @@ void Integrate(uint3 id:SV_DispatchThreadID)
     }
     else
     {
-        if(!cargo&&(!Inside((int2)floor(target))||!Inside((int2)ceil(target))))c.flags=2; // streamed boundary: retain velocity
+        if(_PhysicalShip!=0){c.flags=cargo?4:0;c.step=0;}
+        else if(!cargo&&(!Inside((int2)floor(target))||!Inside((int2)ceil(target))))c.flags=2; // streamed boundary: retain velocity
         else
         {
             float2 normal,otherVelocity;
@@ -187,6 +196,24 @@ void Integrate(uint3 id:SV_DispatchThreadID)
         }
     }
     _Cells[i]=c;
+}
+[numthreads(64,1,1)]
+void Integrate(uint3 id:SV_DispatchThreadID){IntegrateCell(id.x,false);}
+[numthreads(1,1,1)]
+void IntegratePhysical(uint3 id:SV_DispatchThreadID)
+{
+    // Retry blocked trailing cells after leading cells move. Each cell advances at most once.
+    // This preserves packed convoys without depending on the old 4x4 color order.
+    [loop] for(uint retry=0;retry<64;retry++)
+    {
+        uint advanced=0;
+        for(uint i=0;i<_Counters[0];i++)
+        {
+            if(_Cells[i].step==(uint)_Tick)continue;
+            IntegrateCell(i,true);if(_Cells[i].step==(uint)_Tick)advanced++;
+        }
+        if(advanced==0)break;
+    }
 }
 [numthreads(1,1,1)]
 void Inspect(uint3 id:SV_DispatchThreadID)

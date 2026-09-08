@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Debris.Ships;
+using Debris.Materials;
 using UnityEngine;
 namespace Debris.Simulation
 {
@@ -9,7 +10,9 @@ namespace Debris.Simulation
         public string Id;
         public uint[] Hull;
         public Vector4 Pose,Motion;
-        public static RigidFragmentSnapshot FromShip(ShipFragment fragment)
+        public BodyMass Mass;
+        public static RigidFragmentSnapshot FromShip(ShipFragment fragment)=>FromShip(fragment,null);
+        public static RigidFragmentSnapshot FromShip(ShipFragment fragment,TankInventory fuel)
         {
             var mask=new uint[128*128];
             void Put(int x,int y,uint material)
@@ -22,7 +25,10 @@ namespace Debris.Simulation
             {
                 var p=unit.Placement;for(int y=p.Position.y;y<p.Position.y+p.Definition.Size.y;y++)for(int x=p.Position.x;x<p.Position.x+p.Definition.Size.x;x++)Put(x,y,unit.Destroyed?5u:2u);
             }
-            return new RigidFragmentSnapshot{Id=fragment.Id,Hull=mask,Pose=new Vector4(fragment.Position.x,fragment.Position.y,fragment.Angle,1),Motion=new Vector4(fragment.Velocity.x,fragment.Velocity.y,fragment.AngularVelocity,0)};
+            var mass=ShipRuntime.FragmentMassProperties(fragment,Resources.Load<MaterialCatalog>("Materials"),fuel);
+            float c=Mathf.Cos(fragment.Angle),sn=Mathf.Sin(fragment.Angle);var offset=new Vector2(mass.Center.x*c-mass.Center.y*sn,mass.Center.x*sn+mass.Center.y*c);
+            var velocity=ContactPhysics.Surface(fragment.Velocity,fragment.AngularVelocity,offset);
+            return new RigidFragmentSnapshot{Mass=mass,Id=fragment.Id,Hull=mask,Pose=new Vector4(fragment.Position.x,fragment.Position.y,fragment.Angle,1),Motion=new Vector4(velocity.x,velocity.y,fragment.AngularVelocity,0)};
         }
     }
 }

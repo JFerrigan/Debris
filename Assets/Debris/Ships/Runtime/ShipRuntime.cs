@@ -114,6 +114,23 @@ namespace Debris.Ships
         }
         static void AddMass(ref float mass,ref Vector2 first,ref float moment,float amount,Vector2 center,float intrinsic)
         {mass+=amount;first+=center*amount;moment+=amount*(center.sqrMagnitude+intrinsic);}
+        public static BodyMass FragmentMassProperties(ShipFragment fragment,MaterialCatalog catalog,TankInventory fuel=null)
+        {
+            float mass=0,moment=0;var first=Vector2.zero;
+            foreach(var cell in fragment.Cells)AddMass(ref mass,ref first,ref moment,catalog.DefinitionAt(cell.Material).Density,(Vector2)cell.Position+Vector2.one*.5f,1f/6);
+            foreach(var unit in fragment.Units)
+            {
+                var size=unit.Placement.Definition.Size;
+                AddMass(ref mass,ref first,ref moment,unit.Placement.Definition.Mass,(Vector2)unit.Placement.Position+(Vector2)size*.5f,(size.x*size.x+size.y*size.y)/12f);
+                if(unit.Placement.Definition.Kind==UnitKind.Tank&&fuel!=null)
+                {
+                    fuel.MigrateLegacy();float amount=0;foreach(var cell in fuel.Contents)amount+=catalog.DefinitionAt(catalog.IndexOf("fuel-"+cell.Grade)).Density;
+                    AddMass(ref mass,ref first,ref moment,amount,(Vector2)unit.Placement.Position+(Vector2)size*.5f,(size.x*size.x+size.y*size.y)/12f);
+                }
+            }
+            var center=first/Mathf.Max(mass,.0001f);
+            return new BodyMass{Mass=Mathf.Max(.0001f,mass),Center=center,Inertia=Mathf.Max(.0001f,moment-mass*center.sqrMagnitude)};
+        }
         public void InvalidateMass()=>massValid=false;
         // Body-local force and torque about COM; the GPU rotates force at its authoritative pose.
         // Translation is allocated at engine mounts; differential thrust supplies the control couple.

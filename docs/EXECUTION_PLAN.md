@@ -37,7 +37,7 @@ Authorized scope: implement phases A–E in order through playable alien-drone e
 - [ ] B.3 / M5 Moving-hull contact physics, tumbling cargo, spills, component support loss, fragments. Reopened: the verified admission-only solver hard-stops on tiny debris.
 - [x] B.3R.1 Body mass/inertia/mobility, force commands and analytical contact oracle.
 - [x] B.3R.2 GPU ship–cell momentum exchange; eliminate ordinary pixel hard stops and CPU velocity resets.
-- [ ] B.3R.3 Dense piles, cargo mass counted once, fragment torque, anchored bodies and dynamic chips.
+- [x] B.3R.3 Dense piles, cargo mass counted once, fragment torque, anchored bodies and dynamic chips.
 - [ ] B.3R.4 Physics save migration/resume, bounded contacts and measured player acceptance. See [CONTACT_PHYSICS](CONTACT_PHYSICS.md).
 - [x] B.4 / M6 Dirty chunks, loose/fragment records, atomic saves, migrations, interrupted-write recovery.
 - [ ] B.5 / M6 Large ships, prolonged cutting, streaming, 100,000-site index stress.

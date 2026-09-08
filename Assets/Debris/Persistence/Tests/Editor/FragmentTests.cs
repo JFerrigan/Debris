@@ -68,6 +68,7 @@ namespace Debris.Persistence.Tests
                 {
                     session.ConfigureShip(ship.CollisionMask(),ship.Position);
                     var task=session.SnapshotAsync();while(!task.IsCompleted)yield return null;
+                    task.Result.ShipPose[1]=new Vector4(0,3,0,0); // Authoritative GPU motion drives detached inheritance.
                     using(var cut=ShipDamage.CutHull(task.Result,ship,new[]{new Vector2Int(24,25),new Vector2Int(24,26),new Vector2Int(24,27)}))
                     {
                         Assert.That(cut.Released,Is.EqualTo(3));Assert.That(cut.Ship.Fragments.Count,Is.EqualTo(1));Assert.That(ship.Structure.Count,Is.EqualTo(initial));

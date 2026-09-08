@@ -1,5 +1,6 @@
 StructuredBuffer<uint> _FragmentHull;
 StructuredBuffer<float4> _FragmentPose;
+StructuredBuffer<float4> _FragmentMass;
 RWStructuredBuffer<float4> _FragmentNextPose;
 int _FragmentCount, _MovingFragment;
 float _FragmentDelta;
@@ -28,6 +29,11 @@ void MoveFragment(uint3 id:SV_DispatchThreadID)
     int f=_MovingFragment;float4 old=_FragmentPose[f*2],motion=_FragmentPose[f*2+1],next=old;
     // Small substeps preserve collision admission at the bounded active-region edge.
     next.xy+=motion.xy*_FragmentDelta;next.z+=motion.z*_FragmentDelta;
+    if(_PhysicalShip!=0)
+    {
+        if(_FragmentMass[f].x==0)next=old;
+        else next.xy+=Rotate(_FragmentMass[f].zw,old.z)-Rotate(_FragmentMass[f].zw,next.z);
+    }
     bool blocked=false;
     for(int y=-64;y<64&&!blocked;y++)for(int x=-64;x<64&&!blocked;x++)
     {
@@ -54,5 +60,6 @@ void MoveFragment(uint3 id:SV_DispatchThreadID)
     // Separate read/write buffers avoid UAV/SRV aliasing; the owner copies this result in command order.
     for(int i=0;i<32;i++)_FragmentNextPose[i]=_FragmentPose[i];
     _FragmentNextPose[f*2]=blocked?old:next;
-    _FragmentNextPose[f*2+1]=blocked?float4(0,0,0,1):motion;
+    _FragmentNextPose[f*2+1]=blocked&&_PhysicalShip==0?float4(0,0,0,1):motion;
+    if(blocked&&_PhysicalShip!=0)_ContactStats[1]++;
 }

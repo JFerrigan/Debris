@@ -20,7 +20,7 @@ namespace Debris.Presentation
         string SavePath=>Path.Combine(shipBenchmark?Application.temporaryCachePath:Application.persistentDataPath,shipBenchmark?"DebrisVerification":"Saves","salvage.debris");
         WorldManifest worldManifest;string worldRoot,currentSiteId="00000000000000000000000000000001";ulong currentSeed=42;
         MatterSession session;MatterView view;MaterialCatalog catalog;
-        InputActionAsset input;Camera cameraView;bool paused,benchmark,shipBenchmark,contactBenchmark;
+        InputActionAsset input;Camera cameraView;bool paused,benchmark,shipBenchmark,contactBenchmark,islandBenchmark;
         float accumulator,statsTime;ushort inspected;Vector2 pointerWorld;
         readonly FrameTiming[] timings=new FrameTiming[1];
         readonly List<double> cpu=new List<double>(),gpu=new List<double>(),frames=new List<double>();
@@ -30,13 +30,15 @@ namespace Debris.Presentation
         {
             Application.targetFrameRate=60;cameraView=Camera.main;
             catalog=Resources.Load<MaterialCatalog>("Materials");input=Instantiate(Resources.Load<InputActionAsset>("Debris"));input.Enable();
+            islandBenchmark=Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisIslandBenchmark");
             contactBenchmark=Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisContactBenchmark");
-            shipBenchmark=contactBenchmark||Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisShipBenchmark");
+            shipBenchmark=islandBenchmark||contactBenchmark||Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisShipBenchmark");
             benchmark=Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisBenchmark");
             worldRoot=Path.Combine(shipBenchmark?Application.temporaryCachePath:Application.persistentDataPath,shipBenchmark?"DebrisVerification/world-"+Guid.NewGuid().ToString("N"):"World");
             ResetSession(benchmark?2:4,8192);
             if(benchmark)StartCoroutine(CheckedBenchmark(Benchmark()));
-            if(contactBenchmark)StartCoroutine(CheckedBenchmark(ContactBenchmark()));
+            if(islandBenchmark)StartCoroutine(CheckedBenchmark(IslandBenchmark()));
+            else if(contactBenchmark)StartCoroutine(CheckedBenchmark(ContactBenchmark()));
             else if(shipBenchmark)StartCoroutine(CheckedBenchmark(ShipBenchmark()));
             if(!benchmark&&!shipBenchmark&&WorldStore.Exists(worldRoot))_ = LoadCheckpoint();
         }
@@ -76,7 +78,8 @@ namespace Debris.Presentation
                 ship.CargoMass=session.ShipStats[2].y;
                 ship.Angle=session.ShipStats[0].z;
                 ship.Position=new Vector2(pose.x,pose.y);
-                ship.Velocity=new Vector2(session.ShipStats[1].x,session.ShipStats[1].y);ship.AngularVelocity=session.ShipStats[1].z;
+                ship.AngularVelocity=session.ShipStats[1].z;
+                ship.Velocity=ContactPhysics.Surface(new Vector2(session.ShipStats[1].x,session.ShipStats[1].y),-ship.AngularVelocity,ship.ToWorld(ship.MassProperties(catalog).Center)-ship.Position);
             }
             cameraView.orthographicSize=Mathf.Clamp(cameraView.orthographicSize-input["Zoom"].ReadValue<float>()*.025f,30,400);
             if(!paused&&!benchmark&&!shipBenchmark&&!saveBusy)
@@ -155,9 +158,8 @@ namespace Debris.Presentation
         }
         async Task<SalvageSave> CaptureCurrent()
         {
-            var matter=await session.SnapshotAsync();ShipDamage.SynchronizeFragments(matter,ship);var state=ShipSnapshot.Capture(ship);
+            var matter=await session.SnapshotAsync();ShipDamage.SynchronizeShip(matter,ship,catalog);ShipDamage.SynchronizeFragments(matter,ship);var state=ShipSnapshot.Capture(ship);
             state.Position=new Vector2(matter.ShipPose[0].x,matter.ShipPose[0].y);state.Angle=matter.ShipPose[0].z;
-            if(matter.ShipPose[1].w>0){state.Velocity=Vector2.zero;state.AngularVelocity=0;}
             return new SalvageSave{SiteId=currentSiteId,GeneratorSeed=currentSeed,Matter=matter,Ship=state,MaterialKeys=SalvageSave.Keys(catalog)};
         }
         async Task<WorldManifest> CommitWorld(SalvageSave active,params SalvageSave[] changes)
@@ -298,6 +300,39 @@ namespace Debris.Presentation
             string line=$"preset=starter-single-sleeping-cell ship_mass={mass.Mass:F3} cell_mass={pixelMass:F3} initial_speed=10 impact_speed={hit.ShipPose[1].x:F6} pixel_speed={hit.Cells[0].Velocity.x:F6} final_speed={moving.ShipPose[1].x:F6} momentum_error={momentumError:F6} impulses={moving.ContactStats[0]} fallbacks={moving.ContactStats[1]} substeps={moving.ContactStats[2]} frame_p95={frame95:F3} gpu_p95={gpu95:F3} nonoverlap=true thrust=true save_load=true";
             File.WriteAllText(Path.Combine(output,"contact-benchmark.txt"),SystemInfo.graphicsDeviceName+" / Unity "+Application.unityVersion+"\n"+line);
             Debug.Log("DEBRIS_CONTACT_BENCHMARK "+line);Application.Quit();
+        }
+        IEnumerator IslandBenchmark()
+        {
+            string output=Path.GetFullPath(Path.Combine(Application.dataPath,"../../Logs"));Directory.CreateDirectory(output);
+            var task=session.SnapshotAsync();while(!task.IsCompleted)yield return null;if(task.IsFaulted)throw task.Exception;
+            var state=task.Result;foreach(var field in state.Fields)Array.Clear(field,0,field.Length);foreach(var damage in state.Damage)Array.Clear(damage,0,damage.Length);
+            var cells=new List<LooseCell>();
+            for(int y=-15;y<15;y+=3)for(int x=-15;x<15;x+=3)cells.Add(new LooseCell{Position=new Vector2(x,y),Material=1,Identity=(uint)cells.Count+1,Flags=4});
+            for(int y=-5;y<5;y++)for(int x=55;x<65;x++)cells.Add(new LooseCell{Position=ship.Position+new Vector2(x,y),Material=1,Identity=(uint)cells.Count+1,Flags=1});
+            var fragmentPosition=ship.Position+new Vector2(-20,-50);var mask=new uint[16384];for(int y=0;y<4;y++)mask[(64+y)*128+64]=1;
+            cells.Add(new LooseCell{Position=fragmentPosition+new Vector2(-1,3),Velocity=Vector2.right,Material=1,Identity=(uint)cells.Count+1});
+            state.Fragments=new[]{new RigidFragmentSnapshot{Id="00000000000000000000000000000003",Hull=mask,Pose=new Vector4(fragmentPosition.x,fragmentPosition.y,0,1)}};
+            state.Cells=cells.ToArray();state.NextIdentity=(uint)cells.Count+1;state.Counters=new uint[]{(uint)cells.Count,(uint)cells.Count,0,0};Array.Clear(state.Dirty,0,state.Dirty.Length);
+            state.ShipPose[1]=new Vector4(8,0,0,0);session.Restore(state);var mass=ship.MassProperties(catalog);session.ConfigureShipBody(mass);
+            float initialMomentum=mass.Mass*8+1;double initialEnergy=.5*mass.Mass*64+.5;
+            for(int i=0;i<240;i++)
+            {
+                session.Step();yield return null;
+                if(i==59){cpu.Clear();gpu.Clear();frames.Clear();}
+                if(i%60==59)
+                {
+                    task=session.SnapshotAsync();while(!task.IsCompleted)yield return null;if(task.IsFaulted)throw task.Exception;
+                    CpuCutReference.ValidateShipPlacement(task.Result,ship.Id);
+                }
+            }
+            var result=task.Result;double momentum=mass.Mass*result.ShipPose[1].x;
+            double energy=.5*mass.Mass*(result.ShipPose[1].x*result.ShipPose[1].x+result.ShipPose[1].y*result.ShipPose[1].y)+.5*mass.Inertia*result.ShipPose[1].z*result.ShipPose[1].z;
+            foreach(var cell in result.Cells){momentum+=cell.Velocity.x;energy+=.5*cell.Velocity.sqrMagnitude;}
+            foreach(var fragment in result.Fragments){momentum+=fragment.Mass.Mass*fragment.Motion.x;energy+=.5*fragment.Mass.Mass*(fragment.Motion.x*fragment.Motion.x+fragment.Motion.y*fragment.Motion.y)+.5*fragment.Mass.Inertia*fragment.Motion.z*fragment.Motion.z;}
+            if(Math.Abs(momentum-initialMomentum)>3||energy>initialEnergy+3||result.Cells.Length!=201||result.ShipPose[1].x>=7.99f||result.Fragments[0].Motion.z>=-.1f)
+                throw new InvalidOperationException($"Island conservation/coupling failed: momentum_error={momentum-initialMomentum:F6} energy={energy:F6}/{initialEnergy:F6} speed={result.ShipPose[1].x:F6} fragment_spin={result.Fragments[0].Motion.z:F6}");
+            string line=$"preset=starter-pile100-cargo100-fragment cells={result.Cells.Length} ship_mass={mass.Mass:F3} initial_speed=8 final_speed={result.ShipPose[1].x:F6} momentum_error={momentum-initialMomentum:F6} initial_energy={initialEnergy:F3} final_energy={energy:F3} fragment_spin={result.Fragments[0].Motion.z:F6} impulses={result.ContactStats[0]} fallbacks={result.ContactStats[1]} frame_p95={Percentile(frames,.95):F3} gpu_p95={Percentile(gpu,.95):F3} nonoverlap=true conserved=true";
+            File.WriteAllText(Path.Combine(output,"contact-islands.txt"),SystemInfo.graphicsDeviceName+" / Unity "+Application.unityVersion+"\n"+line);Debug.Log("DEBRIS_ISLAND_BENCHMARK "+line);Application.Quit();
         }
         IEnumerator ShipBenchmark()
         {
