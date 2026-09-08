@@ -1,14 +1,14 @@
 # Implementation status
 
-Current priority: **B.3R mass-based contact physics**, before further B.5 scale work. Phase A passed; B.1/B.2 and bounded B.4 have verified checkpoints. B.3 is reopened: geometric collision admission still makes a single loose pixel hard-stop the ship. B.GATE and phases C–E remain incomplete. Current commit: `git log -1`.
+Current priority: **B.3R mass-based contact physics**, before further B.5 scale work. Phase A passed; B.1/B.2 and bounded B.4 have verified checkpoints. B.3 is reopened; isolated pixel response now passes, while coupled contacts and persistence completion remain. B.GATE and phases C–E remain incomplete. Current commit: `git log -1`.
 
 ## Next implementation batch
 
-Read [CONTACT_PHYSICS](CONTACT_PHYSICS.md). Implement B.3R.1–B.3R.2: body mass/inertia and force commands, analytical reference tests, GPU ship–cell impulses, and removal of CPU collision-flag velocity resets. Then complete piles/cargo/fragments/anchors and physics save/resume under B.3R.3–B.3R.4. Use [AGENTS.md](../AGENTS.md) for a focused implementation/validation batch. The current run documents batch measurements, then immediately implements the physics correction. Historical efficiency measurements live in `evidence/feature-batches.csv`.
+Continue B.3R.3: coupled piles, free cargo, fragment torque, anchored contacts and wake-up. Then B.3R.4 physics persistence/migration, bounded contacts and the full measured player gate. B.3R.1–B.3R.2 passed isolated ship–cell acceptance. Historical efficiency records: `evidence/feature-batches.csv`.
 
-## Latest verified baseline
+## Latest verified checkpoint
 
-Code checkpoint `c7da55e`: 38/38 tests, Mac build, damaged-ship fuel/save/leave/revisit loop, and reclamation of unreachable save files while preserving both recovery roots. Standalone: frame p95 18.613 ms; GPU p95 10.721 ms; two-site directory 38,382 bytes. Evidence: `evidence/B-world-collection-tests.xml`, `evidence/B-world-collection-player.txt`. Historical B.3/B.4 results remain in PERFORMANCE and evidence; they do not establish mass-based collision response.
+43 tests passed; explicit scale fixture skipped. Mac build/player passed: mass-1 pixel reduces starter speed 10 → 9.994825; thrust continues; zero pose fallbacks; non-overlap and moving save/load pass. Frame p95 17.595 ms, GPU p95 2.394 ms. Evidence: `evidence/B3R-single-cell-tests.xml`, `evidence/B3R-single-cell-player.txt`. This does not validate dense piles, rotating free cargo, fragment/anchor impulses or high-speed/budget handling. The legacy displacement API remains for historical fixtures; normal gameplay submits forces.
 
 ## Unfinished work to preserve
 

@@ -20,7 +20,7 @@ namespace Debris.Presentation
         string SavePath=>Path.Combine(shipBenchmark?Application.temporaryCachePath:Application.persistentDataPath,shipBenchmark?"DebrisVerification":"Saves","salvage.debris");
         WorldManifest worldManifest;string worldRoot,currentSiteId="00000000000000000000000000000001";ulong currentSeed=42;
         MatterSession session;MatterView view;MaterialCatalog catalog;
-        InputActionAsset input;Camera cameraView;bool paused,benchmark,shipBenchmark;
+        InputActionAsset input;Camera cameraView;bool paused,benchmark,shipBenchmark,contactBenchmark;
         float accumulator,statsTime;ushort inspected;Vector2 pointerWorld;
         readonly FrameTiming[] timings=new FrameTiming[1];
         readonly List<double> cpu=new List<double>(),gpu=new List<double>(),frames=new List<double>();
@@ -30,12 +30,14 @@ namespace Debris.Presentation
         {
             Application.targetFrameRate=60;cameraView=Camera.main;
             catalog=Resources.Load<MaterialCatalog>("Materials");input=Instantiate(Resources.Load<InputActionAsset>("Debris"));input.Enable();
-            shipBenchmark=Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisShipBenchmark");
+            contactBenchmark=Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisContactBenchmark");
+            shipBenchmark=contactBenchmark||Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisShipBenchmark");
             benchmark=Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisBenchmark");
             worldRoot=Path.Combine(shipBenchmark?Application.temporaryCachePath:Application.persistentDataPath,shipBenchmark?"DebrisVerification/world-"+Guid.NewGuid().ToString("N"):"World");
             ResetSession(benchmark?2:4,8192);
             if(benchmark)StartCoroutine(CheckedBenchmark(Benchmark()));
-            if(shipBenchmark)StartCoroutine(CheckedBenchmark(ShipBenchmark()));
+            if(contactBenchmark)StartCoroutine(CheckedBenchmark(ContactBenchmark()));
+            else if(shipBenchmark)StartCoroutine(CheckedBenchmark(ShipBenchmark()));
             if(!benchmark&&!shipBenchmark&&WorldStore.Exists(worldRoot))_ = LoadCheckpoint();
         }
         void ResetSession(int side,int capacity)
@@ -43,7 +45,7 @@ namespace Debris.Presentation
             view?.Dispose();session?.Dispose();if(loadedBlueprint){Destroy(loadedBlueprint);loadedBlueprint=null;}
             session=new MatterSession(catalog,Resources.Load<AsteroidProfile>("Asteroid"),side,128,capacity);
             ship=benchmark?null:new ShipRuntime(Resources.Load<ShipBlueprint>("StarterShip"));
-            if(ship!=null){session.ConfigureShip(ship.CollisionMask(),ship.Position);cameraView.orthographicSize=180;}
+            if(ship!=null){session.ConfigureShip(ship.CollisionMask(),ship.Position);session.ConfigureShipBody(ship.MassProperties(catalog));cameraView.orthographicSize=180;}
             view=new MatterView(session);accumulator=0;inspected=0;
         }
         void Update()
@@ -73,7 +75,8 @@ namespace Debris.Presentation
                 var pose=session.ShipStats[0];cameraView.transform.position=Vector3.Lerp(cameraView.transform.position,new Vector3(pose.x+50,pose.y,-10),1-Mathf.Exp(-4*Time.unscaledDeltaTime));
                 ship.CargoMass=session.ShipStats[2].y;
                 ship.Angle=session.ShipStats[0].z;
-                if(session.ShipStats[1].w>0){ship.Velocity=Vector2.zero;ship.AngularVelocity=0;}
+                ship.Position=new Vector2(pose.x,pose.y);
+                ship.Velocity=new Vector2(session.ShipStats[1].x,session.ShipStats[1].y);ship.AngularVelocity=session.ShipStats[1].z;
             }
             cameraView.orthographicSize=Mathf.Clamp(cameraView.orthographicSize-input["Zoom"].ReadValue<float>()*.025f,30,400);
             if(!paused&&!benchmark&&!shipBenchmark&&!saveBusy)
@@ -85,11 +88,12 @@ namespace Debris.Presentation
                     if(ship!=null)
                     {
                         float turn=input["Turn"].ReadValue<float>();
-                        var old=ship.Position;float angle=ship.Angle;ship.Tick(new Vector2(movement.y,-movement.x),-turn,1f/60);
+                        var force=ship.FlightForce(new Vector2(movement.y,-movement.x),-turn,1f/60,ship.MassProperties(catalog));
+                        session.ConfigureShipBody(ship.MassProperties(catalog));
                         bool cut=input["Cut"].IsPressed()&&ship.Has(UnitKind.Drill);
                         if(cut)command=new SiteCommand(SiteCommandType.CutterStroke,Vector2.zero,Vector2.zero,6,120,1);
                         bool suction=input["Suction"].IsPressed()&&ship.Has(UnitKind.Suction);
-                        session.Step(command,suction?40:0,default,new Vector3(ship.Position.x-old.x,ship.Position.y-old.y,ship.Angle-angle),ship.DoorOpen,cut,suction);
+                        session.Step(command,suction?40:0,default,default,ship.DoorOpen,cut,suction,force);
                     }
                     else session.Step(command);
                     accumulator-=1f/60;
@@ -113,7 +117,7 @@ namespace Debris.Presentation
                 using(var damage=ShipDamage.CutHull(snapshot,ship,positions,unitDamage))
                 {
                     session.Restore(damage.Matter);if(loadedBlueprint)Destroy(loadedBlueprint);
-                    ship=damage.Ship;loadedBlueprint=damage.Blueprint;damage.Blueprint=null;
+                    ship=damage.Ship;loadedBlueprint=damage.Blueprint;damage.Blueprint=null;session.ConfigureShipBody(ship.MassProperties(catalog));
                     saveStatus=$"Impact damage: {damage.Released} hull cells released; {ship.Fragments.Count} detached regions.";
                 }
                 return true;
@@ -206,7 +210,7 @@ namespace Debris.Presentation
                 if(saved.Ship==null)throw new InvalidDataException("This checkpoint has no player ship.");
                 var restored=saved.Ship.Restore(out blueprint);var m=saved.Matter;
                 candidate=new MatterSession(catalog,Resources.Load<AsteroidProfile>("Asteroid"),m.Side,m.ChunkSize,m.Capacity,saved.GeneratorSeed,new Debris.Core.StableId(saved.SiteId));
-                candidate.Restore(m);replacement=new MatterView(candidate);
+                candidate.Restore(m);candidate.ConfigureShipBody(restored.MassProperties(catalog));replacement=new MatterView(candidate);
                 Adopt(saved,candidate,replacement,restored,blueprint);blueprint=null;candidate=null;replacement=null;worldManifest=manifest;
                 saveStatus=saved.RecoveredBackup?"Recovered the previous verified world; latest generation was damaged.":"Site restored, including cargo, fuel and damage. T visits the other site.";return true;
             }
@@ -238,7 +242,7 @@ namespace Debris.Presentation
                 if(arrived==null)throw new InvalidOperationException("No clear arrival berth or debris capacity is available; current site retained.");
                 var restored=arrived.Ship.Restore(out blueprint);var m=arrived.Matter;
                 if(candidate==null)candidate=new MatterSession(catalog,profile,m.Side,m.ChunkSize,m.Capacity,arrived.GeneratorSeed,new Debris.Core.StableId(destination));
-                candidate.Restore(m);replacement=new MatterView(candidate);
+                candidate.Restore(m);candidate.ConfigureShipBody(restored.MassProperties(catalog));replacement=new MatterView(candidate);
                 var committed=await CommitWorld(arrived,departure.Site,arrived);
                 Adopt(arrived,candidate,replacement,restored,blueprint);candidate=null;replacement=null;blueprint=null;worldManifest=committed;
                 saveStatus="Arrived at salvage site "+destination.Substring(30)+". Deposited matter remains at its original site.";return true;
@@ -255,6 +259,45 @@ namespace Debris.Presentation
                 if(failure!=null){Debug.LogException(failure);Application.Quit(1);yield break;}
                 if(!more)yield break;yield return run.Current;
             }
+        }
+        IEnumerator ContactBenchmark()
+        {
+            string output=Path.GetFullPath(Path.Combine(Application.dataPath,"../../Logs"));Directory.CreateDirectory(output);
+            var task=session.SnapshotAsync();while(!task.IsCompleted)yield return null;if(task.IsFaulted)throw task.Exception;
+            var state=task.Result;
+            foreach(var field in state.Fields)Array.Clear(field,0,field.Length);
+            foreach(var damage in state.Damage)Array.Clear(damage,0,damage.Length);
+            state.Cells=new[]{new LooseCell{Position=ship.Position+new Vector2(55,0),Material=1,Identity=1,Flags=1}};
+            state.NextIdentity=2;state.Counters=new uint[]{1,1,0,0};Array.Clear(state.Dirty,0,state.Dirty.Length);
+            state.ShipPose[1]=new Vector4(10,0,0,0);session.Restore(state);
+            var mass=ship.MassProperties(catalog);session.ConfigureShipBody(mass);
+            session.Step();task=session.SnapshotAsync();while(!task.IsCompleted)yield return null;if(task.IsFaulted)throw task.Exception;
+            var hit=task.Result;float pixelMass=catalog.DefinitionAt(1).Density;
+            if(hit.ShipPose[1].x<9.95f||hit.Cells[0].Velocity.x<9.9f||hit.ContactStats[0]==0||hit.ContactStats[1]!=0)
+                throw new InvalidOperationException("Single-pixel momentum acceptance failed: "+hit.ShipPose[1]+" cell="+hit.Cells[0].Velocity+" fallbacks="+hit.ContactStats[1]);
+            float momentumError=Mathf.Abs(hit.ShipPose[1].x*mass.Mass+hit.Cells[0].Velocity.x*pixelMass-10*mass.Mass);
+            if(momentumError>mass.Mass*.00001f)throw new InvalidOperationException("Single-pixel momentum drift.");
+            CpuCutReference.ValidateShipPlacement(hit,ship.Id);
+            cpu.Clear();gpu.Clear();frames.Clear();
+            for(int i=0;i<300;i++)
+            {
+                session.Step(shipForce:new Vector3(mass.Mass*.2f,0,0));yield return null;
+                if(i%60==59)
+                {
+                    task=session.SnapshotAsync();while(!task.IsCompleted)yield return null;if(task.IsFaulted)throw task.Exception;
+                    CpuCutReference.ValidateShipPlacement(task.Result,ship.Id);
+                }
+            }
+            double frame95=Percentile(frames,.95),gpu95=Percentile(gpu,.95);
+            var moving=task.Result;
+            if(moving.ShipPose[1].x<10.8f||moving.ContactStats[1]!=0)throw new InvalidOperationException("Continued thrust/fallback acceptance failed.");
+            var save=SaveCheckpoint();while(!save.IsCompleted)yield return null;if(!save.Result)throw new InvalidOperationException("Contact save failed.");
+            var load=LoadCheckpoint();while(!load.IsCompleted)yield return null;if(!load.Result)throw new InvalidOperationException("Contact load failed.");
+            task=session.SnapshotAsync();while(!task.IsCompleted)yield return null;if(task.IsFaulted)throw task.Exception;
+            if(!moving.Cells.SequenceEqual(task.Result.Cells)||!moving.ShipPose.SequenceEqual(task.Result.ShipPose))throw new InvalidOperationException("Contact checkpoint changed motion.");
+            string line=$"preset=starter-single-sleeping-cell ship_mass={mass.Mass:F3} cell_mass={pixelMass:F3} initial_speed=10 impact_speed={hit.ShipPose[1].x:F6} pixel_speed={hit.Cells[0].Velocity.x:F6} final_speed={moving.ShipPose[1].x:F6} momentum_error={momentumError:F6} impulses={moving.ContactStats[0]} fallbacks={moving.ContactStats[1]} substeps={moving.ContactStats[2]} frame_p95={frame95:F3} gpu_p95={gpu95:F3} nonoverlap=true thrust=true save_load=true";
+            File.WriteAllText(Path.Combine(output,"contact-benchmark.txt"),SystemInfo.graphicsDeviceName+" / Unity "+Application.unityVersion+"\n"+line);
+            Debug.Log("DEBRIS_CONTACT_BENCHMARK "+line);Application.Quit();
         }
         IEnumerator ShipBenchmark()
         {

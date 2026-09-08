@@ -1,0 +1,8 @@
+Unity 6000.3.11f1 / Mac Metal / 1280x800 window / starter ship / 8192 capacity / 16 chunks
+DEBRIS_CONTACT_BENCHMARK preset=starter-single-sleeping-cell ship_mass=1931.592 cell_mass=1.000 initial_speed=10 impact_speed=9.994825 pixel_speed=9.994530 final_speed=10.994180 momentum_error=0.000757 impulses=163 fallbacks=0 substeps=1204 frame_p95=17.595 gpu_p95=2.394 nonoverlap=true thrust=true save_load=true
+Acceptance: PASS; player exit 0. Four substeps per fixed tick, zero restitution, 0.0001-cell geometric skin.
+Canonical tests: B3R-single-cell-tests.xml (43 passed, 1 explicit scale fixture skipped).
+Development: 5 focused launches (missing test assembly reference; shader declaration ordering; centred regression pass; isolated starter fallback reproduction; skin correction pass).
+Final checks: 3 full-suite launches, 2 builds, 2 player runs. Suite #2 followed the starter fallback reproduction/skin fix. Suite #3 followed correction of tank fuel-grade density accounting and its regression. Build/player #2 followed both changes.
+First player failure: correct momentum but one pose fallback at hull (54,0); isolated regression showed sub-cell rounding at translated/rotating contact. No velocity reset was used to hide it.
+Scope: isolated cells, force-driven ship and existing save/load. Dense piles, free rotating cargo, fragments, anchored sliding, high-speed/budget handling and persisted mobility remain B.3R.3–4. Legacy displacement API remains for old fixtures; gameplay uses local force/torque and GPU authoritative motion.

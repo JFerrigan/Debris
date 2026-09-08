@@ -1,6 +1,6 @@
 # Contact physics — Phase B correction
 
-Status: designed, not implemented. B.3R is the next gate, ahead of B.5 expansion. The user's 2026-09-07 report supersedes the earlier conclusion that collision admission alone completed B.3.
+Status: B.3R.1–B.3R.2 verified for isolated ship–cell contacts; B.3R.3–B.3R.4 remain open ahead of B.5 expansion. The user's 2026-09-07 report supersedes the earlier conclusion that collision admission alone completed B.3.
 
 ## Problem and decision
 
@@ -64,3 +64,11 @@ Use a frictionless, zero-restitution reference collision with ship mass 10,000, 
 The final fixture covers isolated cells, 100/1,000-cell piles, a pile against an anchor, a loaded rotating cavity, glancing walls, a dynamic fragment and a fast small projectile. Check low/high frame rates against the same fixed-step sequence, save/load during motion, contact-budget saturation and wake-up. Record mass ratios, thrust, momentum error, penetration tolerance, contact count, solver iterations/substeps, fallback/overflow counts and frame/GPU p95. Target the existing 60 FPS goal / 20 ms minimum-budget threshold on the documented Mac preset; choose numerical tolerances before running the oracle, not after observing failures.
 
 Persist authoritative body mobility, linear/angular velocity, structural/inventory inputs to mass and any required unfinished solver work. A save occurs at a completed fixed-step boundary. If warm-start caches are omitted, rebuild consistently and document/test the resume tolerance; do not claim bit-identical continuation with a different hidden solver state. Legacy terrain retains its anchored generator policy, while old loose cells migrate to finite dynamic mass. Original files remain intact on unsupported migrations.
+
+## B.3R.1–B.3R.2 checkpoint
+
+Attached mass uses material density, whole-machine mass once, and fuel-grade density. Cached structure/machinery sums produce COM and inertia; free cargo is excluded. Gameplay submits local engine forces and mount/control torque; GPU fixed steps own motion. The CPU collision-readback hard stop is removed. The analytical oracle covers the 10,000:1 inelastic collision, anchored/glancing contacts and off-centre torque.
+
+The GPU single-writer solver wakes and exchanges equal/opposite impulses with free cells before integration. Four substeps and a 0.0001-cell geometric skin avoid the observed translated starter-hull rounding fallback; skin correction does not change velocities. This is a bounded first contact proof, not the final island/budget solver. The legacy displacement API remains for historical fixtures.
+
+Canonical evidence: [43 passing tests](evidence/B3R-single-cell-tests.xml), [standalone acceptance and rerun reasons](evidence/B3R-single-cell-player.txt). A mass-1 pixel reduced starter speed from 10 to 9.994825; thrust continued, zero fallbacks, no overlap, motion survived save/load. Mac frame p95 17.595 ms; GPU p95 2.394 ms. Remaining work: cell chains, free-cargo coupling, fragment/anchor impulses, high-speed substeps and physics persistence/migration.

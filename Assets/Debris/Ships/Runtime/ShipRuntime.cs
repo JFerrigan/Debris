@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Debris.Core;
+using Debris.Materials;
 using UnityEngine;
 namespace Debris.Ships
 {
@@ -82,9 +83,58 @@ namespace Debris.Ships
             Velocity=Vector2.ClampMagnitude(Velocity,22);AngularVelocity=Mathf.Clamp(AngularVelocity,-.35f,.35f);
             Position+=Velocity*delta;Angle+=AngularVelocity*delta;
         }
+        // Structural and machinery sums are cached; tank contents are added once on demand.
+        float cachedMass, cachedMoment; Vector2 cachedFirst; bool massValid;
+        MaterialCatalog massCatalog;
+        public BodyMass MassProperties(MaterialCatalog catalog)
+        {
+            if(!massValid || massCatalog != catalog)
+            {
+                cachedMass=0;cachedMoment=0;cachedFirst=Vector2.zero;
+                foreach(var cell in Structure)
+                    AddMass(ref cachedMass,ref cachedFirst,ref cachedMoment,catalog.DefinitionAt(cell.Value).Density,(Vector2)cell.Key+Vector2.one*.5f,1f/6);
+                foreach(var unit in Units)if(unit.Supported)
+                {
+                    var size=unit.Placement.Definition.Size;
+                    AddMass(ref cachedMass,ref cachedFirst,ref cachedMoment,unit.Placement.Definition.Mass,(Vector2)unit.Placement.Position+(Vector2)size*.5f,(size.x*size.x+size.y*size.y)/12f);
+                }
+                massValid=true;massCatalog=catalog;
+            }
+            float mass=cachedMass,moment=cachedMoment;var first=cachedFirst;
+            var tank=Units.Find(u=>u.Supported&&u.Placement.Definition.Kind==UnitKind.Tank);
+            if(tank!=null && Fuel.Count>0)
+            {
+                var size=tank.Placement.Definition.Size;
+                float fuelMass=0;
+                foreach(var fuel in Fuel.Contents)fuelMass+=catalog.DefinitionAt(catalog.IndexOf("fuel-"+fuel.Grade)).Density;
+                AddMass(ref mass,ref first,ref moment,fuelMass,(Vector2)tank.Placement.Position+(Vector2)size*.5f,(size.x*size.x+size.y*size.y)/12f);
+            }
+            var center=first/Mathf.Max(mass,.0001f);
+            return new BodyMass{Mass=Mathf.Max(mass,.0001f),Center=center,Inertia=Mathf.Max(.0001f,moment-mass*center.sqrMagnitude)};
+        }
+        static void AddMass(ref float mass,ref Vector2 first,ref float moment,float amount,Vector2 center,float intrinsic)
+        {mass+=amount;first+=center*amount;moment+=amount*(center.sqrMagnitude+intrinsic);}
+        public void InvalidateMass()=>massValid=false;
+        // Body-local force and torque about COM; the GPU rotates force at its authoritative pose.
+        // Translation is allocated at engine mounts; differential thrust supplies the control couple.
+        public Vector3 FlightForce(Vector2 thrust,float turn,float delta,BodyMass body)
+        {
+            if(!float.IsFinite(delta)||delta<=0||delta>.1f||!float.IsFinite(thrust.x)||!float.IsFinite(thrust.y)||!float.IsFinite(turn))throw new ArgumentOutOfRangeException(nameof(delta));
+            if(!Has(UnitKind.Command)||!Has(UnitKind.Tank))return Vector3.zero;
+            int engines=Units.FindAll(u=>u.Placement.Definition.Kind==UnitKind.Thruster&&u.Operational).Count;
+            float effort=Mathf.Clamp01(thrust.magnitude)+Mathf.Abs(Mathf.Clamp(turn,-1,1))*.4f;
+            if(engines==0||!Fuel.Consume(effort*delta*.9))return Vector3.zero;
+            body.Validate();var local=Vector2.ClampMagnitude(thrust,1)*6000;float torque=Mathf.Clamp(turn,-1,1)*180000*engines;
+            foreach(var unit in Units)if(unit.Operational&&unit.Placement.Definition.Kind==UnitKind.Thruster)
+            {
+                var mount=(Vector2)unit.Placement.Position+(Vector2)unit.Placement.Definition.Size*.5f;
+                torque+=ContactPhysics.Cross(mount-body.Center,local);
+            }
+            return new Vector3(local.x*engines,local.y*engines,torque);
+        }
         public bool RemoveHull(Vector2Int p)
         {
-            if(!Structure.Remove(p))return false;ResolveSupport();return true;
+            if(!Structure.Remove(p))return false;InvalidateMass();ResolveSupport();return true;
         }
         public void DamageUnit(string id,float amount)
         {

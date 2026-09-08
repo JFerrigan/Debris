@@ -1,3 +1,5 @@
+#pragma kernel ApplyShipForce
+#pragma kernel SolveShipCells
 #pragma kernel Upload
 #pragma kernel Cut
 #pragma kernel Integrate
