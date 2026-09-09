@@ -1,0 +1,242 @@
+#pragma kernel Begin
+#pragma kernel Speed
+#pragma kernel SelectSubsteps
+#pragma kernel Prepare
+#pragma kernel ClearBins
+#pragma kernel CountBins
+#pragma kernel ScanBlocks
+#pragma kernel ScanSums
+#pragma kernel ScatterBins
+#pragma kernel Gather
+#pragma kernel ClearDegrees
+#pragma kernel Compact
+#pragma kernel ScatterAdjacency
+#pragma kernel EvaluateVelocity
+#pragma kernel ApplyGrains
+#pragma kernel ApplyBodies
+#pragma kernel Predict
+#pragma kernel EvaluatePosition
+#pragma kernel PrepareValidation
+#pragma kernel Validate
+#pragma kernel Commit
+#pragma kernel Acknowledge
+
+struct Grain { float2 center,velocity; float angle,spin; uint material,identity,flags,r0,r1,r2; };
+struct State { float2 center,velocity; float angle,spin; uint r0,r1; };
+struct Parameters { float im,ii; float2 com; uint first,count,mobility,revision; };
+struct Boundary { float2 center,halfSize; uint body,feature,r0,r1; };
+struct Contact { uint a,b,feature,pad; float2 normal; float separation,ln; float2 ra,rb; float lt,lp,r0,r1; };
+StructuredBuffer<State> _Committed;
+RWStructuredBuffer<State> _State;
+RWStructuredBuffer<State> _CommitOutput;
+RWStructuredBuffer<Grain> _Grains;
+StructuredBuffer<Parameters> _Parameters;
+StructuredBuffer<Boundary> _Boundaries;
+RWStructuredBuffer<uint> _D;
+RWStructuredBuffer<uint> _Args;
+RWStructuredBuffer<float2> _Starts;
+RWStructuredBuffer<uint> _Counts;
+RWStructuredBuffer<uint> _Cursors;
+StructuredBuffer<uint> _Offsets, _BlockOffsets;
+RWStructuredBuffer<uint> _Indices;
+StructuredBuffer<uint> _ScanInput;
+RWStructuredBuffer<uint> _ScanOutput, _Sums;
+StructuredBuffer<uint> _SumInput;
+RWStructuredBuffer<uint> _SumOutput;
+RWStructuredBuffer<Contact> _Rows;
+RWStructuredBuffer<uint> _RowCounts;
+StructuredBuffer<uint> _RowOffsets,_RowBlockOffsets;
+RWStructuredBuffer<Contact> _Contacts;
+RWStructuredBuffer<uint> _Degrees;
+StructuredBuffer<uint> _AdjOffsets,_AdjBlockOffsets;
+RWStructuredBuffer<uint> _AdjCursors,_Adjacency;
+RWStructuredBuffer<float4> _Increments;
+uint _N,_Bodies,_Endpoints,_BoundaryCount,_BinSide,_BinCount,_Slots,_ScanCount,_SumCount,_Substep,_Position;
+float _Dt,_Friction;
+float4 _Force; // local ship force xy, torque z; proof fixture
+
+float cross2(float2 a,float2 b){return a.x*b.y-a.y*b.x;}
+float2 perp(float2 a){return float2(-a.y,a.x);}
+float2 rotate(float2 a,float angle){float s,c;sincos(angle,s,c);return float2(c*a.x-s*a.y,s*a.x+c*a.y);}
+uint offset(uint id){return _Offsets[id]+_BlockOffsets[id/256];}
+uint adjOffset(uint id){return _AdjOffsets[id]+_AdjBlockOffsets[id/256];}
+bool active(){return _D[0]==0 && _Substep<_D[2];}
+void fault(uint bit){InterlockedOr(_D[0],bit);}
+float dt(){return _Dt/max(1u,_D[2]);}
+uint bin(float2 p){int2 xy=(int2)floor((p+256)/2);if(any(xy<0)||any(xy>=(int)_BinSide))return 0xffffffff;return (uint)xy.y*_BinSide+(uint)xy.x;}
+
+// OBB SAT and a clipped contact-patch centroid. One grain constraint per physical face patch.
+void geometry(uint a,uint b,uint feature,out float2 n,out float sep,out float2 ra,out float2 rb)
+{
+    State sa=_State[a],sb=_State[b];float2 ca=sa.center,cb=sb.center;
+    float2 ha=.5,hb=.5;float aa=sa.angle,ab=sb.angle;
+    if(feature!=0xffffffff){Boundary f=_Boundaries[feature]; cb=sb.center+rotate(f.center,ab);hb=f.halfSize;}
+    float2 ax=rotate(float2(1,0),aa),ay=perp(ax),bx=rotate(float2(1,0),ab),by=perp(bx);
+    float2 delta=cb-ca;float2 axes[4]={ax,ay,bx,by};sep=-1e20;n=0;
+    for(uint i=0;i<4;i++)
+    {
+        float2 axis=axes[i];float radiusA=ha.x*abs(dot(ax,axis))+ha.y*abs(dot(ay,axis));
+        float radiusB=hb.x*abs(dot(bx,axis))+hb.y*abs(dot(by,axis));
+        float s=abs(dot(delta,axis))-radiusA-radiusB;
+        if(s>sep){sep=s;n=dot(delta,axis)>=0?axis:-axis;}
+    }
+    // Clip incident support edge to reference edge side planes.
+    bool referenceA=abs(dot(n,ax))>0.99999 || abs(dot(n,ay))>0.99999;
+    float2 rc=referenceA?ca:cb,ic=referenceA?cb:ca;
+    float2 rx=referenceA?ax:bx,ry=referenceA?ay:by,ix=referenceA?bx:ax,iy=referenceA?by:ay;
+    float2 rh=referenceA?ha:hb,ih=referenceA?hb:ha,rn=referenceA?n:-n;
+    bool faceX=abs(dot(rn,rx))>abs(dot(rn,ry));
+    float2 tangent=faceX?ry:rx;float side=faceX?rh.y:rh.x;
+    float2 refCenter=rc+rn*(faceX?rh.x:rh.y);
+    bool incidentX=abs(dot(rn,ix))>abs(dot(rn,iy));
+    float2 incNormal=incidentX?ix:iy;incNormal*=dot(incNormal,rn)>0?-1:1;
+    float2 incTangent=incidentX?iy:ix;float incHalf=incidentX?ih.y:ih.x;
+    float2 edgeCenter=ic+incNormal*(incidentX?ih.x:ih.y);
+    float2 p=edgeCenter-incTangent*incHalf,q=edgeCenter+incTangent*incHalf;
+    float u=dot(p-refCenter,tangent),v=dot(q-refCenter,tangent),lo=0,hi=1;
+    if(abs(v-u)>1e-8){float t0=(-side-u)/(v-u),t1=(side-u)/(v-u);lo=max(0,min(t0,t1));hi=min(1,max(t0,t1));}
+    float2 contactPoint=(lerp(p,q,saturate(lo))+lerp(p,q,saturate(hi)))*.5;
+    // Mid-plane application keeps equal/opposite impulses at exactly the same world contactPoint.
+    contactPoint-=rn*dot(contactPoint-refCenter,rn)*.5;ra=contactPoint-sa.center;rb=contactPoint-sb.center;
+}
+
+[numthreads(64,1,1)] void Begin(uint id:SV_DispatchThreadID)
+{
+    if(id<_Endpoints){_State[id]=_Committed[id];}
+    if(id==0){_D[3]=0;_D[4]=0;_D[5]=0;_D[6]=0;_D[7]=0;}
+}
+[numthreads(64,1,1)] void Speed(uint id:SV_DispatchThreadID)
+{
+    if(id>=_Endpoints || _D[0]!=0)return;State s=_State[id];Parameters p=_Parameters[id];
+    float radius=.707107;
+    if(id>=_N){radius=0;for(uint f=p.first;f<p.first+p.count;f++){Boundary b=_Boundaries[f];radius=max(radius,length(b.center)+length(b.halfSize));}}
+    float speed=length(s.velocity)+abs(s.spin)*radius;
+    if(id==_N)speed+=_Dt*(length(_Force.xy)*p.im+abs(_Force.z)*p.ii*radius);
+    if(!isfinite(speed)){fault(32);return;}InterlockedMax(_D[3],asuint(speed));
+}
+[numthreads(1,1,1)] void SelectSubsteps(uint id:SV_DispatchThreadID)
+{
+    // Remove only float roundoff at an integral substep boundary (120 cells/s => exactly 16).
+    uint count=max(4u,(uint)ceil(max(0,2*asfloat(_D[3])*_Dt/.25-1e-5)));_D[2]=count;
+    if(count>16)fault(1);
+    // Separate indirect blocks for every supported substep: endpoints, grains, contacts and bodies.
+    for(uint s=0;s<16;s++)for(uint k=0;k<4;k++){
+        uint base=(s*4+k)*3;uint groups=k==0?(_Endpoints+63)/64:k==1?(_N+63)/64:k==2?(_N*_Slots+63)/64:_Bodies;
+        _Args[base]=(s<count && _D[0]==0)?groups:0;_Args[base+1]=1;_Args[base+2]=1;
+    }
+}
+[numthreads(64,1,1)] void Prepare(uint id:SV_DispatchThreadID)
+{
+    if(id>=_Endpoints||!active())return;State s=_State[id];_Starts[id]=s.center;
+    if(id==_N){Parameters p=_Parameters[id];s.velocity+=rotate(_Force.xy,s.angle)*p.im*dt();s.spin+=_Force.z*p.ii*dt();}_State[id]=s;
+}
+[numthreads(256,1,1)] void ClearBins(uint id:SV_DispatchThreadID){if(id<_BinCount){_Counts[id]=0;_Cursors[id]=0;}}
+[numthreads(64,1,1)] void CountBins(uint id:SV_DispatchThreadID)
+{
+    if(id>=_N||!active())return;uint b=bin(_State[id].center);if(b==0xffffffff){fault(2);return;}uint old;InterlockedAdd(_Counts[b],1,old);InterlockedMax(_D[4],old+1);
+}
+groupshared uint scan[256];
+[numthreads(256,1,1)] void ScanBlocks(uint id:SV_DispatchThreadID,uint lane:SV_GroupThreadID,uint group:SV_GroupID)
+{
+    uint value=id<_ScanCount?_ScanInput[id]:0;scan[lane]=value;GroupMemoryBarrierWithGroupSync();
+    for(uint stride=1;stride<256;stride*=2){uint add=lane>=stride?scan[lane-stride]:0;GroupMemoryBarrierWithGroupSync();scan[lane]+=add;GroupMemoryBarrierWithGroupSync();}
+    if(id<_ScanCount)_ScanOutput[id]=scan[lane]-value;if(lane==255)_Sums[group]=scan[lane];
+}
+[numthreads(256,1,1)] void ScanSums(uint lane:SV_GroupThreadID)
+{
+    uint value=lane<_SumCount?_SumInput[lane]:0;scan[lane]=value;GroupMemoryBarrierWithGroupSync();
+    for(uint stride=1;stride<256;stride*=2){uint add=lane>=stride?scan[lane-stride]:0;GroupMemoryBarrierWithGroupSync();scan[lane]+=add;GroupMemoryBarrierWithGroupSync();}
+    if(lane<_SumCount)_SumOutput[lane]=scan[lane]-value;
+}
+[numthreads(64,1,1)] void ScatterBins(uint id:SV_DispatchThreadID)
+{
+    if(id>=_N||!active())return;uint b=bin(_State[id].center),slot;InterlockedAdd(_Cursors[b],1,slot);_Indices[offset(b)+slot]=id;
+}
+void addCandidate(uint id,uint other,uint feature,inout uint count)
+{
+    float2 n,ra,rb;float sep;geometry(id,other,feature,n,sep,ra,rb);
+    if(sep>.5)return;
+    if(count>=_Slots){fault(4);return;}
+    Contact c=(Contact)0;c.a=id;c.b=other;c.feature=feature;c.normal=n;c.separation=sep;c.ra=ra;c.rb=rb;
+    _Rows[id*_Slots+count]=c;count++;
+}
+[numthreads(64,1,1)] void Gather(uint id:SV_DispatchThreadID)
+{
+    if(id>=_N)return;_RowCounts[id]=0;if(!active())return;
+    int2 xy=(int2)floor((_State[id].center+256)/2);uint count=0;
+    for(int y=max(0,xy.y-2);y<=min((int)_BinSide-1,xy.y+2);y++)for(int x=max(0,xy.x-2);x<=min((int)_BinSide-1,xy.x+2);x++){
+        uint b=(uint)y*_BinSide+(uint)x,first=offset(b);
+        for(uint k=0;k<_Counts[b];k++){uint other=_Indices[first+k];if(_Grains[id].identity<_Grains[other].identity)addCandidate(id,other,0xffffffff,count);}
+    }
+    for(uint f=0;f<_BoundaryCount;f++)addCandidate(id,_Boundaries[f].body,f,count);
+    // Deterministic per-row endpoint/feature order; bin atomic order is not a persistent identity.
+    for(uint i=1;i<count;i++){Contact c=_Rows[id*_Slots+i];uint j=i;while(j>0){Contact prev=_Rows[id*_Slots+j-1];if(prev.b<c.b||(prev.b==c.b&&prev.feature<=c.feature))break;_Rows[id*_Slots+j]=prev;j--;}_Rows[id*_Slots+j]=c;}
+    _RowCounts[id]=count;InterlockedMax(_D[6],count);
+}
+[numthreads(64,1,1)] void ClearDegrees(uint id:SV_DispatchThreadID){if(id<_Endpoints){_Degrees[id]=0;_AdjCursors[id]=0;}}
+[numthreads(64,1,1)] void Compact(uint id:SV_DispatchThreadID)
+{
+    if(id>=_N||!active())return;uint first=_RowOffsets[id]+_RowBlockOffsets[id/256];uint count=_RowCounts[id];
+    for(uint k=0;k<count;k++){Contact c=_Rows[id*_Slots+k];_Contacts[first+k]=c;InterlockedAdd(_Degrees[c.a],1);InterlockedAdd(_Degrees[c.b],1);}
+    if(id==_N-1){_D[5]=first+count;uint base=(_Substep*4+2)*3;_Args[base]=(first+count+63)/64;}
+}
+[numthreads(64,1,1)] void ScatterAdjacency(uint id:SV_DispatchThreadID)
+{
+    if(id>=_D[5]||!active())return;Contact c=_Contacts[id];uint sa,sb;InterlockedAdd(_AdjCursors[c.a],1,sa);InterlockedAdd(_AdjCursors[c.b],1,sb);
+    _Adjacency[adjOffset(c.a)+sa]=id;_Adjacency[adjOffset(c.b)+sb]=id;
+}
+float effective(Parameters p,float2 r,float2 n){float rn=cross2(r,n);return p.im+p.ii*rn*rn;}
+[numthreads(64,1,1)] void EvaluateVelocity(uint id:SV_DispatchThreadID)
+{
+    if(id>=_D[5]||!active())return;Contact c=_Contacts[id];State a=_State[c.a],b=_State[c.b];Parameters pa=_Parameters[c.a],pb=_Parameters[c.b];
+    float2 rel=b.velocity+b.spin*perp(c.rb)-a.velocity-a.spin*perp(c.ra);
+    float k=max(1u,_Degrees[c.a])*effective(pa,c.ra,c.normal)+max(1u,_Degrees[c.b])*effective(pb,c.rb,c.normal);
+    float target=-max(0,c.separation)/dt();float next=max(0,c.ln+(target-dot(rel,c.normal))/max(k,1e-20));float dn=next-c.ln;c.ln=next;
+    float2 tangent=perp(c.normal);float kt=max(1u,_Degrees[c.a])*effective(pa,c.ra,tangent)+max(1u,_Degrees[c.b])*effective(pb,c.rb,tangent);
+    float nt=c.separation<=.0001?clamp(c.lt-dot(rel,tangent)/max(kt,1e-20),-_Friction*next,_Friction*next):0;float dlt=nt-c.lt;c.lt=nt;
+    float2 impulse=c.normal*dn+tangent*dlt;_Increments[id]=float4(impulse,cross2(c.ra,impulse),cross2(c.rb,impulse));_Contacts[id]=c;
+}
+float4 gatherIncrement(uint endpoint,uint first,uint count,uint lane,uint lanes)
+{
+    float4 total=0;for(uint i=lane;i<count;i+=lanes){uint index=_Adjacency[first+i];Contact c=_Contacts[index];float4 d=_Increments[index];total+=c.a==endpoint?float4(-d.xy,-d.z,0):float4(d.xy,d.w,0);}return total;
+}
+void apply(uint id,float4 sum)
+{
+    State s=_State[id];Parameters p=_Parameters[id];
+    if(_Position!=0){s.center+=p.im*sum.xy;s.angle+=p.ii*sum.z;}else{s.velocity+=p.im*sum.xy;s.spin+=p.ii*sum.z;}_State[id]=s;
+}
+[numthreads(64,1,1)] void ApplyGrains(uint id:SV_DispatchThreadID){if(id<_N&&active())apply(id,gatherIncrement(id,adjOffset(id),_Degrees[id],0,1));}
+groupshared float4 reaction[64];
+[numthreads(64,1,1)] void ApplyBodies(uint group:SV_GroupID,uint lane:SV_GroupThreadID)
+{
+    uint id=_N+group;reaction[lane]=0;if(id<_Endpoints&&active())reaction[lane]=gatherIncrement(id,adjOffset(id),_Degrees[id],lane,64);GroupMemoryBarrierWithGroupSync();
+    for(uint stride=32;stride>0;stride/=2){if(lane<stride)reaction[lane]+=reaction[lane+stride];GroupMemoryBarrierWithGroupSync();}if(lane==0&&id<_Endpoints&&active())apply(id,reaction[0]);
+}
+[numthreads(64,1,1)] void Predict(uint id:SV_DispatchThreadID)
+{
+    if(id>=_Endpoints||!active())return;State s=_State[id];s.center+=s.velocity*dt();s.angle+=s.spin*dt();_State[id]=s;
+}
+[numthreads(64,1,1)] void EvaluatePosition(uint id:SV_DispatchThreadID)
+{
+    if(id>=_D[5]||!active())return;Contact c=_Contacts[id];float2 n,ra,rb;float sep;geometry(c.a,c.b,c.feature,n,sep,ra,rb);
+    Parameters a=_Parameters[c.a],b=_Parameters[c.b];float k=max(1u,_Degrees[c.a])*effective(a,ra,n)+max(1u,_Degrees[c.b])*effective(b,rb,n);
+    float target=c.feature==0xffffffff?.002:.0001;float next=max(0,c.lp+(-sep-target)/max(k,1e-20));float dp=next-c.lp;c.lp=next;
+    float2 correction=dp*n;_Increments[id]=float4(correction,cross2(ra,correction),cross2(rb,correction));_Contacts[id]=c;
+}
+// Latch before validation: one failing thread must not suppress other threads' run maxima.
+[numthreads(1,1,1)] void PrepareValidation(uint id:SV_DispatchThreadID){_D[12]=active()?1:0;}
+[numthreads(64,1,1)] void Validate(uint id:SV_DispatchThreadID)
+{
+    if(_D[12]==0)return;
+    if(id<_Endpoints){State s=_State[id];if(!all(isfinite(float4(s.center,s.velocity)))||!all(isfinite(float2(s.angle,s.spin))))fault(32);
+        float radius=id<_N?.707107:0; if(length(s.center-_Starts[id])>.375){fault(16);InterlockedAdd(_D[10],1);}
+        if(any(abs(s.center)+radius>=256))fault(2);}
+    if(id<_D[5]){Contact c=_Contacts[id];float2 n,ra,rb;float sep;geometry(c.a,c.b,c.feature,n,sep,ra,rb);float pen=max(0,-sep);
+        if(c.feature==0xffffffff){InterlockedMax(_D[8],asuint(pen));if(pen>.01)fault(64);}else{InterlockedMax(_D[9],asuint(pen));if(pen>.001)fault(128);}}
+}
+[numthreads(64,1,1)] void Commit(uint id:SV_DispatchThreadID)
+{
+    if(id>=_Endpoints||_D[0]!=0)return;State s=_State[id];_CommitOutput[id]=s;
+    if(id<_N){Grain g=_Grains[id];g.center=s.center;g.velocity=s.velocity;g.angle=s.angle;g.spin=s.spin;if(length(s.velocity)+abs(s.spin)>.0001)g.flags&=~1u;_Grains[id]=g;}
+}
+[numthreads(1,1,1)] void Acknowledge(uint id:SV_DispatchThreadID){if(_D[0]==0)_D[1]++;else _D[11]++;}

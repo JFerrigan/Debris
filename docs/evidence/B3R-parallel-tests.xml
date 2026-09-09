@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="8" result="Passed" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-09-09 03:54:10Z" end-time="2026-09-09 03:54:10Z" duration="0.6142191">
+  <test-suite type="TestSuite" id="1000" name="Debris" fullname="Debris" runstate="Runnable" testcasecount="58" result="Passed" start-time="2026-09-09 03:54:10Z" end-time="2026-09-09 03:54:10Z" duration="0.614219" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="1088" name="Debris.Simulation.Tests.dll" fullname="/Users/jakeferrigan/Documents/Debris/Library/ScriptAssemblies/Debris.Simulation.Tests.dll" runstate="Runnable" testcasecount="24" result="Passed" start-time="2026-09-09 03:54:10Z" end-time="2026-09-09 03:54:10Z" duration="0.610261" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="13272" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="1089" name="Debris" fullname="Debris" runstate="Runnable" testcasecount="24" result="Passed" start-time="2026-09-09 03:54:10Z" end-time="2026-09-09 03:54:10Z" duration="0.609854" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1090" name="Simulation" fullname="Debris.Simulation" runstate="Runnable" testcasecount="24" result="Passed" start-time="2026-09-09 03:54:10Z" end-time="2026-09-09 03:54:10Z" duration="0.609577" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="1091" name="Tests" fullname="Debris.Simulation.Tests" runstate="Runnable" testcasecount="24" result="Passed" start-time="2026-09-09 03:54:10Z" end-time="2026-09-09 03:54:10Z" duration="0.609228" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1075" name="ParallelGrainTests" fullname="Debris.Simulation.Tests.ParallelGrainTests" classname="Debris.Simulation.Tests.ParallelGrainTests" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-09-09 03:54:10Z" end-time="2026-09-09 03:54:10Z" duration="0.608322" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1080" name="AnchoredWallStops120CellSpeedWithoutTunnelling" fullname="Debris.Simulation.Tests.ParallelGrainTests.AnchoredWallStops120CellSpeedWithoutTunnelling" methodname="AnchoredWallStops120CellSpeedWithoutTunnelling" classname="Debris.Simulation.Tests.ParallelGrainTests" runstate="Runnable" seed="2104881093" result="Passed" start-time="2026-09-09 03:54:10Z" end-time="2026-09-09 03:54:10Z" duration="0.514863" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="Timeout" value="120000" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1076" name="CandidateLayoutsMatchShader" fullname="Debris.Simulation.Tests.ParallelGrainTests.CandidateLayoutsMatchShader" methodname="CandidateLayoutsMatchShader" classname="Debris.Simulation.Tests.ParallelGrainTests" runstate="Runnable" seed="1343233665" result="Passed" start-time="2026-09-09 03:54:10Z" end-time="2026-09-09 03:54:10Z" duration="0.000903" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1079" name="ExcessiveSpeedRejectsWholeTickExactly" fullname="Debris.Simulation.Tests.ParallelGrainTests.ExcessiveSpeedRejectsWholeTickExactly" methodname="ExcessiveSpeedRejectsWholeTickExactly" classname="Debris.Simulation.Tests.ParallelGrainTests" runstate="Runnable" seed="4959623" result="Passed" start-time="2026-09-09 03:54:10Z" end-time="2026-09-09 03:54:10Z" duration="0.008489" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="Timeout" value="120000" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1082" name="FreeSquareRetainsIndependentWorldSpin" fullname="Debris.Simulation.Tests.ParallelGrainTests.FreeSquareRetainsIndependentWorldSpin" methodname="FreeSquareRetainsIndependentWorldSpin" classname="Debris.Simulation.Tests.ParallelGrainTests" runstate="Runnable" seed="608694439" result="Passed" start-time="2026-09-09 03:54:10Z" end-time="2026-09-09 03:54:10Z" duration="0.008729" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="Timeout" value="120000" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1078" name="HeavyBodyAnalyticalSpeed" fullname="Debris.Simulation.Tests.ParallelGrainTests.HeavyBodyAnalyticalSpeed" methodname="HeavyBodyAnalyticalSpeed" classname="Debris.Simulation.Tests.ParallelGrainTests" runstate="Runnable" seed="617942470" result="Passed" start-time="2026-09-09 03:54:10Z" end-time="2026-09-09 03:54:10Z" duration="0.013250" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="Timeout" value="120000" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1081" name="OffCentreFragmentContactConservesMomentumAndEnergy" fullname="Debris.Simulation.Tests.ParallelGrainTests.OffCentreFragmentContactConservesMomentumAndEnergy" methodname="OffCentreFragmentContactConservesMomentumAndEnergy" classname="Debris.Simulation.Tests.ParallelGrainTests" runstate="Runnable" seed="2141835361" result="Passed" start-time="2026-09-09 03:54:10Z" end-time="2026-09-09 03:54:10Z" duration="0.012713" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="Timeout" value="120000" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1083" name="PackedLoadFailurePreservesLastCommittedState" fullname="Debris.Simulation.Tests.ParallelGrainTests.PackedLoadFailurePreservesLastCommittedState" methodname="PackedLoadFailurePreservesLastCommittedState" classname="Debris.Simulation.Tests.ParallelGrainTests" runstate="Runnable" seed="878075312" result="Passed" start-time="2026-09-09 03:54:10Z" end-time="2026-09-09 03:54:10Z" duration="0.037438" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="Timeout" value="120000" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[B3R_PACKED_ROLLBACK tick=3 fault=SolidPenetration grain=0.00361186266 solid=0.00118285418
+B3R_PACKED_ROLLBACK observedRejection=True
+]]></output>
+              </test-case>
+              <test-case id="1077" name="TwoGrainsExchangeMomentumWithoutCorrectionEnergy" fullname="Debris.Simulation.Tests.ParallelGrainTests.TwoGrainsExchangeMomentumWithoutCorrectionEnergy" methodname="TwoGrainsExchangeMomentumWithoutCorrectionEnergy" classname="Debris.Simulation.Tests.ParallelGrainTests" runstate="Runnable" seed="788533744" result="Passed" start-time="2026-09-09 03:54:10Z" end-time="2026-09-09 03:54:10Z" duration="0.005905" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="Timeout" value="120000" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Saving results to: /Users/jakeferrigan/Library/Application Support/JFerrigan/Debris/TestResults.xml
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

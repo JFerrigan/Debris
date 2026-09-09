@@ -28,6 +28,7 @@ namespace Debris.Presentation
         public MatterSession Session=>session;
         void Start()
         {
+            if(Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisParallelProof")){gameObject.AddComponent<ParallelProofRunner>();enabled=false;return;}
             Application.targetFrameRate=60;cameraView=Camera.main;
             catalog=Resources.Load<MaterialCatalog>("Materials");input=Instantiate(Resources.Load<InputActionAsset>("Debris"));input.Enable();
             islandBenchmark=Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisIslandBenchmark");

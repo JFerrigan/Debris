@@ -4,7 +4,7 @@ Current priority: **B.3R mass-based contact physics**, before further B.5 scale 
 
 ## Next implementation batch
 
-Implement the parallel redesign in [CONTACT_PHYSICS](CONTACT_PHYSICS.md), phase order R0–R4. Start with the opt-in three-profile GPU proof, especially packed 50×50 cargo under rotation and acceleration. Stop integration if none of 4/2, 8/4, 12/6 passes correctness/performance. Baseline `f3aa5c9`; unfinished contact gathering is backed up in `evidence/B3R-redesign-baseline/unfinished-contacts.patch`. Earlier dense/rotating checks were scoped; packed acceptance and B.GATE are unresolved.
+R0 is committed; the opt-in parallel square-grain proof is implemented. Eight focused GPU/layout tests pass, including 10000:1, two grains, off-centre spin/conservation, independent spin, 120-cell/s anchor impact, speed rejection and packed rollback. Run one Mac build and `-debrisParallelProof -debrisProofOutput <path>` to sweep packed shared-motion and thrust/torque cases for 4/2, 8/4, 12/6. The 4/2 development case rejects tick 3 at .001183 solid penetration. If all profiles fail, stop integration as specified in [CONTACT_PHYSICS](CONTACT_PHYSICS.md). This is an early necessary convergence experiment, not a completed R1 benchmark. Rigid-only manifolds, full workload/performance suite and R2–R4 remain unimplemented. Normal gameplay stays on the preserved legacy path.
 
 ## Latest verified checkpoint
 
