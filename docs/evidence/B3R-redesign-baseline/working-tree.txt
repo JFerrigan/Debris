@@ -1,0 +1,17 @@
+ M Assets/Debris/Persistence/Runtime/WorldStore.cs
+ M Assets/Debris/Simulation/Resources/Matter.compute
+ M Assets/Debris/Simulation/Resources/ShipMatter.hlsl
+ M Assets/Debris/Simulation/Runtime/MatterSession.cs
+ M Packages/manifest.json
+ M Packages/packages-lock.json
+ M ProjectSettings/GraphicsSettings.asset
+ M ProjectSettings/QualitySettings.asset
+?? Assets/Debris/Persistence/Tests/Editor/WorldScaleTests.cs
+?? Assets/Debris/Persistence/Tests/Editor/WorldScaleTests.cs.meta
+?? Assets/Debris/Simulation/Resources/ContactIsland.hlsl
+?? Assets/Debris/Simulation/Resources/ContactIsland.hlsl.meta
+?? DebrisV1.app/
+?? ProjectSettings/PackageManagerSettings.asset
+?? ProjectSettings/Packages/
+?? ProjectSettings/URPProjectSettings.asset
+?? docs/evidence/B3R-redesign-baseline/

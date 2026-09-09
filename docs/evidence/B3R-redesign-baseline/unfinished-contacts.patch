@@ -1,0 +1,384 @@
+diff --git a/Assets/Debris/Simulation/Resources/Matter.compute b/Assets/Debris/Simulation/Resources/Matter.compute
+index 6b47a6a..b91c688 100644
+--- a/Assets/Debris/Simulation/Resources/Matter.compute
++++ b/Assets/Debris/Simulation/Resources/Matter.compute
+@@ -1,5 +1,7 @@
+ #pragma kernel ApplyShipForce
+ #pragma kernel SolveShipCells
++#pragma kernel GatherCellContacts
++#pragma kernel PrepareCellForces
+ #pragma kernel GatherShipAnchors
+ #pragma kernel GatherFragmentContacts
+ #pragma kernel SolveFragmentContacts
+diff --git a/Assets/Debris/Simulation/Resources/ShipMatter.hlsl b/Assets/Debris/Simulation/Resources/ShipMatter.hlsl
+index abebaef..b213e9b 100644
+--- a/Assets/Debris/Simulation/Resources/ShipMatter.hlsl
++++ b/Assets/Debris/Simulation/Resources/ShipMatter.hlsl
+@@ -51,56 +51,6 @@ float HullSeparation(float2 center,float2 hullCenter,float angle,out float2 norm
+     }
+     return best;
+ }
+-bool CargoFree(float2 target,uint self);
+-void ShipCellImpulses()
+-{
+-    // Exclusive body writer and stable cell ordering: no stale parallel impulse sums.
+-    float4 pose=_ShipPose[0],v=_ShipPose[1];float2 com=World(_ShipMass.zw,pose);
+-    [loop] for(uint i=0;i<_ContactCounts[0];i++)
+-    {
+-        Cell cell=_Cells[i];bool cargo=(cell.flags&4)!=0;
+-        float2 center=cargo?World(cell.position+.5,pose):cell.position+.5;int2 at=(int2)floor(Local(center,pose));
+-        float earliest=1e20,separation=0;float2 chosen=0,lever=0;
+-        [loop] for(int y=-2;y<=2;y++)[loop] for(int x=-2;x<=2;x++)
+-        {
+-            int2 p=at+int2(x,y);if(!HullAt(p))continue;
+-            float2 hc=World(float2(p)+.5,pose),normal;
+-            float gap;
+-            if(cargo){gap=HullSeparation(Rotate(center-hc,-pose.z),0,0,normal);normal=Rotate(normal,pose.z);}
+-            else gap=HullSeparation(center,hc,pose.z,normal);
+-            float2 r=center-normal*.5-com;
+-            float closing=-dot(cell.velocity-SurfaceVelocity(v,r),normal);
+-            if(closing<=.000001||gap>closing*_Delta+.00002)continue;
+-            // Test the other axes at the relative swept endpoint too, excluding diagonal misses.
+-            float2 ignored;
+-            float2 swept=center+(cell.velocity-SurfaceVelocity(v,r))*_Delta;
+-            if(cargo?HullSeparation(Rotate(swept-hc,-pose.z),0,0,ignored)>.00002:HullSeparation(swept,hc,pose.z,ignored)>.00002)continue;
+-            float toi=max(0,gap)/closing;
+-            if(toi<earliest){earliest=toi;chosen=normal;lever=r;separation=gap;}
+-        }
+-        if(earliest==1e20)continue;
+-        float closing=-dot(cell.velocity-SurfaceVelocity(v,lever),chosen);
+-        float cellInv=1/_Properties[cell.material].y,arm=Cross2(lever,chosen);
+-        float j=max(0,closing)/(_ShipMass.x+cellInv+arm*arm*_ShipMass.y);
+-        v.xy-=chosen*(j*_ShipMass.x);v.z-=arm*j*_ShipMass.y;
+-        cell.velocity+=chosen*(j*cellInv);cell.flags=cargo?4:0;
+-        // A geometric skin above cell-space float ULP prevents exact touching from alternating
+-        // between overlap and separation away from origin. This changes no velocity/energy.
+-        if(separation<.0001 && separation>-.001)
+-        {
+-            float2 corrected=cell.position+(cargo?Rotate(chosen,-pose.z):chosen)*(.0001-separation);
+-            if(cargo?CargoFree(corrected,i):Free(corrected,i))
+-            {
+-                if(cargo)_CargoOccupancy[CargoIndex((int2)floor(cell.position))]=0;else _Occupancy[Index((int2)floor(cell.position))]=0;
+-                cell.position=corrected;
+-                if(cargo)_CargoOccupancy[CargoIndex((int2)floor(cell.position))]=(int)i+1;else _Occupancy[Index((int2)floor(cell.position))]=(int)i+1;
+-                _ContactStats[3]++;
+-            }
+-        }
+-        _Cells[i]=cell;_ContactStats[0]++;
+-    }
+-    _ShipPose[1]=v;
+-}
+ // Unit square AABBs vs ship-oriented unit squares. Strict SAT on both sets of axes.
+ bool SquaresOverlap(float2 worldCenter,float2 localCenter,float4 pose)
+ {
+@@ -149,41 +99,6 @@ float CellSeparation(float2 a,float aa,float2 b,float ab,out float2 normal)
+     float2 local=Rotate(b-a,-ab);float gap=HullSeparation(local,0,aa-ab,normal);normal=Rotate(normal,ab);return gap;
+ }
+ float2 CellCenter(Cell c){return (c.flags&4)!=0?World(c.position+.5,_ShipPose[0]):c.position+.5;}
+-void LooseContactImpulses()
+-{
+-    float4 pose=_ShipPose[0];
+-    [loop] for(uint i=0;i<_ContactCounts[0];i++)
+-    {
+-        Cell a=_Cells[i];bool cargo=(a.flags&4)!=0;float aa=cargo?pose.z:0;float2 ca=CellCenter(a);
+-        [loop] for(int domain=0;domain<2;domain++)
+-        {
+-            int2 at=(int2)floor(domain==1?Local(ca,pose):ca);
+-            [loop] for(int y=-2;y<=2;y++)[loop] for(int x=-2;x<=2;x++)
+-            {
+-                int2 q=at+int2(x,y);if(domain==1?!LocalInside(q):!Inside(q))continue;
+-                int slot=domain==1?_CargoOccupancy[CargoIndex(q)]:_Occupancy[Index(q)];
+-                if(slot>(int)i+1)
+-                {
+-                    Cell b=_Cells[slot-1];float ab=(b.flags&4)!=0?pose.z:0;float2 cb=CellCenter(b),n,ignored;
+-                    float gap=CellSeparation(ca,aa,cb,ab,n),closing=dot(a.velocity-b.velocity,n);
+-                    if(closing>0&&gap<=closing*_Delta+.00002&&CellSeparation(ca+(a.velocity-b.velocity)*_Delta,aa,cb,ab,ignored)<=.00002)
+-                    {
+-                        float ia=1/_Properties[a.material].y,ib=1/_Properties[b.material].y,j=closing/(ia+ib);
+-                        a.velocity-=n*(j*ia);b.velocity+=n*(j*ib);a.flags=cargo?4:0;b.flags=(b.flags&4)!=0?4:0;
+-                        _Cells[slot-1]=b;_ContactStats[0]++;
+-                    }
+-                }
+-                if(domain==0&&_Field[Address(q)]!=0)
+-                {
+-                    float2 n,ignored;float gap=CellSeparation(float2(q)+.5,0,ca,aa,n),closing=-dot(a.velocity,n);
+-                    if(closing>0&&gap<=closing*_Delta+.00002&&CellSeparation(float2(q)+.5,0,ca+a.velocity*_Delta,aa,ignored)<=.00002)
+-                    {a.velocity+=n*closing;a.flags=cargo?4:0;_ContactStats[0]++;}
+-                }
+-            }
+-        }
+-        _Cells[i]=a;
+-    }
+-}
+ [numthreads(64,1,1)]
+ void GatherShipAnchors(uint3 id:SV_DispatchThreadID)
+ {
+@@ -220,41 +135,6 @@ void BodyImpulse(inout float4 a,inout float4 b,float4 ma,float4 mb,float2 ra,flo
+     if(closing<=0||k<=0)return;float j=closing/k;
+     a.xy-=n*(j*ma.x);a.z-=armA*j*ma.y;b.xy+=n*(j*mb.x);b.z+=armB*j*mb.y;_ContactStats[0]++;
+ }
+-void FragmentContactImpulses()
+-{
+-    [loop] for(int f=0;f<_FragmentCount;f++)
+-    {
+-        float4 pose=_FragmentNextPose[f*2],v=_FragmentNextPose[f*2+1],mass=_FragmentMass[f];float2 com=World(mass.zw,pose);
+-        [loop] for(uint i=0;i<_ContactCounts[0];i++)
+-        {
+-            Cell cell=_Cells[i];bool cargo=(cell.flags&4)!=0;float angle=cargo?_ShipPose[0].z:0;float2 center=CellCenter(cell);
+-            int2 at=(int2)floor(Local(center,pose));float earliest=1e20,gapChosen=0;float2 chosen=0,lever=0;
+-            [loop] for(int y=-2;y<=2;y++)[loop] for(int x=-2;x<=2;x++)
+-            {
+-                int2 p=at+int2(x,y);if(!LocalInside(p)||_FragmentHull[f*16384+CargoIndex(p)]==0)continue;
+-                float2 hc=World(float2(p)+.5,pose),n,ignored;float gap=CellSeparation(hc,pose.z,center,angle,n);
+-                float2 r=center-n*.5-com,relative=cell.velocity-SurfaceVelocity(v,r);float closing=-dot(relative,n);
+-                if(closing<=0||gap>closing*_Delta+.0001||CellSeparation(hc,pose.z,center+relative*_Delta,angle,ignored)>.0001)continue;
+-                float toi=max(0,gap)/closing;if(toi<earliest){earliest=toi;chosen=n;lever=r;gapChosen=gap;}
+-            }
+-            if(earliest==1e20)continue;
+-            float4 cv=float4(cell.velocity,0,0);BodyImpulse(v,cv,mass,float4(1/_Properties[cell.material].y,0,0,0),lever,0,chosen);
+-            cell.velocity=cv.xy;cell.flags=cargo?4:0;
+-            if(gapChosen<.0001&&gapChosen>-.001)
+-            {
+-                float2 corrected=cell.position+(cargo?Rotate(chosen,-_ShipPose[0].z):chosen)*(.0001-gapChosen);
+-                if(cargo?CargoFree(corrected,i):Free(corrected,i))
+-                {
+-                    if(cargo)_CargoOccupancy[CargoIndex((int2)floor(cell.position))]=0;else _Occupancy[Index((int2)floor(cell.position))]=0;
+-                    cell.position=corrected;
+-                    if(cargo)_CargoOccupancy[CargoIndex((int2)floor(cell.position))]=(int)i+1;else _Occupancy[Index((int2)floor(cell.position))]=(int)i+1;
+-                }
+-            }
+-            _Cells[i]=cell;
+-        }
+-        _FragmentNextPose[f*2+1]=v;
+-    }
+-}
+ StructuredBuffer<float4> _FragmentContacts;
+ RWStructuredBuffer<float4> _FragmentContactOutput;
+ void ConsiderFragmentContact(float2 center,float angle,float2 com,float4 velocity,float2 otherCenter,float otherAngle,float2 otherCom,float4 otherVelocity,int other,inout float earliest,inout float4 contact,inout float4 metadata)
+@@ -306,21 +186,7 @@ void SolveFragmentContacts(uint3 id:SV_DispatchThreadID)
+     }
+     _FragmentNextPose[f*2+1]=velocity;
+ }
+-[numthreads(1,1,1)]
+-void SolveShipCells(uint3 id:SV_DispatchThreadID)
+-{
+-    _ContactStats[2]++;
+-    [loop] for(uint i=0;i<_ContactCounts[0];i++)
+-    {
+-        Cell cell=_Cells[i];float2 position=CellCenter(cell)-.5;
+-        float2 target=_MountedSuction!=0?World(float2(-12,0),_ShipPose[0]):_ForcePosition;
+-        if(_Force>0&&distance(position,target)<80){cell.velocity+=normalize(target-position+float2(.0001,0))*_Force*_Delta;cell.flags=(cell.flags&4)!=0?4:0;_Cells[i]=cell;}
+-    }
+-    // Revisit the same island with freshly updated velocities; equal/opposite impulses converge
+-    // through a pile instead of independent cells all seeing the stale ship velocity.
+-    uint iterations=_ContactCounts[0]>1?16:1;
+-    [loop] for(uint iteration=0;iteration<iterations;iteration++){ShipAnchorImpulses();FragmentContactImpulses();ShipCellImpulses();LooseContactImpulses();}
+-}
++#include "ContactIsland.hlsl"
+ [numthreads(1,1,1)]
+ void PrepareShip(uint3 id:SV_DispatchThreadID)
+ {
+@@ -344,6 +210,7 @@ void PrepareShip(uint3 id:SV_DispatchThreadID)
+         if(obstructed){doorState.z=1;_ShipPose[2]=doorState;}
+     }
+     _ShipSweep[0]=0;_ShipSweep[1]=0xffffffff;
++    if(_PhysicalShip!=0){_ContactStats[2]++;_ContactStats[5]=0;_ContactStats[6]=0;}
+ }
+ [numthreads(64,1,1)]
+ void CheckShipHull(uint3 id:SV_DispatchThreadID)
+diff --git a/Assets/Debris/Simulation/Runtime/MatterSession.cs b/Assets/Debris/Simulation/Runtime/MatterSession.cs
+index 2dea7f0..eaeb9a2 100644
+--- a/Assets/Debris/Simulation/Runtime/MatterSession.cs
++++ b/Assets/Debris/Simulation/Runtime/MatterSession.cs
+@@ -43,9 +43,9 @@ namespace Debris.Simulation
+         public readonly GraphicsBuffer Cells, Counters, Dirty, Properties, Palette, Shadows, Emissions;
+         readonly GraphicsBuffer occupancy, upload, inspection, cargoOccupancy;
+         public readonly GraphicsBuffer Hull, ShipPose,FragmentHull,FragmentPose;
+-        readonly GraphicsBuffer fragmentNextPose,impact,shipSweep,contactStats,hullAnchors,fragmentMass,fragmentContacts;
++        readonly GraphicsBuffer fragmentNextPose,impact,shipSweep,contactStats,hullAnchors,fragmentMass,fragmentContacts,cellContacts,cellContactCounts;
+         readonly MaterialCatalog materialCatalog;
+-        readonly int forceKernel,contactKernel,physicalIntegrateKernel,gatherAnchorsKernel,gatherFragmentContactsKernel,solveFragmentContactsKernel;
++        readonly int forceKernel,contactKernel,physicalIntegrateKernel,gatherAnchorsKernel,gatherFragmentContactsKernel,solveFragmentContactsKernel,gatherCellsKernel,cellForcesKernel;
+         bool physicalShip;
+         public uint[] ImpactStats {get;private set;}=new uint[4];
+         bool impactPending;
+@@ -61,7 +61,7 @@ namespace Debris.Simulation
+         public uint[] Stats {get;private set;}=new uint[4];
+         public int Dispatches {get;private set;}
+         public int ReadbackQueue {get;private set;}
+-        public long BufferBytes => (long)Width*Width*12+(long)Capacity*CellStride+Side*Side*4+ChunkSize*ChunkSize*4+(Properties.count*64)+20+128*128*8+48+16*16384*4+32*16*2+24+16384*16+16*16+32768*16+16;
++        public long BufferBytes => (long)Width*Width*12+(long)Capacity*CellStride+Side*Side*4+ChunkSize*ChunkSize*4+(Properties.count*64)+20+128*128*8+48+16*16384*4+32*16*2+24+16384*16+16*16+32768*16+32+(long)Capacity*(32*32+4);
+         public MatterSession(MaterialCatalog catalog,AsteroidProfile profile,int side=2,int chunkSize=128,int capacity=8192,ulong seed=42,StableId? site=null)
+         {
+             if(side<2||side>16||side%2!=0||chunkSize<8||chunkSize>256||capacity<1)throw new ArgumentOutOfRangeException();
+@@ -72,10 +72,12 @@ namespace Debris.Simulation
+             Field=Texture(GraphicsFormat.R32_UInt);Damage=Texture(GraphicsFormat.R32_SFloat);
+             Cells=Buffer(capacity,CellStride);Counters=Buffer(4,4);Dirty=Buffer(side*side,4);
+             Hull=Buffer(128*128,4);cargoOccupancy=Buffer(128*128,4);ShipPose=Buffer(3,16);
++            cellContacts=Buffer(capacity*32*2,16);cellContactCounts=Buffer(capacity,4);
+             fragmentContacts=Buffer(32768,16);
+             fragmentMass=Buffer(16,16);fragmentMass.SetData(new Vector4[16]);
+             hullAnchors=Buffer(16384,16);
+-            contactStats=Buffer(4,4);contactStats.SetData(new uint[4]);
++            contactStats=Buffer(8,4);contactStats.SetData(new uint[8]);
++            shader.SetInt("_ContactBudget",32);
+             shipSweep=Buffer(2,4);impact=Buffer(4,4);impact.SetData(new uint[4]);
+             FragmentHull=Buffer(16*16384,4);
+             FragmentPose=new GraphicsBuffer(GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.CopyDestination,32,16);
+@@ -89,13 +91,13 @@ namespace Debris.Simulation
+             Properties.SetData(properties);Palette.SetData(palette);Shadows.SetData(shadows);Emissions.SetData(emissions);
+             Cells.SetData(new LooseCell[capacity]);Counters.SetData(new uint[4]);Dirty.SetData(new uint[side*side]);occupancy.SetData(new int[Width*Width]);
+             uploadKernel=shader.FindKernel("Upload");cutKernel=shader.FindKernel("Cut");integrateKernel=shader.FindKernel("Integrate");inspectKernel=shader.FindKernel("Inspect");restoreKernel=shader.FindKernel("RestoreOccupancy");
+-            gatherFragmentContactsKernel=shader.FindKernel("GatherFragmentContacts");solveFragmentContactsKernel=shader.FindKernel("SolveFragmentContacts");gatherAnchorsKernel=shader.FindKernel("GatherShipAnchors");physicalIntegrateKernel=shader.FindKernel("IntegratePhysical");forceKernel=shader.FindKernel("ApplyShipForce");contactKernel=shader.FindKernel("SolveShipCells");
++            gatherCellsKernel=shader.FindKernel("GatherCellContacts");cellForcesKernel=shader.FindKernel("PrepareCellForces");gatherFragmentContactsKernel=shader.FindKernel("GatherFragmentContacts");solveFragmentContactsKernel=shader.FindKernel("SolveFragmentContacts");gatherAnchorsKernel=shader.FindKernel("GatherShipAnchors");physicalIntegrateKernel=shader.FindKernel("IntegratePhysical");forceKernel=shader.FindKernel("ApplyShipForce");contactKernel=shader.FindKernel("SolveShipCells");
+             prepareShipKernel=shader.FindKernel("PrepareShip");checkShipHullKernel=shader.FindKernel("CheckShipHull");checkShipCargoKernel=shader.FindKernel("CheckShipCargo");
+             damageKernel=shader.FindKernel("UploadDamage");moveShipKernel=shader.FindKernel("MoveShip");transferKernel=shader.FindKernel("TransferCargo");fragmentKernel=shader.FindKernel("MoveFragment");
+             shader.SetInt("_ChunkSize",chunkSize);shader.SetInt("_Side",side);shader.SetInt("_Width",Width);shader.SetInt("_Capacity",capacity);shader.SetInts("_Origin",Origin.x,Origin.y);
+-            foreach(int kernel in new[]{uploadKernel,cutKernel,integrateKernel,inspectKernel,restoreKernel,damageKernel,moveShipKernel,transferKernel,fragmentKernel,prepareShipKernel,checkShipHullKernel,checkShipCargoKernel,forceKernel,contactKernel,physicalIntegrateKernel,gatherAnchorsKernel,gatherFragmentContactsKernel,solveFragmentContactsKernel})
++            foreach(int kernel in new[]{uploadKernel,cutKernel,integrateKernel,inspectKernel,restoreKernel,damageKernel,moveShipKernel,transferKernel,fragmentKernel,prepareShipKernel,checkShipHullKernel,checkShipCargoKernel,forceKernel,contactKernel,physicalIntegrateKernel,gatherAnchorsKernel,gatherFragmentContactsKernel,solveFragmentContactsKernel,gatherCellsKernel,cellForcesKernel})
+             {
+-                shader.SetBuffer(kernel,"_FragmentContacts",fragmentContacts);shader.SetBuffer(kernel,"_FragmentContactOutput",fragmentContacts);shader.SetBuffer(kernel,"_FragmentMass",fragmentMass);shader.SetBuffer(kernel,"_ContactCounts",Counters);shader.SetBuffer(kernel,"_HullAnchorOutput",hullAnchors);shader.SetBuffer(kernel,"_HullAnchors",hullAnchors);shader.SetBuffer(kernel,"_ContactStats",contactStats);shader.SetBuffer(kernel,"_ShipSweep",shipSweep);shader.SetBuffer(kernel,"_ShipImpact",impact);shader.SetBuffer(kernel,"_FragmentHull",FragmentHull);shader.SetBuffer(kernel,"_FragmentPose",FragmentPose);shader.SetBuffer(kernel,"_FragmentNextPose",fragmentNextPose);
++                shader.SetBuffer(kernel,"_ContactOutput",cellContacts);shader.SetBuffer(kernel,"_Contacts",cellContacts);shader.SetBuffer(kernel,"_ContactCountOutput",cellContactCounts);shader.SetBuffer(kernel,"_ContactCount",cellContactCounts);shader.SetBuffer(kernel,"_FragmentContacts",fragmentContacts);shader.SetBuffer(kernel,"_FragmentContactOutput",fragmentContacts);shader.SetBuffer(kernel,"_FragmentMass",fragmentMass);shader.SetBuffer(kernel,"_ContactCounts",Counters);shader.SetBuffer(kernel,"_HullAnchorOutput",hullAnchors);shader.SetBuffer(kernel,"_HullAnchors",hullAnchors);shader.SetBuffer(kernel,"_ContactStats",contactStats);shader.SetBuffer(kernel,"_ShipSweep",shipSweep);shader.SetBuffer(kernel,"_ShipImpact",impact);shader.SetBuffer(kernel,"_FragmentHull",FragmentHull);shader.SetBuffer(kernel,"_FragmentPose",FragmentPose);shader.SetBuffer(kernel,"_FragmentNextPose",fragmentNextPose);
+                 shader.SetBuffer(kernel,"_Hull",Hull);shader.SetBuffer(kernel,"_CargoOccupancy",cargoOccupancy);shader.SetBuffer(kernel,"_ShipPose",ShipPose);
+                 shader.SetTexture(kernel,"_Field",Field);shader.SetTexture(kernel,"_Damage",Damage);
+                 shader.SetBuffer(kernel,"_Cells",Cells);shader.SetBuffer(kernel,"_Counters",Counters);shader.SetBuffer(kernel,"_Dirty",Dirty);
+@@ -197,6 +199,8 @@ namespace Debris.Simulation
+                 shader.SetInt("_Tick",++tick);
+                 if(ShipEnabled&&physicalShip){shader.Dispatch(prepareShipKernel,1,1,1);shader.Dispatch(gatherAnchorsKernel,256,1,1);
+                     for(int f=0;f<fragments.Length;f++){shader.SetInt("_MovingFragment",f);shader.Dispatch(gatherFragmentContactsKernel,256,1,1);shader.Dispatch(solveFragmentContactsKernel,1,1,1);Graphics.CopyBuffer(fragmentNextPose,FragmentPose);Dispatches+=2;}
++                    if(force>0){shader.Dispatch(cellForcesKernel,(Capacity+63)/64,1,1);Dispatches++;}
++                    shader.Dispatch(gatherCellsKernel,(Capacity+63)/64,1,1);Dispatches++;
+                     shader.Dispatch(contactKernel,1,1,1);if(fragments.Length>0)Graphics.CopyBuffer(fragmentNextPose,FragmentPose);Dispatches+=3;}
+                 if(ShipEnabled&&physicalShip){shader.Dispatch(physicalIntegrateKernel,1,1,1);Dispatches++;}
+                 else for(int domain=0;domain<(ShipEnabled?2:1);domain++)
+@@ -299,7 +303,7 @@ namespace Debris.Simulation
+         public void Dispose()
+         {
+             if(disposed)return;disposed=true;AsyncGPUReadback.WaitAllRequests();
+-            foreach(var b in new[]{Cells,Counters,Dirty,Properties,Palette,Shadows,Emissions,occupancy,upload,inspection,Hull,ShipPose,cargoOccupancy,FragmentHull,FragmentPose,fragmentNextPose,impact,shipSweep,contactStats,hullAnchors,fragmentMass,fragmentContacts})b.Dispose();
++            foreach(var b in new[]{Cells,Counters,Dirty,Properties,Palette,Shadows,Emissions,occupancy,upload,inspection,Hull,ShipPose,cargoOccupancy,FragmentHull,FragmentPose,fragmentNextPose,impact,shipSweep,contactStats,hullAnchors,fragmentMass,fragmentContacts,cellContacts,cellContactCounts})b.Dispose();
+             Field.Release();Damage.Release();UnityEngine.Object.DestroyImmediate(Field);UnityEngine.Object.DestroyImmediate(Damage);UnityEngine.Object.DestroyImmediate(shader);
+         }
+     }
+diff --git a/Assets/Debris/Simulation/Resources/ContactIsland.hlsl b/Assets/Debris/Simulation/Resources/ContactIsland.hlsl
+new file mode 100644
+index 0000000..522e363
+--- /dev/null
++++ b/Assets/Debris/Simulation/Resources/ContactIsland.hlsl
+@@ -0,0 +1,108 @@
++// Contacts are gathered in parallel once per substep, then solved in stable cell/slot order.
++// Two float4 rows: normal.xy, other body code, gap; other body's COM lever.xy.
++RWStructuredBuffer<float4> _ContactOutput;
++StructuredBuffer<float4> _Contacts;
++RWStructuredBuffer<uint> _ContactCountOutput;
++StructuredBuffer<uint> _ContactCount;
++int _ContactBudget;
++#define CONTACT_SLOTS 32
++void StoreContact(uint cell,inout uint count,float2 n,int other,float gap,float2 lever)
++{
++    if(count>=(uint)_ContactBudget){InterlockedAdd(_ContactStats[4],1);InterlockedOr(_ContactStats[5],1);return;}
++    uint address=(cell*CONTACT_SLOTS+count)*2;
++    _ContactOutput[address]=float4(n,other,gap);_ContactOutput[address+1]=float4(lever,0,0);count++;
++}
++bool PotentialContact(float2 a,float aa,float2 b,float ab,float2 relative,out float2 normal,out float gap)
++{
++    gap=CellSeparation(a,aa,b,ab,normal);
++    if(gap<=.0001)return true;
++    float closing=-dot(relative,normal);float2 ignored;
++    return closing>0&&gap<=closing*_Delta+.0001&&CellSeparation(a,aa,b+relative*_Delta,ab,ignored)<=.0001;
++}
++[numthreads(64,1,1)]
++void PrepareCellForces(uint3 id:SV_DispatchThreadID)
++{
++    uint i=id.x;if(i>=_ContactCounts[0])return;Cell c=_Cells[i];float2 position=CellCenter(c)-.5;
++    float2 target=_MountedSuction!=0?World(float2(-12,0),_ShipPose[0]):_ForcePosition;
++    if(_Force>0&&distance(position,target)<80){c.velocity+=normalize(target-position+float2(.0001,0))*_Force*_Delta;c.flags=(c.flags&4)!=0?4:0;_Cells[i]=c;}
++}
++[numthreads(64,1,1)]
++void GatherCellContacts(uint3 id:SV_DispatchThreadID)
++{
++    uint i=id.x;if(i>=_ContactCounts[0])return;uint count=0;Cell cell=_Cells[i];bool cargo=(cell.flags&4)!=0;
++    float4 ship=_ShipPose[0];float angle=cargo?ship.z:0;float2 center=CellCenter(cell);
++    [loop] for(int domain=0;domain<2;domain++)
++    {
++        int2 at=(int2)floor(domain==1?Local(center,ship):center);
++        [loop] for(int y=-2;y<=2;y++)[loop] for(int x=-2;x<=2;x++)
++        {
++            int2 q=at+int2(x,y);if(domain==1?!LocalInside(q):!Inside(q))continue;
++            int slot=domain==1?_CargoOccupancy[CargoIndex(q)]:_Occupancy[Index(q)];
++            if(slot>(int)i+1)
++            {
++                Cell other=_Cells[slot-1];float2 n;float gap;
++                if(PotentialContact(CellCenter(other),(other.flags&4)!=0?ship.z:0,center,angle,cell.velocity-other.velocity,n,gap))StoreContact(i,count,n,slot-1,gap,0);
++            }
++            if(domain==0&&_Field[Address(q)]!=0)
++            {
++                float2 n;float gap;if(PotentialContact(float2(q)+.5,0,center,angle,cell.velocity,n,gap))StoreContact(i,count,n,-2,gap,0);
++            }
++        }
++    }
++    [loop] for(int body=-1;body<_FragmentCount;body++)
++    {
++        float4 pose=body<0?ship:_FragmentPose[body*2],mass=body<0?_ShipMass:_FragmentMass[body];
++        float4 motion=body<0?_ShipPose[1]:_FragmentPose[body*2+1];float2 com=World(mass.zw,pose);
++        int2 at=(int2)floor(Local(center,pose));float earliest=1e20,bestGap=0;float2 chosen=0,lever=0;
++        [loop] for(int y=-2;y<=2;y++)[loop] for(int x=-2;x<=2;x++)
++        {
++            int2 p=at+int2(x,y);if(!LocalInside(p)||(body<0?!HullAt(p):_FragmentHull[body*16384+CargoIndex(p)]==0))continue;
++            float2 hc=World(float2(p)+.5,pose),n;float gap=CellSeparation(hc,pose.z,center,angle,n);
++            float2 r=center-n*.5-com,relative=cell.velocity-SurfaceVelocity(motion,r);float closing=-dot(relative,n);
++            if(!PotentialContact(hc,pose.z,center,angle,relative,n,gap))continue;
++            float toi=max(0,gap)/max(closing,.000001);if(toi<earliest){earliest=toi;chosen=n;lever=r;bestGap=gap;}
++        }
++        if(earliest<1e20)StoreContact(i,count,chosen,body<0?-1:-3-body,bestGap,lever);
++    }
++    _ContactCountOutput[i]=count;InterlockedAdd(_ContactStats[6],count);
++}
++[numthreads(1,1,1)]
++void SolveShipCells(uint3 id:SV_DispatchThreadID)
++{
++    if(_ContactStats[5]!=0)return;
++    uint iterations=_ContactCounts[0]>1?16:1;
++    [loop] for(uint iteration=0;iteration<iterations;iteration++)
++    {
++        ShipAnchorImpulses();
++        [loop] for(uint i=0;i<_ContactCounts[0];i++)
++        {
++            Cell cell=_Cells[i];float inverse=1/_Properties[cell.material].y;
++            [loop] for(uint contactIndex=0;contactIndex<_ContactCount[i];contactIndex++)
++            {
++                uint address=(i*CONTACT_SLOTS+contactIndex)*2;float4 contact=_Contacts[address];float2 n=contact.xy,r=_Contacts[address+1].xy;
++                int other=(int)contact.z;float4 v=0,mass=0;
++                if(other>=0){v=float4(_Cells[other].velocity,0,0);mass.x=1/_Properties[_Cells[other].material].y;}
++                else if(other==-1){v=_ShipPose[1];mass=_ShipMass;}
++                else if(other<-2){v=_FragmentNextPose[(-3-other)*2+1];mass=_FragmentMass[-3-other];}
++                float closing=-dot(cell.velocity-SurfaceVelocity(v,r),n);if(closing<=0)continue;
++                float arm=Cross2(r,n),j=closing/(inverse+mass.x+arm*arm*mass.y);
++                cell.velocity+=n*(j*inverse);cell.flags=(cell.flags&4)!=0?4:0;v.xy-=n*(j*mass.x);v.z-=arm*j*mass.y;
++                if(other>=0){Cell target=_Cells[other];target.velocity=v.xy;target.flags=(target.flags&4)!=0?4:0;_Cells[other]=target;}
++                else if(other==-1)_ShipPose[1]=v;else if(other<-2)_FragmentNextPose[(-3-other)*2+1]=v;
++                _ContactStats[0]++;
++                if(iteration==0&&other<0&&other!=-2&&contact.w<.0001&&contact.w>-.001)
++                {
++                    bool cargo=(cell.flags&4)!=0;float2 correction=(cargo?Rotate(n,-_ShipPose[0].z):n)*(.0001-contact.w),target=cell.position+correction;
++                    if(cargo?CargoFree(target,i):Free(target,i))
++                    {
++                        if(cargo)_CargoOccupancy[CargoIndex((int2)floor(cell.position))]=0;else _Occupancy[Index((int2)floor(cell.position))]=0;
++                        cell.position=target;
++                        if(cargo)_CargoOccupancy[CargoIndex((int2)floor(cell.position))]=(int)i+1;else _Occupancy[Index((int2)floor(cell.position))]=(int)i+1;
++                        _ContactStats[3]++;
++                    }
++                }
++            }
++            _Cells[i]=cell;
++        }
++    }
++}
+diff --git a/Assets/Debris/Simulation/Resources/ContactIsland.hlsl.meta b/Assets/Debris/Simulation/Resources/ContactIsland.hlsl.meta
+new file mode 100644
+index 0000000..278a8dd
+--- /dev/null
++++ b/Assets/Debris/Simulation/Resources/ContactIsland.hlsl.meta
+@@ -0,0 +1,2 @@
++fileFormatVersion: 2
++guid: 0600a1de4f234782bed02a8405891ed6

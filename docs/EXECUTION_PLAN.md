@@ -38,7 +38,13 @@ Authorized scope: implement phases A–E in order through playable alien-drone e
 - [x] B.3R.1 Body mass/inertia/mobility, force commands and analytical contact oracle.
 - [x] B.3R.2 GPU ship–cell momentum exchange; eliminate ordinary pixel hard stops and CPU velocity resets.
 - [x] B.3R.3 Dense piles, cargo mass counted once, fragment torque, anchored bodies and dynamic chips.
-- [ ] B.3R.4 Physics save migration/resume, bounded contacts and measured player acceptance. See [CONTACT_PHYSICS](CONTACT_PHYSICS.md).
+- [x] B.3R.R0 Preserve unfinished contacts and freeze parallel redesign contract.
+- [ ] B.3R.R1 Parallel square-grain proof, three-profile packed experiment; stop integration if no profile passes.
+- [ ] B.3R.R2 Candidate mining/cargo/door/fuel/damage and exceptional limits.
+- [ ] B.3R.R3 Schema-5/schema-3 migration, travel, restoration and default cutover.
+- [ ] B.3R.R4 Delete old architecture and verify final B.GATE. See [CONTACT_PHYSICS](CONTACT_PHYSICS.md).
+
+Earlier B.3R.1–3 checks are historical scoped evidence; dense packed acceptance is reopened under the replacement contract.
 - [x] B.4 / M6 Dirty chunks, loose/fragment records, atomic saves, migrations, interrupted-write recovery.
 - [ ] B.5 / M6 Large ships, prolonged cutting, streaming, 100,000-site index stress.
 - [ ] B.GATE Mine → collect → spill → save → reload → revisit preserves authoritative state. Controllable force-driven ship; isolated cells barely affect it, piles transfer mass-dependent impulses, anchored bodies remain fixed, and transfers never duplicate matter.

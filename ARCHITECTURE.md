@@ -56,7 +56,7 @@ Update order:
 6. CPU applies compact transfer/events, UI snapshots, and persistence dirty marks;
 7. rendering/effects consume GPU outputs; diagnostics records timings.
 
-CPU does not poll every pixel. Hover inspection is a one-cell asynchronous readback, cached and rate-limited. Collision starts as SDF/coarse occupancy queries generated per active chunk; precise expensive queries stay local to tools and ship contact points.
+CPU does not poll every pixel. Hover inspection is a one-cell asynchronous readback, cached and rate-limited. B.3R contacts use cached exposed boundary cells, square SAT and swept two-cell spatial bins; see the locked contact contract.
 
 ## Ships and cargo
 
@@ -70,7 +70,7 @@ World-level save stores player ship/body/misc-inventory state, Frontier Count, s
 
 ## Threading and GPU ownership
 
-Unity main thread owns Unity object lifecycle and public orchestration. Jobs/Burst may prepare generation, save compression, spatial indexes, and command packing; they never touch Unity GPU resources directly. Compute shaders own active chunk fields and loose-particle buffers during a frame. `AsyncGPUReadback` is used for chunk persistence on eviction/save, limited inspection samples, and diagnostics only. GPU resource lifetime is owned by `SiteSession` and released on session disposal.
+Unity main thread owns Unity object lifecycle and public orchestration. Jobs/Burst may prepare generation, save compression, spatial indexes, and command packing; they never touch Unity GPU resources directly. Compute shaders own active chunk fields and loose-particle buffers during a frame. `AsyncGPUReadback` is used for chunk persistence on eviction/save, limited inspection samples, and diagnostics only. GPU resource lifetime is owned by `MatterSession` and released on session disposal.
 
 ## First vertical-slice implementation plan
 
@@ -109,3 +109,7 @@ The [continuous execution contract](docs/EXECUTION_PLAN.md) governs phases A–E
 ## Mass-based contacts — required Phase B correction
 
 [CONTACT_PHYSICS](docs/CONTACT_PHYSICS.md) defines the replacement for the current hard-stop collision prototype. The GPU owns dynamic ship/fragment poses and velocities as well as loose matter; CPU components submit force/torque and lifecycle commands. Finite-mass contacts exchange momentum and rotational impulses. Anchored planets, home bases and designated giant bodies have explicit persistent mobility policies. Rendering/storage class, sleeping state and resource exhaustion do not determine whether a loose object is immovable. Independent cargo contributes mass once through its dynamics; it cannot simultaneously be counted as rigid hull mass. This boundary supersedes the current CPU-prescribed translation path when B.3R is implemented.
+
+## Parallel redesign cutover
+
+[CONTACT_PHYSICS](docs/CONTACT_PHYSICS.md) is the locked replacement contract. World-space 48-byte square grains retain independent spin in cargo; 32-byte body state carries COM motion. CPU owns body definitions and transactional inventories; GPU owns motion and geometric cargo classification. Parallel mass-split impulses and separate position cleanup couple to bounded rigid-only sweeps. Compact tick acknowledgements commit provisional flight fuel; saves drain submissions. The opt-in proof must pass before gameplay, schema-5/schema-3 migration and removal of the old path. Historical occupancy acceptance does not certify the .01 grain/.001 boundary penetration limits or physical capacity.

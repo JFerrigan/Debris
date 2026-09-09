@@ -4,7 +4,7 @@ Current priority: **B.3R mass-based contact physics**, before further B.5 scale 
 
 ## Next implementation batch
 
-Continue B.3R.4. Immediate failure: combined 100-cell pile + 100-cell cargo + fragment workload takes **324.505 ms GPU p95** (20 ms gate) and records 29 pose fallbacks. Replace repeated neighborhood searches inside iterations with compact gathered contacts, then complete physics persistence/migration, bounded high-speed/contact handling and final player acceptance. B.3R.1–B.3R.3 scoped physics acceptance passed; B.GATE stays open. Historical efficiency records: `evidence/feature-batches.csv`.
+Implement the parallel redesign in [CONTACT_PHYSICS](CONTACT_PHYSICS.md), phase order R0–R4. Start with the opt-in three-profile GPU proof, especially packed 50×50 cargo under rotation and acceleration. Stop integration if none of 4/2, 8/4, 12/6 passes correctness/performance. Baseline `f3aa5c9`; unfinished contact gathering is backed up in `evidence/B3R-redesign-baseline/unfinished-contacts.patch`. Earlier dense/rotating checks were scoped; packed acceptance and B.GATE are unresolved.
 
 ## Latest verified checkpoint
 
