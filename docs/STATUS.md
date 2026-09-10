@@ -1,23 +1,19 @@
 # Implementation status
 
-Current priority: **B.3R mass-based contact physics**, before further B.5 scale work. Phase A passed; B.1/B.2 and bounded B.4 have verified checkpoints. B.3 is reopened; isolated pixel response now passes, while coupled contacts and persistence completion remain. B.GATE and phases C–E remain incomplete. Current commit: `git log -1`.
+Current priority: **B.3R parallel contact redesign**. R0 is complete. The R1 necessary packed experiment failed all three approved profiles, triggering the plan's stop condition. B.GATE, B.5 and later phases remain blocked. `git log -1` is the current commit.
 
-## Next implementation batch
+## Next task and exact failure
 
-R0 is committed; the opt-in parallel square-grain proof is implemented. Eight focused GPU/layout tests pass, including 10000:1, two grains, off-centre spin/conservation, independent spin, 120-cell/s anchor impact, speed rejection and packed rollback. Run one Mac build and `-debrisParallelProof -debrisProofOutput <path>` to sweep packed shared-motion and thrust/torque cases for 4/2, 8/4, 12/6. The 4/2 development case rejects tick 3 at .001183 solid penetration. If all profiles fail, stop integration as specified in [CONTACT_PHYSICS](CONTACT_PHYSICS.md). This is an early necessary convergence experiment, not a completed R1 benchmark. Rigid-only manifolds, full workload/performance suite and R2–R4 remain unimplemented. Normal gameplay stays on the preserved legacy path.
+Integration is stopped; retain the opt-in proof and [locked contract](CONTACT_PHYSICS.md) for the next convergence/design decision. In a fully packed 50×50 cavity under thrust/torque, 4/2, 8/4 and 12/6 all reject tick 3 at wall penetrations .001183, .001115 and .001022 cell respectively (limit .001). Shared initial rigid motion also fails all profiles. Do not silently add passes, relax tolerance, switch gameplay or resume serial optimization.
 
-## Latest verified checkpoint
+## Latest evidence
 
-49 tests passed; explicit scale fixture skipped. Mac build/player physics passed: combined workload preserves 201 cells/non-overlap, momentum error 0.323917, energy decreases, fragment spins; frame p95 324.382 ms / GPU p95 324.505 ms **fails performance**. Evidence: `evidence/B3R-island-tests.xml`, `evidence/B3R-island-player.txt`. Isolated pixel response remains covered. Fragment mass/mobility and pending solver phase are not yet serialized; legacy displacement fixtures remain. No claim of full B.3R completion.
+Source `2a61ff2`: eight focused GPU/layout tests passed; one Mac development build succeeded; one player sweep completed with exit 2 for failed correctness. [Canonical experiment and limitations](evidence/B3R-parallel-experiment.md), [raw player results](evidence/B3R-parallel-player.txt), [runner result](evidence/B3R-parallel-tests.xml). GPU p95 is unmeasured; no performance gate passed. R1 full manifolds/workloads/diagnostics and R2–R4 gameplay, persistence and cleanup remain unimplemented. Normal gameplay stays on the legacy path.
 
-## Unfinished work to preserve
+## Preserved unfinished work
 
-`Assets/Debris/Persistence/Runtime/WorldStore.cs` has an uncommitted streaming transaction change. `Assets/Debris/Persistence/Tests/Editor/WorldScaleTests.cs` and its meta are uncommitted. The explicit 100,000-site test **failed the 180-second runner timeout**, despite logging successful internal checks. Provisional timings: write 113,238 ms, open 23 ms, 27 representative reads/regeneration 729 ms, full collection 33,257 ms. Fix timeout/setup/cleanup accounting and schedule maintenance incrementally/off the ordinary save path when B.5 resumes. Do not rerun or claim this gate during the physics correction. No Unity test/player process remained running when this handoff was checked.
+The old uncommitted contact gatherer remains in Matter.compute, ShipMatter.hlsl, MatterSession.cs and ContactIsland.hlsl; its [baseline patch](evidence/B3R-redesign-baseline/unfinished-contacts.patch) records it against `f3aa5c9`. WorldStore.cs and WorldScaleTests.cs/meta are unrelated unfinished persistence work. The 100,000-site test previously failed its 180-second runner timeout; do not rerun it during this correction. Preserve package/settings changes and DebrisV1.app outside implementation commits.
 
-Preserve unrelated package/Unity Assistant edits, GraphicsSettings/QualitySettings changes, untracked ProjectSettings files and `DebrisV1.app`. They are outside implementation commits.
+## Commands
 
-## Commands and scope
-
-Unity 6000.3.11f1: `bash tools/unity.sh test`, `build`, `open`. Focused tests use `-testFilter` with separate output paths. F5/F9 save/load World, T changes salvage sites, R restores saved state. Legacy salvage.debris imports via F9 when no world exists. Benchmarks use temporary verification slots. Windows/Linux execution is unverified.
-
-Read this handoff plus the current execution-plan block; open further documents only as needed. Keep this file current and concise rather than appending session history.
+Unity 6000.3.11f1: `bash tools/unity.sh test`, `build`, `open`. Opt-in player: `Builds/Debris.app/Contents/MacOS/Debris -debrisParallelProof -debrisProofOutput /private/tmp/B3R-parallel-proof.txt`. The proof uses a temporary output file, not saves. Final tests/build/player have finished; completion-note changes need no rebuild. Windows/Linux remain unverified.

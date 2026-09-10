@@ -1,6 +1,6 @@
 # Contact physics — B.3R parallel redesign
 
-Status: replacement required. Earlier checkpoints below are historical scoped evidence, not packed-contact acceptance. B.GATE and B.5 remain blocked. Baseline is `f3aa5c9`; the unfinished gatherer is preserved in [baseline evidence](evidence/B3R-redesign-baseline/unfinished-contacts.patch).
+Status: replacement required; the opt-in packed experiment failed all three profiles and integration is stopped. See [canonical results](evidence/B3R-parallel-experiment.md). Earlier checkpoints below are historical scoped evidence, not packed-contact acceptance. B.GATE and B.5 remain blocked. Baseline is `f3aa5c9`; the unfinished gatherer is preserved in [baseline evidence](evidence/B3R-redesign-baseline/unfinished-contacts.patch).
 
 ## Locked architecture
 
@@ -78,4 +78,4 @@ Canonical evidence: [43 passing tests](evidence/B3R-single-cell-tests.xml), [sta
 
 Cell pairs/piles now exchange equal/opposite impulses; serial retries advance packed trailing cells after leaders. Free cargo uses an exact next-pose frame conversion with world velocity unchanged; contacts supply load, without adding cargo to hull mass. Fragments have finite material/unit mass and inertia, exchange impulses with cells/ship/anchors, and inherit surface motion. Anchored walls remove approaching normal velocity while preserving tangent; cutter-released cells remain dynamic. Damage/save synchronization no longer zeroes motion from collision flags.
 
-[49 tests](evidence/B3R-island-tests.xml) and the [combined Mac player](evidence/B3R-island-player.txt) pass scoped physics acceptance. The 201-cell workload conserved momentum within 0.323917 mass-cell/s, reduced energy, rotated the impacted fragment and remained non-overlapping. **Performance fails:** frame p95 324.382 ms; GPU p95 324.505 ms. It also records 29 pose fallbacks during convergence. B.3R.4 must gather bounded contacts once per substep rather than repeating neighborhood searches inside every solver iteration, then complete persistence/high-speed/budget acceptance and rerun the measured gate.
+[49 tests](evidence/B3R-island-tests.xml) and the [combined Mac player](evidence/B3R-island-player.txt) pass scoped physics acceptance. The 201-cell workload conserved momentum within 0.323917 mass-cell/s, reduced energy, rotated the impacted fragment and remained non-overlapping. **Performance fails:** frame p95 324.382 ms; GPU p95 324.505 ms. It also records 29 pose fallbacks during convergence. That checkpoint proposed gathered serial contacts; the parallel redesign contract above supersedes that proposal.

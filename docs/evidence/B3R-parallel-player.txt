@@ -1,0 +1,20 @@
+Source commit: 2a61ff2 (preserved legacy working-tree changes also present; opt-in path does not instantiate the legacy session).
+Build: bash tools/unity.sh build; exit 0; Build Finished, Result: Success.
+Player: -debrisParallelProof -debrisProofOutput /private/tmp/B3R-parallel-proof.txt -screen-width 1280 -screen-height 800 -screen-fullscreen 0; exit 2 as intended for failed correctness.
+Player output completed UTC: 2026-09-09T03:57:56.268652+00:00
+
+B3R_PARALLEL_PROOF utc=2026-09-09T03:57:49.6219160Z device=Apple M4 Pro api=Metal unity=6000.3.11f1 resolution=1280x800 vsync=0 dt=1/60 slots=64 substeps=4..16 friction=.3
+Protocol: correctness-first necessary packed cases, 120 ticks; stop each case on rejection. No performance PASS from these untimed runs. Warm120/sample600 and all remaining workloads require a correctness-passing profile.
+PROFILE 4/2 packed=shared-rigid-motion count=2500 attempted=28 completed=27 fault=SolidPenetration substeps=4 binMax=5 candidates=9902 maxRow=5 maxGrainPenetration=0.0038190484 maxSolidPenetration=0.00101912022 envelope=0 buffers=25553652 cpuSubmissionMaxMs=1.262 result=FAIL physicsGpuP95=unmeasured totalGpuP95=unmeasured
+COMMITTED bodyPosition=(1.35, 0.00) bodyVelocity=(3.00, 0.00) bodyAngle=0.0269998964 bodySpin=0.0599992238
+PROFILE 4/2 packed=rest-under-thrust-torque count=2500 attempted=3 completed=2 fault=SolidPenetration substeps=4 binMax=4 candidates=9902 maxRow=5 maxGrainPenetration=0.00361186266 maxSolidPenetration=0.00118285418 envelope=0 buffers=25553652 cpuSubmissionMaxMs=0.524 result=FAIL physicsGpuP95=unmeasured totalGpuP95=unmeasured
+COMMITTED bodyPosition=(0.00, 0.00) bodyVelocity=(0.20, 0.00) bodyAngle=3.72154173E-05 bodySpin=0.001985235
+PROFILE 8/4 packed=shared-rigid-motion count=2500 attempted=39 completed=38 fault=SolidPenetration substeps=4 binMax=5 candidates=9902 maxRow=5 maxGrainPenetration=0.00393152237 maxSolidPenetration=0.00101149082 envelope=0 buffers=25553652 cpuSubmissionMaxMs=1.529 result=FAIL physicsGpuP95=unmeasured totalGpuP95=unmeasured
+COMMITTED bodyPosition=(1.90, 0.00) bodyVelocity=(3.00, 0.00) bodyAngle=0.0379998125 bodySpin=0.0599983633
+PROFILE 8/4 packed=rest-under-thrust-torque count=2500 attempted=3 completed=2 fault=SolidPenetration substeps=4 binMax=4 candidates=9902 maxRow=5 maxGrainPenetration=0.003906667 maxSolidPenetration=0.00111538172 envelope=0 buffers=25553652 cpuSubmissionMaxMs=0.817 result=FAIL physicsGpuP95=unmeasured totalGpuP95=unmeasured
+COMMITTED bodyPosition=(0.00, 0.00) bodyVelocity=(0.20, 0.00) bodyAngle=3.711678E-05 bodySpin=0.00198034127
+PROFILE 12/6 packed=shared-rigid-motion count=2500 attempted=46 completed=45 fault=SolidPenetration substeps=4 binMax=5 candidates=9902 maxRow=5 maxGrainPenetration=0.00399649143 maxSolidPenetration=0.00100064278 envelope=0 buffers=25553652 cpuSubmissionMaxMs=1.905 result=FAIL physicsGpuP95=unmeasured totalGpuP95=unmeasured
+COMMITTED bodyPosition=(2.25, 0.00) bodyVelocity=(3.00, 0.00) bodyAngle=0.04499968 bodySpin=0.0599974878
+PROFILE 12/6 packed=rest-under-thrust-torque count=2500 attempted=3 completed=2 fault=SolidPenetration substeps=4 binMax=4 candidates=9902 maxRow=5 maxGrainPenetration=0.0038395524 maxSolidPenetration=0.00102245808 envelope=0 buffers=25553652 cpuSubmissionMaxMs=0.992 result=FAIL physicsGpuP95=unmeasured totalGpuP95=unmeasured
+COMMITTED bodyPosition=(0.00, 0.00) bodyVelocity=(0.20, 0.00) bodyAngle=3.70493035E-05 bodySpin=0.00197684672
+STOP: all three profiles fail necessary packed correctness. Integration stopped; performance gate cannot pass. Remaining R1 workloads and R2-R4 not executed.

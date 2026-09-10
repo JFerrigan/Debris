@@ -39,7 +39,7 @@ Authorized scope: implement phases A–E in order through playable alien-drone e
 - [x] B.3R.2 GPU ship–cell momentum exchange; eliminate ordinary pixel hard stops and CPU velocity resets.
 - [x] B.3R.3 Dense piles, cargo mass counted once, fragment torque, anchored bodies and dynamic chips.
 - [x] B.3R.R0 Preserve unfinished contacts and freeze parallel redesign contract.
-- [ ] B.3R.R1 Parallel square-grain proof, three-profile packed experiment; stop integration if no profile passes.
+- [ ] B.3R.R1 Parallel square-grain proof. **STOP:** all three profiles failed the necessary packed experiment; full R1 remains incomplete. [Evidence](evidence/B3R-parallel-experiment.md).
 - [ ] B.3R.R2 Candidate mining/cargo/door/fuel/damage and exceptional limits.
 - [ ] B.3R.R3 Schema-5/schema-3 migration, travel, restoration and default cutover.
 - [ ] B.3R.R4 Delete old architecture and verify final B.GATE. See [CONTACT_PHYSICS](CONTACT_PHYSICS.md).
