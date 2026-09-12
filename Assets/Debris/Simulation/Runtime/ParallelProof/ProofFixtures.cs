@@ -32,6 +32,14 @@ namespace Debris.Simulation.ParallelProof
                     new Boundary{Center=new Vector2(0,25.5f),HalfSize=new Vector2(26,.5f),Body=count,Feature=3}},
                 Force=sharedMotion?Vector2.zero:new Vector2(mass*6,0),Torque=sharedMotion?0:inertia*.06f};
         }
+        public static ProofFixture RigidImpact()
+        {
+            return new ProofFixture{
+                Grains=new[]{new LooseCell{Center=new Vector2(100,100),Material=1,Identity=1}},
+                Bodies=new[]{new BodyState{Center=new Vector2(-1,1.5f),Velocity=Vector2.right},new BodyState()},
+                Parameters=new[]{new BodyParameters{InverseMass=1,InverseInertia=6,BoundaryCount=1,Mobility=1},new BodyParameters{InverseMass=.25f,InverseInertia=3f/17,BoundaryStart=1,BoundaryCount=1,Mobility=1}},
+                Boundaries=new[]{new Boundary{Body=1,HalfSize=Vector2.one*.5f},new Boundary{Body=2,HalfSize=new Vector2(.5f,2)}}};
+        }
         public static ProofFixture IsolatedHeavy()
         {
             return new ProofFixture{

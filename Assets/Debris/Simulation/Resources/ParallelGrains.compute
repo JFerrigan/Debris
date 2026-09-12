@@ -10,6 +10,7 @@
 #pragma kernel Gather
 #pragma kernel ClearDegrees
 #pragma kernel Compact
+#pragma kernel ValidateDegrees
 #pragma kernel ScatterAdjacency
 #pragma kernel EvaluateVelocity
 #pragma kernel ApplyGrains
@@ -20,6 +21,12 @@
 #pragma kernel Validate
 #pragma kernel Commit
 #pragma kernel Acknowledge
+#pragma kernel RigidClearContacts
+#pragma kernel RigidGatherContacts
+#pragma kernel RigidCheckCapacity
+#pragma kernel RigidSolveVelocity
+#pragma kernel RigidSolvePosition
+#pragma kernel RigidValidate
 
 struct Grain { float2 center,velocity; float angle,spin; uint material,identity,flags,r0,r1,r2; };
 struct State { float2 center,velocity; float angle,spin; uint r0,r1; };
@@ -34,7 +41,7 @@ StructuredBuffer<Parameters> _Parameters;
 StructuredBuffer<Boundary> _Boundaries;
 RWStructuredBuffer<uint> _D;
 RWStructuredBuffer<uint> _Args;
-RWStructuredBuffer<float2> _Starts;
+RWStructuredBuffer<float4> _Starts;
 RWStructuredBuffer<uint> _Counts;
 RWStructuredBuffer<uint> _Cursors;
 StructuredBuffer<uint> _Offsets, _BlockOffsets;
@@ -65,39 +72,20 @@ void fault(uint bit){InterlockedOr(_D[0],bit);}
 float dt(){return _Dt/max(1u,_D[2]);}
 uint bin(float2 p){int2 xy=(int2)floor((p+256)/2);if(any(xy<0)||any(xy>=(int)_BinSide))return 0xffffffff;return (uint)xy.y*_BinSide+(uint)xy.x;}
 
-// OBB SAT and a clipped contact-patch centroid. One grain constraint per physical face patch.
+#include "ParallelContactGeometry.hlsl"
+
+// One grain constraint per physical patch. Distinct hull-corner normals come
+// from their separate boundary patches; convex grain pairs use the winning SAT axis.
 void geometry(uint a,uint b,uint feature,out float2 n,out float sep,out float2 ra,out float2 rb)
 {
-    State sa=_State[a],sb=_State[b];float2 ca=sa.center,cb=sb.center;
-    float2 ha=.5,hb=.5;float aa=sa.angle,ab=sb.angle;
-    if(feature!=0xffffffff){Boundary f=_Boundaries[feature]; cb=sb.center+rotate(f.center,ab);hb=f.halfSize;}
-    float2 ax=rotate(float2(1,0),aa),ay=perp(ax),bx=rotate(float2(1,0),ab),by=perp(bx);
-    float2 delta=cb-ca;float2 axes[4]={ax,ay,bx,by};sep=-1e20;n=0;
-    for(uint i=0;i<4;i++)
-    {
-        float2 axis=axes[i];float radiusA=ha.x*abs(dot(ax,axis))+ha.y*abs(dot(ay,axis));
-        float radiusB=hb.x*abs(dot(bx,axis))+hb.y*abs(dot(by,axis));
-        float s=abs(dot(delta,axis))-radiusA-radiusB;
-        if(s>sep){sep=s;n=dot(delta,axis)>=0?axis:-axis;}
-    }
-    // Clip incident support edge to reference edge side planes.
-    bool referenceA=abs(dot(n,ax))>0.99999 || abs(dot(n,ay))>0.99999;
-    float2 rc=referenceA?ca:cb,ic=referenceA?cb:ca;
-    float2 rx=referenceA?ax:bx,ry=referenceA?ay:by,ix=referenceA?bx:ax,iy=referenceA?by:ay;
-    float2 rh=referenceA?ha:hb,ih=referenceA?hb:ha,rn=referenceA?n:-n;
-    bool faceX=abs(dot(rn,rx))>abs(dot(rn,ry));
-    float2 tangent=faceX?ry:rx;float side=faceX?rh.y:rh.x;
-    float2 refCenter=rc+rn*(faceX?rh.x:rh.y);
-    bool incidentX=abs(dot(rn,ix))>abs(dot(rn,iy));
-    float2 incNormal=incidentX?ix:iy;incNormal*=dot(incNormal,rn)>0?-1:1;
-    float2 incTangent=incidentX?iy:ix;float incHalf=incidentX?ih.y:ih.x;
-    float2 edgeCenter=ic+incNormal*(incidentX?ih.x:ih.y);
-    float2 p=edgeCenter-incTangent*incHalf,q=edgeCenter+incTangent*incHalf;
-    float u=dot(p-refCenter,tangent),v=dot(q-refCenter,tangent),lo=0,hi=1;
-    if(abs(v-u)>1e-8){float t0=(-side-u)/(v-u),t1=(side-u)/(v-u);lo=max(0,min(t0,t1));hi=min(1,max(t0,t1));}
-    float2 contactPoint=(lerp(p,q,saturate(lo))+lerp(p,q,saturate(hi)))*.5;
-    // Mid-plane application keeps equal/opposite impulses at exactly the same world contactPoint.
-    contactPoint-=rn*dot(contactPoint-refCenter,rn)*.5;ra=contactPoint-sa.center;rb=contactPoint-sb.center;
+    n=0;sep=1e20;ra=0;rb=0;
+    State sa=_State[a],sb=_State[b];ParallelObb ba,bb;
+    ba.center=sa.center;ba.halfSize=.5;ba.angle=sa.angle;
+    bb.center=sb.center;bb.halfSize=.5;bb.angle=sb.angle;
+    if(feature!=0xffffffff){Boundary f=_Boundaries[feature];bb.center+=rotate(f.center-_Parameters[b].com,sb.angle);bb.halfSize=f.halfSize;}
+    ParallelObbContact c0,c1;uint count;
+    if(!ParallelObbContacts(ba,bb,count,c0,c1)){n=0;sep=1e20;ra=0;rb=0;fault(32);return;}
+    n=c0.normal;sep=c0.separation;ra=c0.contactPoint-sa.center;rb=c0.contactPoint-sb.center;
 }
 
 [numthreads(64,1,1)] void Begin(uint id:SV_DispatchThreadID)
@@ -109,7 +97,7 @@ void geometry(uint a,uint b,uint feature,out float2 n,out float sep,out float2 r
 {
     if(id>=_Endpoints || _D[0]!=0)return;State s=_State[id];Parameters p=_Parameters[id];
     float radius=.707107;
-    if(id>=_N){radius=0;for(uint f=p.first;f<p.first+p.count;f++){Boundary b=_Boundaries[f];radius=max(radius,length(b.center)+length(b.halfSize));}}
+    if(id>=_N){radius=0;for(uint f=p.first;f<p.first+p.count;f++){Boundary b=_Boundaries[f];radius=max(radius,length(b.center-p.com)+length(b.halfSize));}}
     float speed=length(s.velocity)+abs(s.spin)*radius;
     if(id==_N)speed+=_Dt*(length(_Force.xy)*p.im+abs(_Force.z)*p.ii*radius);
     if(!isfinite(speed)){fault(32);return;}InterlockedMax(_D[3],asuint(speed));
@@ -120,14 +108,16 @@ void geometry(uint a,uint b,uint feature,out float2 n,out float sep,out float2 r
     uint count=max(4u,(uint)ceil(max(0,2*asfloat(_D[3])*_Dt/.25-1e-5)));_D[2]=count;
     if(count>16)fault(1);
     // Separate indirect blocks for every supported substep: endpoints, grains, contacts and bodies.
-    for(uint s=0;s<16;s++)for(uint k=0;k<4;k++){
-        uint base=(s*4+k)*3;uint groups=k==0?(_Endpoints+63)/64:k==1?(_N+63)/64:k==2?(_N*_Slots+63)/64:_Bodies;
+    for(uint s=0;s<16;s++)for(uint k=0;k<10;k++){
+        uint base=(s*10+k)*3;uint groups=k==0?(_Endpoints+63)/64:k==1?(_N+63)/64:k==2?(_N*_Slots+63)/64:k==3?_Bodies:k==4?256:k==5?(_N+255)/256:k==6?(_Endpoints+255)/256:k==7?1:k==8?(_Endpoints+63)/64:(_BoundaryCount*_BoundaryCount+63)/64;
         _Args[base]=(s<count && _D[0]==0)?groups:0;_Args[base+1]=1;_Args[base+2]=1;
     }
 }
 [numthreads(64,1,1)] void Prepare(uint id:SV_DispatchThreadID)
 {
-    if(id>=_Endpoints||!active())return;State s=_State[id];_Starts[id]=s.center;
+    if(id>=_Endpoints||!active())return;State s=_State[id];float radius=.707107;
+    if(id>=_N){Parameters p=_Parameters[id];radius=0;for(uint f=p.first;f<p.first+p.count;f++){Boundary b=_Boundaries[f];radius=max(radius,length(b.center-p.com)+length(b.halfSize));}}
+    _Starts[id]=float4(s.center,s.angle,radius);
     if(id==_N){Parameters p=_Parameters[id];s.velocity+=rotate(_Force.xy,s.angle)*p.im*dt();s.spin+=_Force.z*p.ii*dt();}_State[id]=s;
 }
 [numthreads(256,1,1)] void ClearBins(uint id:SV_DispatchThreadID){if(id<_BinCount){_Counts[id]=0;_Cursors[id]=0;}}
@@ -155,7 +145,8 @@ groupshared uint scan[256];
 void addCandidate(uint id,uint other,uint feature,inout uint count)
 {
     float2 n,ra,rb;float sep;geometry(id,other,feature,n,sep,ra,rb);
-    if(sep>.5)return;
+    // Each endpoint may move .125 cell plus its .25-cell correction envelope.
+    if(sep>.75)return;
     if(count>=_Slots){fault(4);return;}
     Contact c=(Contact)0;c.a=id;c.b=other;c.feature=feature;c.normal=n;c.separation=sep;c.ra=ra;c.rb=rb;
     _Rows[id*_Slots+count]=c;count++;
@@ -178,7 +169,11 @@ void addCandidate(uint id,uint other,uint feature,inout uint count)
 {
     if(id>=_N||!active())return;uint first=_RowOffsets[id]+_RowBlockOffsets[id/256];uint count=_RowCounts[id];
     for(uint k=0;k<count;k++){Contact c=_Rows[id*_Slots+k];_Contacts[first+k]=c;InterlockedAdd(_Degrees[c.a],1);InterlockedAdd(_Degrees[c.b],1);}
-    if(id==_N-1){_D[5]=first+count;uint base=(_Substep*4+2)*3;_Args[base]=(first+count+63)/64;}
+    if(id==_N-1){_D[5]=first+count;uint base=(_Substep*10+2)*3;_Args[base]=(first+count+63)/64;_Args[(_Substep*10+8)*3]=(max(_Endpoints,first+count)+63)/64;}
+}
+[numthreads(64,1,1)] void ValidateDegrees(uint id:SV_DispatchThreadID)
+{
+    if(id<_N&&_Substep<_D[2]){InterlockedMax(_D[7],_Degrees[id]);if(_Degrees[id]>_Slots)fault(4);}
 }
 [numthreads(64,1,1)] void ScatterAdjacency(uint id:SV_DispatchThreadID)
 {
@@ -229,7 +224,7 @@ groupshared float4 reaction[64];
 {
     if(_D[12]==0)return;
     if(id<_Endpoints){State s=_State[id];if(!all(isfinite(float4(s.center,s.velocity)))||!all(isfinite(float2(s.angle,s.spin))))fault(32);
-        float radius=id<_N?.707107:0; if(length(s.center-_Starts[id])>.375){fault(16);InterlockedAdd(_D[10],1);}
+        float4 start=_Starts[id];float radius=start.w; if(length(s.center-start.xy)+radius*abs(s.angle-start.z)>.375){fault(16);InterlockedAdd(_D[10],1);}
         if(any(abs(s.center)+radius>=256))fault(2);}
     if(id<_D[5]){Contact c=_Contacts[id];float2 n,ra,rb;float sep;geometry(c.a,c.b,c.feature,n,sep,ra,rb);float pen=max(0,-sep);
         if(c.feature==0xffffffff){InterlockedMax(_D[8],asuint(pen));if(pen>.01)fault(64);}else{InterlockedMax(_D[9],asuint(pen));if(pen>.001)fault(128);}}
@@ -240,3 +235,5 @@ groupshared float4 reaction[64];
     if(id<_N){Grain g=_Grains[id];g.center=s.center;g.velocity=s.velocity;g.angle=s.angle;g.spin=s.spin;if(length(s.velocity)+abs(s.spin)>.0001)g.flags&=~1u;_Grains[id]=g;}
 }
 [numthreads(1,1,1)] void Acknowledge(uint id:SV_DispatchThreadID){if(_D[0]==0)_D[1]++;else _D[11]++;}
+
+#include "ParallelRigidContacts.hlsl"

@@ -1,0 +1,45 @@
+#pragma kernel Probe
+
+#include "ParallelContactGeometry.hlsl"
+
+struct ParallelGeometryPair
+{
+    float2 aCenter;
+    float2 aHalfSize;
+    float aAngle;
+    float2 bCenter;
+    float2 bHalfSize;
+    float bAngle;
+};
+
+struct ParallelGeometryOutput
+{
+    uint valid;
+    uint count;
+    float2 normal0;
+    float separation0;
+    float2 point0;
+    float2 normal1;
+    float separation1;
+    float2 point1;
+};
+
+StructuredBuffer<ParallelGeometryPair> _Pairs;
+RWStructuredBuffer<ParallelGeometryOutput> _Outputs;
+uint _Count;
+
+[numthreads(64,1,1)]
+void Probe(uint id:SV_DispatchThreadID)
+{
+    if(id>=_Count)return;
+    ParallelGeometryPair pair=_Pairs[id];
+    ParallelObb a=(ParallelObb)0,b=(ParallelObb)0;
+    a.center=pair.aCenter;a.halfSize=pair.aHalfSize;a.angle=pair.aAngle;
+    b.center=pair.bCenter;b.halfSize=pair.bHalfSize;b.angle=pair.bAngle;
+    ParallelObbContact c0,c1;uint count;bool valid=ParallelObbContacts(a,b,count,c0,c1);
+    ParallelGeometryOutput output=(ParallelGeometryOutput)0;
+    output.valid=valid?1:0;output.count=count;
+    output.normal0=c0.normal;output.separation0=c0.separation;output.point0=c0.contactPoint;
+    output.normal1=c1.normal;output.separation1=c1.separation;output.point1=c1.contactPoint;
+    _Outputs[id]=output;
+}

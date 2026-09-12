@@ -6,6 +6,10 @@ Current priority: **B.3R parallel contact redesign**. R0 is complete. The R1 nec
 
 Integration is stopped; retain the opt-in proof and [locked contract](CONTACT_PHYSICS.md) for the next convergence/design decision. In a fully packed 50×50 cavity under thrust/torque, 4/2, 8/4 and 12/6 all reject tick 3 at wall penetrations .001183, .001115 and .001022 cell respectively (limit .001). Shared initial rigid motion also fails all profiles. Do not silently add passes, relax tolerance, switch gameplay or resume serial optimization.
 
+## Delegated Phase-1 pieces
+
+Under the user’s explicit delegation request, three gpt-5.6-luna workers drafted geometry, rigid manifolds and GPU diagnostics; the parent integrated/reviewed them and corrected implementation defects. Thirty focused tests now pass, covering GPU metrics, geometry, rigid-only sequential sweeps and bounded rollback. One matching Mac build/player run is next. No change to the packed tolerance/profile gate or authorization for R2–R4.
+
 ## Latest evidence
 
 Source `2a61ff2`: eight focused GPU/layout tests passed; one Mac development build succeeded; one player sweep completed with exit 2 for failed correctness. [Canonical experiment and limitations](evidence/B3R-parallel-experiment.md), [raw player results](evidence/B3R-parallel-player.txt), [runner result](evidence/B3R-parallel-tests.xml). GPU p95 is unmeasured; no performance gate passed. R1 full manifolds/workloads/diagnostics and R2–R4 gameplay, persistence and cleanup remain unimplemented. Normal gameplay stays on the legacy path.

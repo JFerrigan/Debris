@@ -1,0 +1,193 @@
+#pragma kernel Contribute
+#pragma kernel Reduce
+#pragma kernel Finalize
+
+// These declarations intentionally mirror ProofRecords.cs. The metrics pass is
+// read-only with respect to the solver state and owns only its reduction buffers.
+struct State { float2 center,velocity; float angle,spin; uint r0,r1; };
+struct Parameters { float im,ii; float2 com; uint first,count,mobility,revision; };
+struct Grain { float2 center,velocity; float angle,spin; uint material,identity,flags,r0,r1,r2; };
+
+struct Partial
+{
+    float2 momentum;
+    float angularMomentum;
+    float energy;
+    uint grainCount;
+    uint identitySum;
+    uint identityXor;
+    uint nonfiniteCount;
+    float momentumScale;
+    float angularScale;
+    uint reserved0;
+    uint reserved1;
+};
+
+struct Baseline
+{
+    float2 momentum;
+    float angularMomentum;
+    float energy;
+    float momentumScale;
+    float angularScale;
+    uint grainCount;
+    uint identitySum;
+    uint identityXor;
+    uint reserved;
+    uint reserved1;
+    uint reserved2;
+};
+
+struct Result
+{
+    float2 momentum;
+    float angularMomentum;
+    float energy;
+    float2 maximumMomentumError;
+    float maximumAngularMomentumError;
+    float maximumEnergyGain;
+    uint grainCount;
+    uint identitySum;
+    uint identityXor;
+    uint nonfiniteCount;
+    uint sampleCount;
+    uint maximumNonfiniteCount;
+    uint maximumGrainCountError;
+    uint initialGrainCount;
+    uint initialIdentitySum;
+    uint initialIdentityXor;
+    float initialMomentumScale;
+    float initialAngularMomentumScale;
+};
+
+StructuredBuffer<State> _State;
+StructuredBuffer<Parameters> _Parameters;
+StructuredBuffer<Grain> _Grains;
+RWStructuredBuffer<Partial> _Partials;
+RWStructuredBuffer<Partial> _Groups;
+RWStructuredBuffer<Baseline> _Baseline;
+RWStructuredBuffer<Result> _Result;
+uint _GrainCount,_BodyCount,_TotalCount,_GroupCount;
+
+bool finiteState(State s, Parameters p)
+{
+    return all(isfinite(float4(s.center,s.velocity))) &&
+           all(isfinite(float2(s.angle,s.spin))) &&
+           all(isfinite(float4(p.im,p.ii,p.com)));
+}
+
+Partial zeroPartial()
+{
+    Partial p=(Partial)0;
+    return p;
+}
+
+Partial contribution(uint id)
+{
+    Partial value=zeroPartial();
+    if(id>=_TotalCount)return value;
+    State s=_State[id];Parameters p=_Parameters[id];
+    bool finite=finiteState(s,p);
+    value.grainCount=id<_GrainCount?1:0;
+    if(id<_GrainCount){uint identity=_Grains[id].identity;value.identitySum=identity;value.identityXor=identity;}
+    if(!finite){value.nonfiniteCount=1;return value;}
+
+    // Zero inverse mass/inertia denotes an anchored body. It contributes no
+    // finite momentum or energy while still participating in nonfinite checks.
+    float mass=p.im>0?1/p.im:0;
+    float inertia=p.ii>0?1/p.ii:0;
+    value.momentum=mass*s.velocity;
+    value.angularMomentum=mass*(s.center.x*s.velocity.y-s.center.y*s.velocity.x)+inertia*s.spin;
+    value.energy=.5*mass*dot(s.velocity,s.velocity)+.5*inertia*s.spin*s.spin;
+    value.momentumScale=mass*length(s.velocity);
+    value.angularScale=abs(value.angularMomentum);
+    if(!all(isfinite(float4(value.momentum,value.angularMomentum,value.energy))))
+    {
+        value.momentum=0;value.angularMomentum=0;value.energy=0;value.nonfiniteCount=1;
+    }
+    return value;
+}
+
+[numthreads(256,1,1)] void Contribute(uint id:SV_DispatchThreadID)
+{
+    Partial value=zeroPartial();
+    if(id<_TotalCount)value=contribution(id);
+    _Partials[id]=value;
+}
+
+groupshared Partial sharedPartials[256];
+[numthreads(256,1,1)] void Reduce(uint id:SV_DispatchThreadID,uint lane:SV_GroupThreadID,uint group:SV_GroupID)
+{
+    sharedPartials[lane]=zeroPartial();
+    if(id<_TotalCount)sharedPartials[lane]=_Partials[id];
+    GroupMemoryBarrierWithGroupSync();
+    for(uint stride=128;stride>0;stride>>=1)
+    {
+        if(lane<stride)
+        {
+            sharedPartials[lane].momentum+=sharedPartials[lane+stride].momentum;
+            sharedPartials[lane].angularMomentum+=sharedPartials[lane+stride].angularMomentum;
+            sharedPartials[lane].energy+=sharedPartials[lane+stride].energy;
+            sharedPartials[lane].grainCount+=sharedPartials[lane+stride].grainCount;
+            sharedPartials[lane].identitySum+=sharedPartials[lane+stride].identitySum;
+            sharedPartials[lane].identityXor^=sharedPartials[lane+stride].identityXor;
+            sharedPartials[lane].nonfiniteCount+=sharedPartials[lane+stride].nonfiniteCount;
+            sharedPartials[lane].momentumScale+=sharedPartials[lane+stride].momentumScale;
+            sharedPartials[lane].angularScale+=sharedPartials[lane+stride].angularScale;
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(lane==0)_Groups[group]=sharedPartials[0];
+}
+
+[numthreads(1,1,1)] void Finalize(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    Partial current=zeroPartial();
+    for(uint i=0;i<_GroupCount;i++)
+    {
+        Partial p=_Groups[i];
+        current.momentum+=p.momentum;
+        current.angularMomentum+=p.angularMomentum;
+        current.energy+=p.energy;
+        current.grainCount+=p.grainCount;
+        current.identitySum+=p.identitySum;
+        current.identityXor^=p.identityXor;
+        current.nonfiniteCount+=p.nonfiniteCount;
+        current.momentumScale+=p.momentumScale;
+        current.angularScale+=p.angularScale;
+    }
+    Result result=_Result[0];Baseline baseline=_Baseline[0];
+    if(result.sampleCount==0)
+    {
+        baseline.momentum=current.momentum;
+        baseline.angularMomentum=current.angularMomentum;
+        baseline.energy=current.energy;
+        baseline.momentumScale=max(1.0,current.momentumScale);
+        baseline.angularScale=max(1.0,current.angularScale);
+        baseline.grainCount=current.grainCount;
+        baseline.identitySum=current.identitySum;
+        baseline.identityXor=current.identityXor;
+        _Baseline[0]=baseline;
+        result.initialGrainCount=current.grainCount;
+        result.initialIdentitySum=current.identitySum;
+        result.initialIdentityXor=current.identityXor;
+        result.initialMomentumScale=baseline.momentumScale;
+        result.initialAngularMomentumScale=baseline.angularScale;
+    }
+    result.momentum=current.momentum;
+    result.angularMomentum=current.angularMomentum;
+    result.energy=current.energy;
+    result.maximumMomentumError=max(result.maximumMomentumError,abs(current.momentum-baseline.momentum)/baseline.momentumScale);
+    result.maximumAngularMomentumError=max(result.maximumAngularMomentumError,abs(current.angularMomentum-baseline.angularMomentum)/baseline.angularScale);
+    result.maximumEnergyGain=max(result.maximumEnergyGain,max(0,current.energy-baseline.energy));
+    uint countError=current.grainCount>baseline.grainCount?current.grainCount-baseline.grainCount:baseline.grainCount-current.grainCount;
+    result.maximumGrainCountError=max(result.maximumGrainCountError,countError);
+    result.grainCount=current.grainCount;
+    result.identitySum=current.identitySum;
+    result.identityXor=current.identityXor;
+    result.nonfiniteCount=current.nonfiniteCount;
+    result.maximumNonfiniteCount=max(result.maximumNonfiniteCount,current.nonfiniteCount);
+    result.sampleCount++;
+    _Result[0]=result;
+}

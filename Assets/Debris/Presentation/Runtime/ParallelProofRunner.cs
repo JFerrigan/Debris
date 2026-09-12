@@ -22,14 +22,22 @@ namespace Debris.Presentation
             material=new Material(Resources.Load<Shader>("ParallelProof"));wallMaterial=new Material(material);wallMaterial.SetInt("_DrawBoundaries",1);
             Record($"B3R_PARALLEL_PROOF utc={DateTime.UtcNow:O} device={SystemInfo.graphicsDeviceName} api={SystemInfo.graphicsDeviceType} unity={Application.unityVersion} resolution=1280x800 vsync=0 dt=1/60 slots=64 substeps=4..16 friction=.3");
             Record("Protocol: correctness-first necessary packed cases, 120 ticks; stop each case on rejection. No performance PASS from these untimed runs. Warm120/sample600 and all remaining workloads require a correctness-passing profile.");
+            using(var rigid=ProofFixtures.RigidImpact().Create(8,4,0))
+            {
+                rigid.Step();var rt=rigid.SnapshotAsync();while(!rt.IsCompleted)yield return null;
+                var mt=rigid.MetricsAsync();while(!mt.IsCompleted)yield return null;var rm=mt.Result;
+                bool ok=rt.Result.Fault==SolverFault.None&&rt.Result.Endpoints[2].AngularVelocity<0&&rm.MaximumMomentumErrorMagnitude<=.0001f&&rm.MaximumAngularMomentumError<=.001f&&rm.MaximumEnergyGain<=.0001f;
+                Record($"RIGID_IMPACT result={(ok?"PASS":"FAIL")} fault={rt.Result.Fault} manifoldPoints={rt.Result.Diagnostics[13]} momentumError={rm.MaximumMomentumErrorMagnitude:R} angularError={rm.MaximumAngularMomentumError:R} energyGain={rm.MaximumEnergyGain:R}");
+                if(!ok){File.WriteAllLines(output,lines);Application.Quit(3);yield break;}
+            }
             int passing=0;
             foreach(int velocity in new[]{4,8,12})
             {
                 bool profilePass=true;
                 foreach(bool shared in new[]{true,false})
                 {
-                    var fixture=ProofFixtures.Packed(shared);solver=fixture.Create(velocity,velocity/2);material.SetBuffer("_Grains",solver.Grains);material.SetBuffer("_Bodies",solver.Bodies);material.SetBuffer("_Boundaries",solver.Boundaries);
-                    wallMaterial.SetBuffer("_Grains",solver.Grains);wallMaterial.SetBuffer("_Bodies",solver.Bodies);wallMaterial.SetBuffer("_Boundaries",solver.Boundaries);
+                    var fixture=ProofFixtures.Packed(shared);solver=fixture.Create(velocity,velocity/2);material.SetBuffer("_Grains",solver.Grains);material.SetBuffer("_Bodies",solver.Bodies);material.SetBuffer("_Boundaries",solver.Boundaries);material.SetBuffer("_Parameters",solver.Parameters);
+                    wallMaterial.SetBuffer("_Grains",solver.Grains);wallMaterial.SetBuffer("_Bodies",solver.Bodies);wallMaterial.SetBuffer("_Boundaries",solver.Boundaries);wallMaterial.SetBuffer("_Parameters",solver.Parameters);
                     int attempted=0;uint[] facts=null;double maximumSubmission=0;
                     for(int tick=0;tick<120;tick++)
                     {
@@ -41,7 +49,12 @@ namespace Debris.Presentation
                         yield return null;
                     }
                     var snapshotTask=solver.SnapshotAsync();while(!snapshotTask.IsCompleted)yield return null;var snapshot=snapshotTask.Result;
-                    bool passed=facts[0]==0&&facts[1]==120;profilePass&=passed;
+                    var metricsTask=solver.MetricsAsync();while(!metricsTask.IsCompleted)yield return null;var metrics=metricsTask.Result;
+                    double initialEnergy=0;foreach(var grain in fixture.Grains)initialEnergy+=.5*grain.Velocity.sqrMagnitude+grain.AngularVelocity*grain.AngularVelocity/12.0;
+                    for(int b=0;b<fixture.Bodies.Length;b++){var bs=fixture.Bodies[b];var bp=fixture.Parameters[b];if(bp.InverseMass>0)initialEnergy+=.5*bs.Velocity.sqrMagnitude/bp.InverseMass;if(bp.InverseInertia>0)initialEnergy+=.5*bs.AngularVelocity*bs.AngularVelocity/bp.InverseInertia;}
+                    bool conserved=!shared||(metrics.MaximumMomentumErrorMagnitude<=.0001f&&metrics.MaximumEnergyGain<=Math.Max(.0001,initialEnergy*.001));
+                    bool passed=facts[0]==0&&facts[1]==120&&conserved&&metrics.MaximumNonfiniteCount==0&&metrics.GrainCount==2500&&metrics.IdentitySum==metrics.InitialIdentitySum&&metrics.IdentityXor==metrics.InitialIdentityXor;profilePass&=passed;
+                    Record($"METRICS {velocity}/{velocity/2} forced={!shared} normalizedMomentumError={metrics.MaximumMomentumErrorMagnitude:R} angularError={metrics.MaximumAngularMomentumError:R} energyGain={metrics.MaximumEnergyGain:R} nonfinite={metrics.MaximumNonfiniteCount} grains={metrics.GrainCount} identitySum={metrics.IdentitySum} identityXor={metrics.IdentityXor} samples={metrics.SampleCount}");
                     Record($"PROFILE {velocity}/{velocity/2} packed={(shared?"shared-rigid-motion":"rest-under-thrust-torque")} count=2500 attempted={attempted} completed={facts[1]} fault={(SolverFault)facts[0]} substeps={facts[2]} binMax={facts[4]} candidates={facts[5]} maxRow={facts[6]} maxGrainPenetration={snapshot.GrainPenetration:R} maxSolidPenetration={snapshot.SolidPenetration:R} envelope={facts[10]} buffers={solver.BufferBytes} cpuSubmissionMaxMs={maximumSubmission:F3} result={(passed?"NECESSARY_CASE_PASS":"FAIL")} physicsGpuP95=unmeasured totalGpuP95=unmeasured");
                     // Full state is read only after the case, outside any timing window.
                     Record($"COMMITTED bodyPosition={snapshot.Endpoints[2500].Center} bodyVelocity={snapshot.Endpoints[2500].Velocity} bodyAngle={snapshot.Endpoints[2500].Angle:R} bodySpin={snapshot.Endpoints[2500].AngularVelocity:R}");

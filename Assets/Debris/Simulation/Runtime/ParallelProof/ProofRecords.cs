@@ -34,7 +34,7 @@ namespace Debris.Simulation.ParallelProof
     public enum SolverFault : uint
     {
         None=0, Speed=1, Page=2, Candidates=4, Adjacency=8, Envelope=16,
-        Nonfinite=32, GrainPenetration=64, SolidPenetration=128
+        Nonfinite=32, GrainPenetration=64, SolidPenetration=128, RigidCapacity=256, RigidPairCapacity=512, RigidNonfinite=1024, RigidPenetration=2048, RigidTopology=4096
     }
     public sealed class ProofSnapshot
     {
