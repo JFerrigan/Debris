@@ -1,6 +1,6 @@
 # Contact physics — B.3R parallel redesign
 
-Status: replacement required; the opt-in packed experiment failed all three profiles and integration is stopped. See [canonical results](evidence/B3R-parallel-experiment.md). Earlier checkpoints below are historical scoped evidence, not packed-contact acceptance. B.GATE and B.5 remain blocked. Baseline is `f3aa5c9`; the unfinished gatherer is preserved in [baseline evidence](evidence/B3R-redesign-baseline/unfinished-contacts.patch).
+Status: replacement required; the opt-in packed experiment failed all three profiles and integration is stopped. See [canonical results](evidence/B3R-parallel-pieces.md). Earlier checkpoints below are historical scoped evidence, not packed-contact acceptance. B.GATE and B.5 remain blocked. Baseline is `f3aa5c9`; the unfinished gatherer is preserved in [baseline evidence](evidence/B3R-redesign-baseline/unfinished-contacts.patch).
 
 ## Locked architecture
 

@@ -4,15 +4,11 @@ Current priority: **B.3R parallel contact redesign**. R0 is complete. The R1 nec
 
 ## Next task and exact failure
 
-Integration is stopped; retain the opt-in proof and [locked contract](CONTACT_PHYSICS.md) for the next convergence/design decision. In a fully packed 50×50 cavity under thrust/torque, 4/2, 8/4 and 12/6 all reject tick 3 at wall penetrations .001183, .001115 and .001022 cell respectively (limit .001). Shared initial rigid motion also fails all profiles. Do not silently add passes, relax tolerance, switch gameplay or resume serial optimization.
-
-## Delegated Phase-1 pieces
-
-Under the user’s explicit delegation request, three gpt-5.6-luna workers drafted geometry, rigid manifolds and GPU diagnostics; the parent integrated/reviewed them and corrected implementation defects. Thirty focused tests now pass, covering GPU metrics, geometry, rigid-only sequential sweeps and bounded rollback. One matching Mac build/player run is next. No change to the packed tolerance/profile gate or authorization for R2–R4.
+Integration is stopped pending a convergence/design decision. After the delegated proof improvements, all profiles still reject the resting packed cavity at tick 3: wall penetration .001186/.001123/.001034 for 4/2, 8/4, 12/6 (limit .001). Shared rigid motion also fails. Do not add passes, relax tolerance, switch gameplay or resume serial optimization.
 
 ## Latest evidence
 
-Source `2a61ff2`: eight focused GPU/layout tests passed; one Mac development build succeeded; one player sweep completed with exit 2 for failed correctness. [Canonical experiment and limitations](evidence/B3R-parallel-experiment.md), [raw player results](evidence/B3R-parallel-player.txt), [runner result](evidence/B3R-parallel-tests.xml). GPU p95 is unmeasured; no performance gate passed. R1 full manifolds/workloads/diagnostics and R2–R4 gameplay, persistence and cleanup remain unimplemented. Normal gameplay stays on the legacy path.
+Source `5898f8d`: three authorized GPT-5.6-luna workers contributed geometry, rigid manifolds and GPU diagnostics, integrated and corrected by the parent. **30 focused tests and one Mac development build passed.** The matching player passed the off-centre rigid impact, then failed all six packed cases (exit 2). [Canonical evidence](evidence/B3R-parallel-pieces.md), [raw player](evidence/B3R-parallel-pieces-player.txt), [test result](evidence/B3R-parallel-pieces-tests.xml). GPU p95 remains unmeasured. Full R1 workload/performance coverage and R2–R4 remain incomplete; normal gameplay uses the legacy path.
 
 ## Preserved unfinished work
 
