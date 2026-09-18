@@ -4,11 +4,11 @@ Current handoff: **B.3R opt-in GPU flight/collision implementation is automated-
 
 ## Latest validation
 
-Focused startup validation passed 4/4, including completion-ring saturation, monotonic submission identity, rotated COM conversion, translated terrain origin and no steady-state full snapshot. The final fast EditMode suite passed 115 with one explicit scale test skipped (116 total, 2026-09-18 05:30 UTC), and the Mac build succeeded. A 25-second Mac player run with `-debrisParallelGameplay` activated the candidate and produced no Metal binding or solver faults after the direct-buffer binding correction. Windows/Linux are unverified.
+Focused startup validation passed 4/4, including completion-ring saturation, monotonic submission identity, rotated COM conversion, translated terrain origin and no steady-state full snapshot. The final fast EditMode suite passed 115 with one explicit scale test skipped (116 total, 2026-09-18 05:30 UTC), and the Mac build succeeded. Two bounded Mac player runs with `-debrisParallelGameplay` activated the candidate without Metal, readback, or solver faults; the second included a bounded input sequence but supplied no motion telemetry. Windows/Linux are unverified.
 
 ## Remaining limitation and next work
 
-Candidate mining, suction, doors, damage, fuel transfer, persistence, travel and streaming remain gated and report unavailable. Player collision/render acceptance beyond startup, packed-cargo/performance, R1 convergence and B.GATE remain open. The test suite does not replace the required terrain-contact, high-speed, completion-ordering and render acceptance cases specified for the next verification pass.
+Candidate mining, suction, doors, damage, fuel transfer, persistence, travel and streaming remain gated and report unavailable. Measured player flight/collision trajectories, packed-cargo/performance, R1 convergence and B.GATE remain open. Existing GPU fixtures cover high speed, mass, corners, rejection atomicity, terrain revision and endpoint limits; compact acknowledgements, geometry conversion and queue saturation now have candidate-specific coverage.
 
 ## Preserved unfinished work
 
