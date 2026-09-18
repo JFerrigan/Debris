@@ -4,11 +4,11 @@ Current handoff: **B.3R opt-in GPU flight/collision implementation is automated-
 
 ## Latest validation
 
-The final fast EditMode suite passed 110 with one explicit scale test skipped (111 total, 2026-09-18 05:05–05:06 UTC). The final Mac build succeeded. No player run was made; the single-player allowance was already exhausted. Windows/Linux are unverified.
+The final fast EditMode suite passed 110 with one explicit scale test skipped (111 total, 2026-09-18 05:14–05:15 UTC). The final Mac build succeeded. A 25-second Mac player run with `-debrisParallelGameplay` activated the candidate and produced no Metal binding or solver faults after the direct-buffer binding correction. Windows/Linux are unverified.
 
 ## Remaining limitation and next work
 
-Candidate mining, suction, doors, damage, fuel transfer, persistence, travel and streaming remain gated and report unavailable. Player collision/render acceptance, packed-cargo/performance, R1 convergence and B.GATE remain open. The test suite does not replace the required terrain-contact, high-speed, completion-ordering and render acceptance cases specified for the next verification pass.
+Candidate mining, suction, doors, damage, fuel transfer, persistence, travel and streaming remain gated and report unavailable. Player collision/render acceptance beyond startup, packed-cargo/performance, R1 convergence and B.GATE remain open. The test suite does not replace the required terrain-contact, high-speed, completion-ordering and render acceptance cases specified for the next verification pass.
 
 ## Preserved unfinished work
 
