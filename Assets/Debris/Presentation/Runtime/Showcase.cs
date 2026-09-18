@@ -42,7 +42,7 @@ namespace Debris.Presentation
             if(islandBenchmark)StartCoroutine(CheckedBenchmark(IslandBenchmark()));
             else if(contactBenchmark)StartCoroutine(CheckedBenchmark(ContactBenchmark()));
             else if(shipBenchmark)StartCoroutine(CheckedBenchmark(ShipBenchmark()));
-            if(!benchmark&&!shipBenchmark&&WorldStore.Exists(worldRoot))_ = LoadCheckpoint();
+            if(!parallelGameplay&&!benchmark&&!shipBenchmark&&WorldStore.Exists(worldRoot))_ = LoadCheckpoint();
         }
         void ResetSession(int side,int capacity)
         {
@@ -137,7 +137,7 @@ namespace Debris.Presentation
             }
             statsTime+=Time.unscaledDeltaTime;
             if(statsTime>.2f){statsTime=0;
-                if(!saveBusy&&!benchmark&&!shipBenchmark&&ship!=null&&ship.Fuel.Count>0&&ship.Units.Exists(u=>u.Placement.Definition.Kind==UnitKind.Tank&&(u.Destroyed||!u.Supported)))_ = TransferFuel(false);
+                if(!parallelGameplay&&!saveBusy&&!benchmark&&!shipBenchmark&&ship!=null&&ship.Fuel.Count>0&&ship.Units.Exists(u=>u.Placement.Definition.Kind==UnitKind.Tank&&(u.Destroyed||!u.Supported)))_ = TransferFuel(false);
                 session.PollStats();session.Inspect(Vector2Int.FloorToInt(pointerWorld),m=>inspected=m);}
             if(parallelGameplay&&parallel!=null)view.DrawCandidate();else view.Draw();
             FrameTimingManager.CaptureFrameTimings();

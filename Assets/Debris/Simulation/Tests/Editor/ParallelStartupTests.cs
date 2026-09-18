@@ -38,5 +38,21 @@ namespace Debris.Simulation.Tests
                 }
             }
         }
+        [UnityTest,Timeout(120000)]
+        public IEnumerator CompletionRingRejectsSaturationWithoutAddingFuelReservation()
+        {
+            var catalog=Resources.Load<MaterialCatalog>("Materials");var ship=new ShipRuntime(Resources.Load<ShipBlueprint>("StarterShip"));
+            using(var source=new MatterSession(catalog,Resources.Load<AsteroidProfile>("Asteroid"),4,128,8192))
+            {
+                source.ConfigureShip(ship.CollisionMask(),ship.Position);source.ConfigureShipBody(ship.MassProperties(catalog));var read=source.SnapshotAsync();while(!read.IsCompleted)yield return null;
+                using(var candidate=ParallelGameplaySession.Import(read.Result,ship,catalog))
+                {
+                    var input=new MatterStepInput(null,0,default,false,false,false,Vector3.zero);
+                    for(uint tick=1;tick<=ParallelGameplaySession.MaximumPendingTicks;tick++)Assert.That(candidate.Submit(tick,input,.25),Is.True);
+                    Assert.That(candidate.PendingTicks,Is.EqualTo(ParallelGameplaySession.MaximumPendingTicks));Assert.That(candidate.ProvisionalFuel,Is.EqualTo(4).Within(.000001));
+                    Assert.That(candidate.Submit(17,input,.25),Is.False);Assert.That(candidate.PendingTicks,Is.EqualTo(ParallelGameplaySession.MaximumPendingTicks));Assert.That(candidate.ProvisionalFuel,Is.EqualTo(4).Within(.000001));
+                }
+            }
+        }
     }
 }

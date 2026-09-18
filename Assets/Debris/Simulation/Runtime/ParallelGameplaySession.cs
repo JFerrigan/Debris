@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Debris.Materials;
 using Debris.Ships;
@@ -17,17 +16,21 @@ namespace Debris.Simulation
         public const int MaximumPendingTicks=16;
         public const int StarterCargoCapacity=2500;
         readonly ParallelGrainSolver solver;
-        readonly Queue<Pending> pending=new Queue<Pending>();
+        readonly Pending[] pending=new Pending[MaximumPendingTicks];
         readonly MaterialCatalog catalog;
         readonly MatterSnapshot source;
         readonly bool[] cargo;
+        int pendingHead,pendingCount;
         bool faulted,disposed;
         double unresolvedFuel;
         public bool Faulted=>faulted;
         public string Fault { get; private set; }
-        public int PendingTicks=>pending.Count;
+        public int PendingTicks=>pendingCount;
         public ParallelGrainSolver Solver=>solver;
-        public double ProvisionalFuel=>unresolvedFuel+pending.Sum(p=>p.Fuel);
+        public double ProvisionalFuel
+        {
+            get { double total=unresolvedFuel;for(int i=0;i<pendingCount;i++)total+=pending[(pendingHead+i)%MaximumPendingTicks].Fuel;return total; }
+        }
 
         sealed class Pending
         {
@@ -150,23 +153,23 @@ namespace Debris.Simulation
         }
         public bool Submit(uint tick,MatterStepInput input,double provisionalFuel=0)
         {
-            if(disposed||faulted||pending.Count>=MaximumPendingTicks||provisionalFuel<0||double.IsNaN(provisionalFuel)||double.IsInfinity(provisionalFuel))return false;
+            if(disposed||faulted||pendingCount>=MaximumPendingTicks||provisionalFuel<0||double.IsNaN(provisionalFuel)||double.IsInfinity(provisionalFuel))return false;
             solver.Step(new Vector2(input.LocalForce.x,input.LocalForce.y),input.LocalForce.z);
-            pending.Enqueue(new Pending{Tick=tick,Fuel=provisionalFuel,Readback=solver.CompletionAsync(source.Cells.Length)});return true;
+            pending[(pendingHead+pendingCount)%MaximumPendingTicks]=new Pending{Tick=tick,Fuel=provisionalFuel,Readback=solver.CompletionAsync(source.Cells.Length)};pendingCount++;return true;
         }
         public bool TryAcknowledge(out Completion completion)
         {
-            completion=default;if(disposed||pending.Count==0||!pending.Peek().Readback.IsCompleted)return false;
-            var next=pending.Dequeue();if(next.Readback.IsFaulted)
+            completion=default;if(disposed||pendingCount==0||!pending[pendingHead].Readback.IsCompleted)return false;
+            var next=pending[pendingHead];pending[pendingHead]=null;pendingHead=(pendingHead+1)%MaximumPendingTicks;pendingCount--;if(next.Readback.IsFaulted)
             {
                 faulted=true;Fault=next.Readback.Exception?.GetBaseException().Message??"Candidate GPU readback failed.";
                 // Commit state is unknowable after readback failure. Keep all
                 // reservations until reset so a possible thrust is never free.
-                unresolvedFuel+=next.Fuel+pending.Sum(p=>p.Fuel);pending.Clear();return true;
+                unresolvedFuel+=next.Fuel+ProvisionalFuel-unresolvedFuel;ClearPending();return true;
             }
             var result=next.Readback.Result;if(result.Fault!=SolverFault.None)
             {
-                faulted=true;Fault="Candidate solver fault: "+result.Fault;pending.Clear();completion=new Completion(next.Tick,result.Fault,default,0,0);return true;
+                faulted=true;Fault="Candidate solver fault: "+result.Fault;ClearPending();completion=new Completion(next.Tick,result.Fault,default,0,0);return true;
             }
             int count=0;float cargoMass=0;for(int i=0;i<cargo.Length;i++)if(cargo[i]){count++;cargoMass+=catalog.DefinitionAt((ushort)source.Cells[i].Material).Density;}
             completion=new Completion(next.Tick,SolverFault.None,result.State,count,cargoMass,next.Fuel);return true;
@@ -178,7 +181,8 @@ namespace Debris.Simulation
             // readbacks. Fence them before releasing their buffers so a reset
             // or destruction cannot invoke a callback against disposed memory.
             AsyncGPUReadback.WaitAllRequests();
-            pending.Clear();solver.Dispose();
+            ClearPending();solver.Dispose();
         }
+        void ClearPending(){Array.Clear(pending,0,pending.Length);pendingHead=0;pendingCount=0;}
     }
 }
