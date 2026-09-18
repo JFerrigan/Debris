@@ -54,5 +54,25 @@ namespace Debris.Simulation.Tests
                 }
             }
         }
+        [UnityTest,Timeout(120000)]
+        public IEnumerator ImportedShipUsesHullOriginAndRotatedLocalCom()
+        {
+            var catalog=Resources.Load<MaterialCatalog>("Materials");var ship=new ShipRuntime(Resources.Load<ShipBlueprint>("StarterShip"));
+            using(var source=new MatterSession(catalog,Resources.Load<AsteroidProfile>("Asteroid"),4,128,8192))
+            {
+                source.ConfigureShip(ship.CollisionMask(),ship.Position);source.ConfigureShipBody(ship.MassProperties(catalog));var read=source.SnapshotAsync();while(!read.IsCompleted)yield return null;
+                var snapshot=read.Result;snapshot.OriginX=121;snapshot.OriginY=-95;snapshot.ShipPose[0]=new Vector4(31.25f,-17.5f,.61f,1);snapshot.ShipPose[1]=new Vector4(3,-2,.17f,0);var mass=ship.MassProperties(catalog);
+                float c=Mathf.Cos(snapshot.ShipPose[0].z),s=Mathf.Sin(snapshot.ShipPose[0].z);var expected=new Vector2(snapshot.ShipPose[0].x+mass.Center.x*c-mass.Center.y*s,snapshot.ShipPose[0].y+mass.Center.x*s+mass.Center.y*c);
+                using(var candidate=ParallelGameplaySession.Import(snapshot,ship,catalog))
+                {
+                    var state=candidate.Solver.SnapshotAsync();while(!state.IsCompleted)yield return null;var shipState=state.Result.Endpoints[snapshot.Cells.Length];
+                    Assert.That(shipState.Center,Is.EqualTo(expected).Using(new Vector2Comparer(.0001f)));Assert.That(shipState.Angle,Is.EqualTo(.61f).Within(.0001f));Assert.That(shipState.Velocity,Is.EqualTo(new Vector2(3,-2)).Using(new Vector2Comparer(.0001f)));Assert.That(shipState.AngularVelocity,Is.EqualTo(.17f).Within(.0001f));Assert.That(state.Result.Endpoints[snapshot.Cells.Length+1].Center,Is.EqualTo(new Vector2(121,-95)).Using(new Vector2Comparer(.0001f)));
+                }
+            }
+        }
+        sealed class Vector2Comparer : System.Collections.Generic.IEqualityComparer<Vector2>
+        {
+            readonly float tolerance;public Vector2Comparer(float value){tolerance=value;}public bool Equals(Vector2 a,Vector2 b)=>Vector2.Distance(a,b)<=tolerance;public int GetHashCode(Vector2 value)=>0;
+        }
     }
 }
