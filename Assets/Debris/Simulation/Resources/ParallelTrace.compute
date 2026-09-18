@@ -1,0 +1,219 @@
+#pragma kernel Reset
+#pragma kernel ClearSlot
+#pragma kernel Capture
+
+// ParallelTrace never writes a solver buffer. It is queued beside the solver
+// dispatches and copies the state that exists at that exact command boundary.
+struct State { float2 center,velocity; float angle,spin; uint r0,r1; };
+struct Parameters { float im,ii; float2 com; uint first,count,mobility,revision; };
+struct Boundary { float2 center,halfSize; uint body,feature,r0,r1; };
+struct Contact { uint a,b,feature,pad; float2 normal; float separation,ln; float2 ra,rb; float lt,lp,r0,r1; };
+
+struct TraceCheckpoint
+{
+    uint tick,substep,stage,iteration;
+    uint contactCount,capturedContactCount,stateOffset,contactOffset;
+    uint flags,reserved;
+};
+
+struct TraceState
+{
+    float2 center,velocity; float angle,spin;
+    uint identity,endpoint,degree,flags,reserved0,reserved1;
+};
+
+struct TraceContact
+{
+    uint a,b,feature,flags;
+    uint identityA,identityB,endpointFlags,reserved;
+    float2 normal; float separation,normalLambda;
+    float2 armA,armB;
+    float tangentLambda,positionLambda;
+    float effectiveMassA,effectiveMassB;
+    float2 incrementalImpulse;
+    float incrementalTorqueA,incrementalTorqueB;
+};
+
+struct TraceSummary
+{
+    uint contactCount,capturedContactCount,grainContactCount,solidContactCount;
+    uint maximumGrainPenetration,maximumSolidPenetration;
+    uint maximumDegree,flags;
+};
+
+StructuredBuffer<State> _State;
+StructuredBuffer<Contact> _Contacts;
+StructuredBuffer<uint> _Degrees;
+StructuredBuffer<float4> _Increments;
+StructuredBuffer<uint> _Diagnostics;
+StructuredBuffer<uint> _Identities;
+StructuredBuffer<Parameters> _Parameters;
+StructuredBuffer<Boundary> _Boundaries;
+RWStructuredBuffer<TraceCheckpoint> _TraceCheckpoints;
+RWStructuredBuffer<TraceState> _TraceStates;
+RWStructuredBuffer<TraceContact> _TraceContacts;
+RWStructuredBuffer<uint> _TraceDiagnostics;
+RWStructuredBuffer<TraceSummary> _TraceSummaries;
+RWStructuredBuffer<uint> _TraceMarkers;
+
+uint _GrainCount,_EndpointCount,_SubstepCapacity,_BoundaryCount,_CheckpointCapacity,_DiagnosticWords;
+uint _Tick,_Substep,_Stage,_Iteration,_Slot,_ContactBase;
+uint _StateSourceCount,_SourceContactCapacity,_ContactCapacity,_DegreeSourceCount,_IncrementSourceCount,_CaptureContacts;
+
+float cross2(float2 a,float2 b){return a.x*b.y-a.y*b.x;}
+float2 perp(float2 a){return float2(-a.y,a.x);}
+float2 rotate(float2 a,float angle){float s,c;sincos(angle,s,c);return float2(c*a.x-s*a.y,s*a.x+c*a.y);}
+
+#include "ParallelContactGeometry.hlsl"
+
+void traceGeometry(uint a,uint b,uint feature,out float2 n,out float sep,out float2 ra,out float2 rb)
+{
+    n=0;sep=1e20;ra=0;rb=0;
+    if(a>=_EndpointCount||b>=_EndpointCount){return;}
+    State sa=_State[a],sb=_State[b];
+    ParallelObb ba,bb;ba.center=sa.center;ba.halfSize=.5;ba.angle=sa.angle;
+    bb.center=sb.center;bb.halfSize=.5;bb.angle=sb.angle;
+    if(feature!=0xffffffff)
+    {
+        if(feature>=_BoundaryCount)return;
+        Boundary f=_Boundaries[feature];
+        if(f.body!=b)return;
+        bb.center+=rotate(f.center-_Parameters[b].com,sb.angle);bb.halfSize=f.halfSize;
+    }
+    ParallelObbContact c0,c1;uint count;
+    if(!ParallelObbContacts(ba,bb,count,c0,c1))return;
+    n=c0.normal;sep=c0.separation;ra=c0.contactPoint-sa.center;rb=c0.contactPoint-sb.center;
+}
+
+uint endpointIdentity(uint endpoint)
+{
+    if(endpoint<_GrainCount)return _Identities[endpoint];
+    return 0x80000000u|endpoint;
+}
+
+float effectiveMass(uint endpoint,float2 arm,float2 normal)
+{
+    Parameters p=_Parameters[endpoint];float rn=cross2(arm,normal);
+    return p.im+p.ii*rn*rn;
+}
+
+[numthreads(64,1,1)]
+void Reset(uint id:SV_DispatchThreadID)
+{
+    if(id<_CheckpointCapacity)
+    {
+        TraceCheckpoint c=(TraceCheckpoint)0;c.flags=0;_TraceCheckpoints[id]=c;
+        _TraceSummaries[id]=(TraceSummary)0;
+    }
+    if(id<_SubstepCapacity)_TraceMarkers[id]=0;
+}
+
+[numthreads(1,1,1)]
+void ClearSlot(uint id:SV_DispatchThreadID)
+{
+    if(_Slot<_CheckpointCapacity)_TraceSummaries[_Slot]=(TraceSummary)0;
+}
+
+[numthreads(64,1,1)]
+void Capture(uint id:SV_DispatchThreadID)
+{
+    // Ordinary capture is gated by the solver's active state. Validation is
+    // also retained after a fault, provided this substep reached a trace
+    // marker; that is how a rejected tick remains observable without copying
+    // stale states for later, skipped substeps.
+    bool ordinary=_Diagnostics[0]==0 && _Substep<_Diagnostics[2];
+    bool validationAfterFault=_Stage==7u && _Substep<_SubstepCapacity && _TraceMarkers[_Substep]!=0;
+    if(!ordinary&&!validationAfterFault)return;
+    uint rawContacts=_Stage==0u?0:_Diagnostics[5];
+    uint sourceContacts=min(rawContacts,_SourceContactCapacity);
+    uint captured=_CaptureContacts==0?0:min(sourceContacts,_ContactCapacity);
+    if(id==0)
+    {
+        TraceCheckpoint h=(TraceCheckpoint)0;
+        h.tick=_Tick;h.substep=_Substep;h.stage=_Stage;h.iteration=_Iteration;
+        h.contactCount=rawContacts;h.capturedContactCount=captured;
+        h.stateOffset=_Slot*_EndpointCount;h.contactOffset=_ContactBase;
+        h.flags=0x80000000u;
+        if(_CaptureContacts!=0&&rawContacts>captured)h.flags|=1u;
+        if(rawContacts>sourceContacts)h.flags|=2u;
+        if(_Diagnostics[0]!=0)h.flags|=4u;
+        if(_Diagnostics[2]>_SubstepCapacity)h.flags|=8u;
+        _TraceCheckpoints[_Slot]=h;
+        _TraceSummaries[_Slot].contactCount=rawContacts;
+        _TraceSummaries[_Slot].capturedContactCount=captured;
+        if(_Stage==1u||_Stage==2u||_Stage==3u||_Stage==5u||_Stage==6u||_Stage==7u)
+            InterlockedOr(_TraceSummaries[_Slot].flags,2u);
+    }
+    if(id==0&&_Stage==1u&&_Substep<_SubstepCapacity)_TraceMarkers[_Substep]=1;
+    if(id==0&&_Stage==4u&&_Substep<_SubstepCapacity)_TraceMarkers[_Substep]=2;
+    if(id<_EndpointCount)
+    {
+        TraceState t=(TraceState)0;
+        if(id<_StateSourceCount)
+        {
+            State s=_State[id];t.center=s.center;t.velocity=s.velocity;t.angle=s.angle;t.spin=s.spin;
+        }
+        t.identity=endpointIdentity(id);t.endpoint=id;
+        t.degree=_Stage==0u?0:(id<_DegreeSourceCount?_Degrees[id]:0);
+        t.flags=id>=_GrainCount?1u:0;
+        _TraceStates[_Slot*_EndpointCount+id]=t;
+    }
+    if(id<_DiagnosticWords)_TraceDiagnostics[_Slot*_DiagnosticWords+id]=_Diagnostics[id];
+    if(id>=sourceContacts)return;
+    Contact c=_Contacts[id];
+    if(c.a<_EndpointCount&&c.b<_EndpointCount)
+    {
+        uint da=c.a<_DegreeSourceCount?_Degrees[c.a]:0;
+        uint db=c.b<_DegreeSourceCount?_Degrees[c.b]:0;
+        InterlockedMax(_TraceSummaries[_Slot].maximumDegree,max(da,db));
+    }
+    float summarySeparation=c.separation;
+    if(_Stage>=4u)
+    {
+        float2 summaryNormal,summaryA,summaryB;
+        traceGeometry(c.a,c.b,c.feature,summaryNormal,summarySeparation,summaryA,summaryB);
+    }
+    float penetration=max(0,-summarySeparation);
+    if(!isfinite(penetration))
+    {
+        InterlockedOr(_TraceSummaries[_Slot].flags,4u);
+        penetration=0;
+    }
+    if(c.feature==0xffffffffu)
+    {
+        InterlockedAdd(_TraceSummaries[_Slot].grainContactCount,1);
+        InterlockedMax(_TraceSummaries[_Slot].maximumGrainPenetration,asuint(penetration));
+    }
+    else
+    {
+        InterlockedAdd(_TraceSummaries[_Slot].solidContactCount,1);
+        InterlockedMax(_TraceSummaries[_Slot].maximumSolidPenetration,asuint(penetration));
+    }
+    if(_CaptureContacts==0||id>=captured)return;
+    TraceContact t=(TraceContact)0;
+    t.a=c.a;t.b=c.b;t.feature=c.feature;t.identityA=endpointIdentity(c.a);t.identityB=endpointIdentity(c.b);
+    t.endpointFlags=(c.a>=_GrainCount?1u:0u)|(c.b>=_GrainCount?2u:0u);
+    t.normal=c.normal;t.separation=c.separation;t.normalLambda=c.ln;
+    t.armA=c.ra;t.armB=c.rb;t.tangentLambda=c.lt;t.positionLambda=c.lp;
+    if(c.a>=_EndpointCount||c.b>=_EndpointCount)t.flags|=1u;
+    if(c.a<_EndpointCount&&c.b<_EndpointCount)
+    {
+        // Position evaluation reconstructs the geometry from current state;
+        // velocity checkpoints preserve the geometry stored during gather.
+        if(_Stage==5u||_Stage==6u||_Stage==7u)
+        {
+            float2 n,ra,rb;float sep;traceGeometry(c.a,c.b,c.feature,n,sep,ra,rb);
+            t.normal=n;t.separation=sep;t.armA=ra;t.armB=rb;
+        }
+        uint da=c.a<_DegreeSourceCount?_Degrees[c.a]:0;
+        uint db=c.b<_DegreeSourceCount?_Degrees[c.b]:0;
+        t.effectiveMassA=max(1u,da)*effectiveMass(c.a,t.armA,t.normal);
+        t.effectiveMassB=max(1u,db)*effectiveMass(c.b,t.armB,t.normal);
+    }
+    if(id<_IncrementSourceCount)
+    {
+        float4 increment=_Increments[id];
+        t.incrementalImpulse=increment.xy;t.incrementalTorqueA=increment.z;t.incrementalTorqueB=increment.w;
+    }
+    _TraceContacts[_ContactBase+id]=t;
+}

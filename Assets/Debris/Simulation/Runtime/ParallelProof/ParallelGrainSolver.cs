@@ -10,6 +10,7 @@ namespace Debris.Simulation.ParallelProof
     {
         readonly ComputeShader shader;
         readonly ProofMetrics metrics;
+        readonly ProofTrace trace;
         readonly CommandBuffer commands = new CommandBuffer { name="B3R parallel grain proof" };
         readonly List<GraphicsBuffer> buffers = new List<GraphicsBuffer>();
         readonly Dictionary<string,int> kernels = new Dictionary<string,int>();
@@ -25,11 +26,13 @@ namespace Debris.Simulation.ParallelProof
         public GraphicsBuffer Parameters => parameters;
         public Task<uint[]> DiagnosticsAsync()=>Read<uint>(diagnostics);
         public Task<ProofMetricsReadback> MetricsAsync()=>metrics.ReadAsync();
+        public Task<ProofTraceReadback> TraceAsync()=>trace!=null?trace.ReadAsync():throw new InvalidOperationException("Proof tracing is disabled");
         public ParallelGrainSolver(LooseCell[] initialGrains, BodyState[] initialBodies, BodyParameters[] bodyParameters, Boundary[] patches,
-            int velocityIterations=8,int positionIterations=4,float friction=.3f,int candidateSlots=64,int rigidContactCapacity=4096)
+            int velocityIterations=8,int positionIterations=4,float friction=.3f,int candidateSlots=64,int rigidContactCapacity=4096,ProofTraceConfiguration traceConfiguration=null)
         {
             ValidateInput(initialGrains,initialBodies,bodyParameters,patches,velocityIterations,positionIterations,friction,candidateSlots);
             if(rigidContactCapacity<1||rigidContactCapacity>4096||patches.Length>4096)throw new ArgumentOutOfRangeException();
+            traceConfiguration?.Validate(initialGrains.Length,initialGrains.Length+initialBodies.Length,patches.Length,initialGrains.Length*candidateSlots,velocityIterations,positionIterations);
             n=initialGrains.Length;bodies=initialBodies.Length;endpoints=n+bodies;slots=candidateSlots;
             this.velocityIterations=velocityIterations;this.positionIterations=positionIterations;
             shader=UnityEngine.Object.Instantiate(Resources.Load<ComputeShader>("ParallelGrains"));
@@ -80,6 +83,11 @@ namespace Debris.Simulation.ParallelProof
             Bind("RigidCheckCapacity",("_D",diagnostics),("_RigidContactCount",rigidCount));
             Bind("RigidSolveVelocity",("_D",diagnostics),("_State",state),("_Parameters",parameters),("_RigidContacts",rigidContacts),("_RigidContactCount",rigidCount));
             foreach(string kernel in new[]{"RigidSolvePosition","RigidValidate"})Bind(kernel,("_D",diagnostics),("_State",state),("_Parameters",parameters),("_Boundaries",boundaries),("_RigidContacts",rigidContacts),("_RigidContactCount",rigidCount));
+            if(traceConfiguration!=null)
+            {
+                trace=new ProofTrace(n,endpoints,n*slots,positionIterations,velocityIterations,initialGrains,physical,patches,traceConfiguration,friction);
+                BufferBytes+=trace.AllocatedBytes;
+            }
             metrics=new ProofMetrics(n,bodies);BufferBytes+=metrics.AllocatedBytes;
             metrics.Record(commands,committed,parameters,grains);Graphics.ExecuteCommandBuffer(commands);commands.Clear();
         }
@@ -125,22 +133,40 @@ namespace Debris.Simulation.ParallelProof
             commands.SetComputeIntParam(shader,"_ScanCount",count);commands.SetComputeBufferParam(shader,k,"_ScanInput",input);commands.SetComputeBufferParam(shader,k,"_ScanOutput",output);commands.SetComputeBufferParam(shader,k,"_Sums",blockSums);Indirect("ScanBlocks",substep,kind);
             k=kernels["ScanSums"];commands.SetComputeIntParam(shader,"_SumCount",blocks);commands.SetComputeBufferParam(shader,k,"_SumInput",blockSums);commands.SetComputeBufferParam(shader,k,"_SumOutput",blockStarts);Indirect("ScanSums",substep,7);
         }
+        void Trace(int substep,ProofTraceStage stage,int iteration=-1)
+        {
+            trace?.Record(commands,state,contacts,degrees,increments,diagnostics,substep,stage,iteration);
+        }
         public void Step(Vector2 localForce=default,float torque=0)
         {
             if(!Finite(localForce)||!Finite(torque))throw new ArgumentException("Flight force and torque must be finite");
-            commands.Clear();commands.BeginSample("B3R.ParallelPhysics");commands.SetComputeVectorParam(shader,"_Force",new Vector4(localForce.x,localForce.y,torque,0));
+            commands.Clear();trace?.BeginTick(commands);commands.BeginSample("B3R.ParallelPhysics");commands.SetComputeVectorParam(shader,"_Force",new Vector4(localForce.x,localForce.y,torque,0));
             Direct("Begin",endpoints);Direct("Speed",endpoints);Direct("SelectSubsteps",1,1);
             for(int s=0;s<16;s++)
             {
-                commands.SetComputeIntParam(shader,"_Substep",s);Indirect("Prepare",s,0);
+                commands.SetComputeIntParam(shader,"_Substep",s);Indirect("Prepare",s,0);Trace(s,ProofTraceStage.SubstepStart);
                 commands.BeginSample("B3R.Bins");Indirect("ClearBins",s,4);Indirect("CountBins",s,1);Scan(counts,offsets,sums,blockOffsets,65536,s,4);Indirect("ScatterBins",s,1);commands.EndSample("B3R.Bins");
                 commands.BeginSample("B3R.Gather");Indirect("Gather",s,1);Scan(rowCounts,rowOffsets,rowSums,rowBlocks,n,s,5);Indirect("ClearDegrees",s,0);Indirect("Compact",s,1);Indirect("ValidateDegrees",s,0);Scan(degrees,adjOffsets,adjSums,adjBlocks,endpoints,s,6);Indirect("ScatterAdjacency",s,2);if(bodies>1){Indirect("RigidClearContacts",s,7);Indirect("RigidGatherContacts",s,9);Indirect("RigidCheckCapacity",s,7);}commands.EndSample("B3R.Gather");
+                Trace(s,ProofTraceStage.BeforeVelocity);
                 commands.BeginSample("B3R.Velocity");commands.SetComputeIntParam(shader,"_Position",0);
-                for(int i=0;i<velocityIterations;i++){Indirect("EvaluateVelocity",s,2);Indirect("ApplyGrains",s,1);if(bodies>0)Indirect("ApplyBodies",s,3);if(bodies>1){Indirect("RigidSolveVelocity",s,7);Indirect("RigidSolveVelocity",s,7);}}
-                commands.EndSample("B3R.Velocity");Indirect("Predict",s,0);
+                for(int i=0;i<velocityIterations;i++)
+                {
+                    Indirect("EvaluateVelocity",s,2);Trace(s,ProofTraceStage.VelocityEvaluated,i);
+                    Indirect("ApplyGrains",s,1);if(bodies>0)Indirect("ApplyBodies",s,3);
+                    if(bodies>1){Indirect("RigidSolveVelocity",s,7);Indirect("RigidSolveVelocity",s,7);}
+                    Trace(s,ProofTraceStage.VelocityApplied,i);
+                }
+                commands.EndSample("B3R.Velocity");Indirect("Predict",s,0);Trace(s,ProofTraceStage.Predicted);
                 commands.BeginSample("B3R.Position");commands.SetComputeIntParam(shader,"_Position",1);
-                for(int i=0;i<positionIterations;i++){Indirect("EvaluatePosition",s,2);Indirect("ApplyGrains",s,1);if(bodies>0)Indirect("ApplyBodies",s,3);if(bodies>1){Indirect("RigidSolvePosition",s,7);Indirect("RigidSolvePosition",s,7);}}
+                for(int i=0;i<positionIterations;i++)
+                {
+                    Indirect("EvaluatePosition",s,2);Trace(s,ProofTraceStage.PositionEvaluated,i);
+                    Indirect("ApplyGrains",s,1);if(bodies>0)Indirect("ApplyBodies",s,3);
+                    if(bodies>1){Indirect("RigidSolvePosition",s,7);Indirect("RigidSolvePosition",s,7);}
+                    Trace(s,ProofTraceStage.PositionApplied,i);
+                }
                 commands.EndSample("B3R.Position");Indirect("PrepareValidation",s,7);Indirect("Validate",s,8);if(bodies>1)Indirect("RigidValidate",s,7);
+                Trace(s,ProofTraceStage.Validation);
             }
             Direct("Commit",endpoints);Direct("Acknowledge",1,1);metrics.Record(commands,committed,parameters,grains);commands.EndSample("B3R.ParallelPhysics");Graphics.ExecuteCommandBuffer(commands);
         }
@@ -153,6 +179,6 @@ namespace Debris.Simulation.ParallelProof
         {
             var source=new TaskCompletionSource<T[]>();AsyncGPUReadback.Request(b,r=>{if(r.hasError)source.SetException(new InvalidOperationException("Proof GPU readback failed"));else source.SetResult(r.GetData<T>().ToArray());});return source.Task;
         }
-        public void Dispose(){metrics.Dispose();commands.Dispose();foreach(var b in buffers)b.Dispose();if(Application.isPlaying)UnityEngine.Object.Destroy(shader);else UnityEngine.Object.DestroyImmediate(shader);}
+        public void Dispose(){trace?.Dispose();metrics.Dispose();commands.Dispose();foreach(var b in buffers)b.Dispose();if(Application.isPlaying)UnityEngine.Object.Destroy(shader);else UnityEngine.Object.DestroyImmediate(shader);}
     }
 }

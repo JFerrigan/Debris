@@ -30,16 +30,23 @@ namespace Debris.Presentation
                 Record($"RIGID_IMPACT result={(ok?"PASS":"FAIL")} fault={rt.Result.Fault} manifoldPoints={rt.Result.Diagnostics[13]} momentumError={rm.MaximumMomentumErrorMagnitude:R} angularError={rm.MaximumAngularMomentumError:R} energyGain={rm.MaximumEnergyGain:R}");
                 if(!ok){File.WriteAllLines(output,lines);Application.Quit(3);yield break;}
             }
+            bool tracing=Array.IndexOf(commandLine,"-debrisProofTrace")>=0;
+            if(tracing)Record("DIAGNOSTIC tracing enabled: latest attempted tick only; instrumented submission times are not performance evidence.");
             int passing=0;
             foreach(int velocity in new[]{4,8,12})
             {
                 bool profilePass=true;
+                foreach(var motion in tracing?new[]{PackedDiagnosticMotion.Combined,PackedDiagnosticMotion.Stationary,PackedDiagnosticMotion.TranslationOnly,PackedDiagnosticMotion.RotationOnly}:new[]{PackedDiagnosticMotion.Combined})
                 foreach(bool shared in new[]{true,false})
                 {
-                    var fixture=ProofFixtures.Packed(shared);solver=fixture.Create(velocity,velocity/2);material.SetBuffer("_Grains",solver.Grains);material.SetBuffer("_Bodies",solver.Bodies);material.SetBuffer("_Boundaries",solver.Boundaries);material.SetBuffer("_Parameters",solver.Parameters);
+                    bool canonical=motion==PackedDiagnosticMotion.Combined;
+                    var fixture=canonical?ProofFixtures.Packed(shared):ProofDiagnosticFixtures.Packed(shared,motion);
+                    string caseName=(shared?"shared-rigid-motion":"rest-under-thrust-torque")+(canonical?"":"-"+motion);
+                    solver=new ParallelGrainSolver(fixture.Grains,fixture.Bodies,fixture.Parameters,fixture.Boundaries,velocity,velocity/2,traceConfiguration:tracing?new ProofTraceConfiguration():null);material.SetBuffer("_Grains",solver.Grains);material.SetBuffer("_Bodies",solver.Bodies);material.SetBuffer("_Boundaries",solver.Boundaries);material.SetBuffer("_Parameters",solver.Parameters);
                     wallMaterial.SetBuffer("_Grains",solver.Grains);wallMaterial.SetBuffer("_Bodies",solver.Bodies);wallMaterial.SetBuffer("_Boundaries",solver.Boundaries);wallMaterial.SetBuffer("_Parameters",solver.Parameters);
+                    int tickLimit=canonical?120:12;
                     int attempted=0;uint[] facts=null;double maximumSubmission=0;
-                    for(int tick=0;tick<120;tick++)
+                    for(int tick=0;tick<tickLimit;tick++)
                     {
                         long begin=System.Diagnostics.Stopwatch.GetTimestamp();solver.Step(fixture.Force,fixture.Torque);
                         maximumSubmission=Math.Max(maximumSubmission,(System.Diagnostics.Stopwatch.GetTimestamp()-begin)*1000.0/System.Diagnostics.Stopwatch.Frequency);
@@ -53,11 +60,19 @@ namespace Debris.Presentation
                     double initialEnergy=0;foreach(var grain in fixture.Grains)initialEnergy+=.5*grain.Velocity.sqrMagnitude+grain.AngularVelocity*grain.AngularVelocity/12.0;
                     for(int b=0;b<fixture.Bodies.Length;b++){var bs=fixture.Bodies[b];var bp=fixture.Parameters[b];if(bp.InverseMass>0)initialEnergy+=.5*bs.Velocity.sqrMagnitude/bp.InverseMass;if(bp.InverseInertia>0)initialEnergy+=.5*bs.AngularVelocity*bs.AngularVelocity/bp.InverseInertia;}
                     bool conserved=!shared||(metrics.MaximumMomentumErrorMagnitude<=.0001f&&metrics.MaximumEnergyGain<=Math.Max(.0001,initialEnergy*.001));
-                    bool passed=facts[0]==0&&facts[1]==120&&conserved&&metrics.MaximumNonfiniteCount==0&&metrics.GrainCount==2500&&metrics.IdentitySum==metrics.InitialIdentitySum&&metrics.IdentityXor==metrics.InitialIdentityXor;profilePass&=passed;
+                    bool passed=facts[0]==0&&facts[1]==tickLimit&&conserved&&metrics.MaximumNonfiniteCount==0&&metrics.GrainCount==2500&&metrics.IdentitySum==metrics.InitialIdentitySum&&metrics.IdentityXor==metrics.InitialIdentityXor;if(canonical)profilePass&=passed;
                     Record($"METRICS {velocity}/{velocity/2} forced={!shared} normalizedMomentumError={metrics.MaximumMomentumErrorMagnitude:R} angularError={metrics.MaximumAngularMomentumError:R} energyGain={metrics.MaximumEnergyGain:R} nonfinite={metrics.MaximumNonfiniteCount} grains={metrics.GrainCount} identitySum={metrics.IdentitySum} identityXor={metrics.IdentityXor} samples={metrics.SampleCount}");
-                    Record($"PROFILE {velocity}/{velocity/2} packed={(shared?"shared-rigid-motion":"rest-under-thrust-torque")} count=2500 attempted={attempted} completed={facts[1]} fault={(SolverFault)facts[0]} substeps={facts[2]} binMax={facts[4]} candidates={facts[5]} maxRow={facts[6]} maxGrainPenetration={snapshot.GrainPenetration:R} maxSolidPenetration={snapshot.SolidPenetration:R} envelope={facts[10]} buffers={solver.BufferBytes} cpuSubmissionMaxMs={maximumSubmission:F3} result={(passed?"NECESSARY_CASE_PASS":"FAIL")} physicsGpuP95=unmeasured totalGpuP95=unmeasured");
+                    Record($"PROFILE {velocity}/{velocity/2} packed={caseName} canonical={canonical} tickLimit={tickLimit} count=2500 attempted={attempted} completed={facts[1]} fault={(SolverFault)facts[0]} substeps={facts[2]} binMax={facts[4]} candidates={facts[5]} maxRow={facts[6]} maxGrainPenetration={snapshot.GrainPenetration:R} maxSolidPenetration={snapshot.SolidPenetration:R} envelope={facts[10]} buffers={solver.BufferBytes} cpuSubmissionMaxMs={maximumSubmission:F3} result={(passed?"NECESSARY_CASE_PASS":"FAIL")} physicsGpuP95=unmeasured totalGpuP95=unmeasured");
                     // Full state is read only after the case, outside any timing window.
                     Record($"COMMITTED bodyPosition={snapshot.Endpoints[2500].Center} bodyVelocity={snapshot.Endpoints[2500].Velocity} bodyAngle={snapshot.Endpoints[2500].Angle:R} bodySpin={snapshot.Endpoints[2500].AngularVelocity:R}");
+                    if(tracing)
+                    {
+                        var traceTask=solver.TraceAsync();while(!traceTask.IsCompleted)yield return null;
+                        if(traceTask.IsFaulted)throw traceTask.Exception;
+                        string tracePath=Path.Combine(Path.GetDirectoryName(output)??"",Path.GetFileNameWithoutExtension(output)+$"-{velocity}-{velocity/2}-{caseName}");
+                        string exportedPath=traceTask.Result.Export(tracePath);
+                        Record($"TRACE case={caseName} profile={velocity}/{velocity/2} truncated={traceTask.Result.Truncated} checkpoints={traceTask.Result.Checkpoints.Length} contacts={traceTask.Result.Contacts.Length} path={exportedPath}");
+                    }
                     solver.Dispose();solver=null;
                 }
                 if(profilePass)passing++;

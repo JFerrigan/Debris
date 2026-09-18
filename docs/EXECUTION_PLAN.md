@@ -2,6 +2,8 @@
 
 Authorized scope: implement phases A–E in order through playable alien-drone escalation. Continue automatically when each gate passes. Final story resolution is outside this run. Latest priority: record feature-batch efficiency and implement B.3R before B.5. Follow [AGENTS.md](../AGENTS.md) for validation and concise context loading. Preserve existing work, make coherent subsystem commits, and push ordinary commits to origin/main.
 
+Latest user scope (2026-09-17): finish the interrupted diagnostic work and deliver a working Mac build only. That checkpoint is complete; stop feature expansion here. The user accepts the measured penetration for this checkpoint. The numerical physics gate and gameplay cutover remain open. See [diagnostic/build evidence](evidence/B3R-packed-diagnosis.md).
+
 ## Locked design interpretations
 
 - Physical commodity cargo is simulated cells. Fuel-tank and capacity-limited misc-storage inventories are explicit menu exceptions.
