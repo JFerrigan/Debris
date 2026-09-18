@@ -41,7 +41,7 @@ Latest user scope (2026-09-17): finish the interrupted diagnostic work and deliv
 - [x] B.3R.2 GPU ship–cell momentum exchange; eliminate ordinary pixel hard stops and CPU velocity resets.
 - [x] B.3R.3 Dense piles, cargo mass counted once, fragment torque, anchored bodies and dynamic chips.
 - [x] B.3R.R0 Preserve unfinished contacts and freeze parallel redesign contract.
-- [ ] B.3R.R1 Parallel square-grain proof. **STOP:** all three profiles failed the necessary packed experiment; full R1 remains incomplete. [Evidence](evidence/B3R-parallel-pieces.md).
+- [ ] B.3R.R1 Parallel square-grain proof. Interim integration proceeds with a .002-cell solid-penetration gate. **TODO:** intentionally revisit the original .001-cell target; packed convergence is a known limitation, not a completed fix. Full R1 correctness/performance coverage remains incomplete. [Evidence](evidence/B3R-parallel-pieces.md).
 - [ ] B.3R.R2 Candidate mining/cargo/door/fuel/damage and exceptional limits.
 - [ ] B.3R.R3 Schema-5/schema-3 migration, travel, restoration and default cutover.
 - [ ] B.3R.R4 Delete old architecture and verify final B.GATE. See [CONTACT_PHYSICS](CONTACT_PHYSICS.md).

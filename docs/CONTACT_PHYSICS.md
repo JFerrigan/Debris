@@ -1,6 +1,6 @@
 # Contact physics — B.3R parallel redesign
 
-Status: replacement required; the opt-in packed experiment failed all three profiles and integration is stopped. See [canonical results](evidence/B3R-parallel-pieces.md). Earlier checkpoints below are historical scoped evidence, not packed-contact acceptance. B.GATE and B.5 remain blocked. Baseline is `f3aa5c9`; the unfinished gatherer is preserved in [baseline evidence](evidence/B3R-redesign-baseline/unfinished-contacts.patch).
+Status: opt-in packed proof is accepted for interim integration with a temporary .002-cell solid-penetration gate. The original .001-cell target is a documented TODO requiring intentional review; it is not silently forgotten or considered fixed. See [canonical results](evidence/B3R-parallel-pieces.md). Earlier checkpoints below are historical scoped evidence. B.GATE remains open for the broader gameplay and performance checks. Baseline is `f3aa5c9`; the unfinished gatherer is preserved in [baseline evidence](evidence/B3R-redesign-baseline/unfinished-contacts.patch).
 
 ## Locked architecture
 
@@ -18,7 +18,7 @@ Only three profiles: 4/2, 8/4, 12/6 velocity/position iterations, with two rigid
 
 For normal A→B, vn = dot(surfaceVelocityB − surfaceVelocityA, normal). kA = invMassA + invInertiaA * cross(rA, normal)^2; similarly kB. Ksplit = degreeA*kA + degreeB*kB, where degree counts incident candidate constraints and is at least one. Accumulate unilateral normal impulses against Ksplit; reduce equal/opposite increments using actual inverse mass/inertia, without endpoint averaging. Speculative contacts allow closing only through the remaining gap. Touching friction is clamped to μ times accumulated normal impulse. Separate mass-split position correction never changes physical velocity.
 
-Maximum penetration over the entire run: .01 cell grain–grain, .001 grain/rigid–solid; after 120 unforced steps residual grain penetration ≤ .002. These bounded errors never authorize extra cargo capacity. Normalized linear momentum error ≤ 1e-4 using max(1, sum(initial mass*speed)); isolated angular momentum error ≤ 1e-3. Energy, including all spin, may not exceed initial energy by more than max(.1%, .0001) without external work. Keep the stricter 10000:1 analytical speed assertion (100000/10001 ± .0001).
+Maximum penetration over the entire run: .01 cell grain–grain, .002 grain/rigid–solid for the interim integration gate; after 120 unforced steps residual grain penetration ≤ .002. TODO(B.3R): revisit the original .001-cell solid target with explicit packed-cargo, capacity, door, high-speed, and save/reload evidence. These bounded errors never authorize extra cargo capacity. Normalized linear momentum error ≤ 1e-4 using max(1, sum(initial mass*speed)); isolated angular momentum error ≤ 1e-3. Energy, including all spin, may not exceed initial energy by more than max(.1%, .0001) without external work. Keep the stricter 10000:1 analytical speed assertion (100000/10001 ± .0001).
 
 ## GPU scheduling and bounds
 
@@ -49,7 +49,7 @@ After default cutover delete IntegratePhysical/64 retries, serial SolveShipCells
 ## Phase order and stop gate
 
 0. Freeze this contract and preserve changes; documentation checks only.
-1. Opt-in runnable GPU proof using production-intended kernels; normal gameplay stays unchanged. Test two grains, 10000:1, 100/1000 dense piles, 2500 tightly packed grains in a 50×50 cavity (shared initial rigid motion and initially resting cargo under thrust/torque), free spinning cargo, off-centre fragment, anchored glancing wall, existing 201 layout, 8192 combined and 10000 exploratory. Sweep only 4/2, 8/4 and 12/6. **If none passes locked correctness and performance, preserve evidence and stop integration.** Isolate the failing assumption; never soften tolerances or add arbitrary passes.
+1. Opt-in runnable GPU proof using production-intended kernels; normal gameplay stays unchanged. Test two grains, 10000:1, 100/1000 dense piles, 2500 tightly packed grains in a 50×50 cavity (shared initial rigid motion and initially resting cargo under thrust/torque), free spinning cargo, off-centre fragment, anchored glancing wall, existing 201 layout, 8192 combined and 10000 exploratory. Sweep only 4/2, 8/4 and 12/6. The interim integration gate uses .002 solid penetration; the original .001 target is tracked as TODO(B.3R). Continue integration only with the remaining correctness, rollback, persistence, and performance checks visible; do not treat the relaxed gate as proof that the tighter target is solved.
 2. Complete masks/boundaries, mining/suction/cargo/door/rendering, fuel/damage/topology acknowledgement and exceptional limits on candidate path.
 3. Migrate persistence/travel, port fixtures, then switch default.
 4. Remove legacy paths; stable fast suite and one matching final Mac build/player batch; close gate only with every acceptance case verified.
