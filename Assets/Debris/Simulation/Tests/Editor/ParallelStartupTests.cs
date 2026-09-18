@@ -55,6 +55,20 @@ namespace Debris.Simulation.Tests
             }
         }
         [UnityTest,Timeout(120000)]
+        public IEnumerator SubmissionIdentityIsMonotonicAcrossAcknowledgements()
+        {
+            var catalog=Resources.Load<MaterialCatalog>("Materials");var ship=new ShipRuntime(Resources.Load<ShipBlueprint>("StarterShip"));
+            using(var source=new MatterSession(catalog,Resources.Load<AsteroidProfile>("Asteroid"),4,128,8192))
+            {
+                source.ConfigureShip(ship.CollisionMask(),ship.Position);source.ConfigureShipBody(ship.MassProperties(catalog));var read=source.SnapshotAsync();while(!read.IsCompleted)yield return null;
+                using(var candidate=ParallelGameplaySession.Import(read.Result,ship,catalog))
+                {
+                    var input=new MatterStepInput(null,0,default,false,false,false,Vector3.zero);Assert.That(candidate.NextSubmissionTick,Is.EqualTo(1));Assert.That(candidate.Submit(candidate.NextSubmissionTick,input),Is.True);
+                    ParallelGameplaySession.Completion completion;while(!candidate.TryAcknowledge(out completion))yield return null;Assert.That(completion.Tick,Is.EqualTo(1));Assert.That(candidate.NextSubmissionTick,Is.EqualTo(2));Assert.That(candidate.Submit(1,input),Is.False);Assert.That(candidate.Submit(candidate.NextSubmissionTick,input),Is.True);
+                }
+            }
+        }
+        [UnityTest,Timeout(120000)]
         public IEnumerator ImportedShipUsesHullOriginAndRotatedLocalCom()
         {
             var catalog=Resources.Load<MaterialCatalog>("Materials");var ship=new ShipRuntime(Resources.Load<ShipBlueprint>("StarterShip"));

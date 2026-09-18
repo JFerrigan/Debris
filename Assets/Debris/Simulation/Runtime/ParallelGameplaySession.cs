@@ -21,11 +21,13 @@ namespace Debris.Simulation
         readonly MatterSnapshot source;
         readonly bool[] cargo;
         int pendingHead,pendingCount;
+        uint lastSubmittedTick;
         bool faulted,disposed;
         double unresolvedFuel;
         public bool Faulted=>faulted;
         public string Fault { get; private set; }
         public int PendingTicks=>pendingCount;
+        public uint NextSubmissionTick=>lastSubmittedTick+1;
         public ParallelGrainSolver Solver=>solver;
         public double ProvisionalFuel
         {
@@ -153,9 +155,9 @@ namespace Debris.Simulation
         }
         public bool Submit(uint tick,MatterStepInput input,double provisionalFuel=0)
         {
-            if(disposed||faulted||pendingCount>=MaximumPendingTicks||provisionalFuel<0||double.IsNaN(provisionalFuel)||double.IsInfinity(provisionalFuel))return false;
+            if(disposed||faulted||tick==0||tick<=lastSubmittedTick||pendingCount>=MaximumPendingTicks||provisionalFuel<0||double.IsNaN(provisionalFuel)||double.IsInfinity(provisionalFuel))return false;
             solver.Step(new Vector2(input.LocalForce.x,input.LocalForce.y),input.LocalForce.z);
-            pending[(pendingHead+pendingCount)%MaximumPendingTicks]=new Pending{Tick=tick,Fuel=provisionalFuel,Readback=solver.CompletionAsync(source.Cells.Length)};pendingCount++;return true;
+            pending[(pendingHead+pendingCount)%MaximumPendingTicks]=new Pending{Tick=tick,Fuel=provisionalFuel,Readback=solver.CompletionAsync(source.Cells.Length)};pendingCount++;lastSubmittedTick=tick;return true;
         }
         public bool TryAcknowledge(out Completion completion)
         {

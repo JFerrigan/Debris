@@ -128,7 +128,7 @@ namespace Debris.Presentation
                         if(cut)command=new SiteCommand(SiteCommandType.CutterStroke,Vector2.zero,Vector2.zero,6,120,1);
                         bool suction=!parallelGameplay&&input["Suction"].IsPressed()&&ship.Has(UnitKind.Suction);
                         var step=new MatterStepInput(command,suction?40:0,default,ship.DoorOpen,cut,suction,force);
-                        if(parallelGameplay){if(!parallel.Submit((uint)(session.ShipStats[2].x+parallel.PendingTicks+1),step,provisional)){break;}}
+                        if(parallelGameplay){if(!parallel.Submit(parallel.NextSubmissionTick,step,provisional)){break;}}
                         else session.Step(step);
                     }
                     else session.Step(command);
