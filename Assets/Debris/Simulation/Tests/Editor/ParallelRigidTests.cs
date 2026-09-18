@@ -48,6 +48,20 @@ namespace Debris.Simulation.Tests
                 Assert.That(s.Endpoints[2].Center,Is.EqualTo(f.Bodies[1].Center));Assert.That(s.Endpoints[2].Angle,Is.EqualTo(0));
             }
         }
+        [UnityTest,Timeout(120000)] public IEnumerator ImportedTerrainRevisionStillParticipatesInRigidContact()
+        {
+            var f=Pair();f.Parameters[1].InverseMass=0;f.Parameters[1].InverseInertia=0;f.Parameters[1].Mobility=0;f.Parameters[1].ShapeRevision=uint.MaxValue;f.Boundaries[1].HalfSize=new Vector2(.5f,10);
+            using(var solver=f.Create(8,4,0))
+            {
+                solver.Step();var t=solver.SnapshotAsync();while(!t.IsCompleted)yield return null;var s=t.Result;
+                Assert.That(s.Fault,Is.EqualTo(SolverFault.None));Assert.That(s.Diagnostics[13],Is.GreaterThan(0));Assert.That(s.Endpoints[1].Velocity.x,Is.EqualTo(0).Within(.001));Assert.That(s.Endpoints[2].Center,Is.EqualTo(f.Bodies[1].Center));
+            }
+        }
+        [Test] public void EighteenRigidEndpointsAreAdmitted()
+        {
+            var bodies=new BodyState[18];var parameters=new BodyParameters[18];for(int i=0;i<parameters.Length;i++)parameters[i]=new BodyParameters{InverseMass=1,InverseInertia=1,Mobility=1};
+            Assert.DoesNotThrow(()=>{using(var solver=new ParallelGrainSolver(Array.Empty<Grain>(),bodies,parameters,Array.Empty<Boundary>(),4,2)){};});
+        }
         [UnityTest,Timeout(120000)] public IEnumerator UndersizedManifoldBufferRejectsAtomically()
         {
             var f=Pair();using(var solver=new ParallelGrainSolver(f.Grains,f.Bodies,f.Parameters,f.Boundaries,8,4,0,64,1))

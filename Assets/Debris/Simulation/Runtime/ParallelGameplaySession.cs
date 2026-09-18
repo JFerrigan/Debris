@@ -6,6 +6,7 @@ using Debris.Materials;
 using Debris.Ships;
 using Debris.Simulation.ParallelProof;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Debris.Simulation
 {
@@ -170,6 +171,14 @@ namespace Debris.Simulation
             int count=0;float cargoMass=0;for(int i=0;i<cargo.Length;i++)if(cargo[i]){count++;cargoMass+=catalog.DefinitionAt((ushort)source.Cells[i].Material).Density;}
             completion=new Completion(next.Tick,SolverFault.None,result.State,count,cargoMass,next.Fuel);return true;
         }
-        public void Dispose(){if(disposed)return;disposed=true;pending.Clear();solver.Dispose();}
+        public void Dispose()
+        {
+            if(disposed)return;disposed=true;
+            // A candidate owns both the command buffer and its completion
+            // readbacks. Fence them before releasing their buffers so a reset
+            // or destruction cannot invoke a callback against disposed memory.
+            AsyncGPUReadback.WaitAllRequests();
+            pending.Clear();solver.Dispose();
+        }
     }
 }

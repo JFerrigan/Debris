@@ -4,7 +4,7 @@ Current handoff: **B.3R opt-in GPU flight/collision implementation is automated-
 
 ## Latest validation
 
-The final fast EditMode suite passed 110 with one explicit scale test skipped (111 total, 2026-09-18 05:14–05:15 UTC). The final Mac build succeeded. A 25-second Mac player run with `-debrisParallelGameplay` activated the candidate and produced no Metal binding or solver faults after the direct-buffer binding correction. Windows/Linux are unverified.
+Focused rigid validation passed 7/7, including imported-terrain revision and 18-endpoint admission. The final fast EditMode suite passed 112 with one explicit scale test skipped (113 total, 2026-09-18 05:17 UTC), and the Mac build succeeded. A 25-second Mac player run with `-debrisParallelGameplay` activated the candidate and produced no Metal binding or solver faults after the direct-buffer binding correction. Windows/Linux are unverified.
 
 ## Remaining limitation and next work
 
