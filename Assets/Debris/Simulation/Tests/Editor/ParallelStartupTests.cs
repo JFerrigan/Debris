@@ -34,6 +34,7 @@ namespace Debris.Simulation.Tests
                         Assert.That(completion.Fault,Is.EqualTo(SolverFault.None));
                         Assert.That(completion.Tick,Is.EqualTo(tick));
                         Assert.That(completion.ShipVelocity.x,Is.GreaterThan(0));
+                        Assert.That(candidate.Solver.SnapshotRequests,Is.Zero,"normal acknowledgements must use compact completion readback");
                     }
                 }
             }

@@ -19,6 +19,7 @@ namespace Debris.Simulation.ParallelProof
         readonly GraphicsBuffer counts,cursors,offsets,sums,blockOffsets,indices;
         readonly GraphicsBuffer rows,rowCounts,rowOffsets,rowSums,rowBlocks,contacts,degrees,adjOffsets,adjSums,adjBlocks,adjCursors,adjacency,increments;
         readonly int n,bodies,endpoints,slots,velocityIterations,positionIterations;
+        int snapshotRequests;
         public long BufferBytes { get; private set; }
         public GraphicsBuffer Grains => grains;
         public GraphicsBuffer Bodies => committed;
@@ -26,6 +27,7 @@ namespace Debris.Simulation.ParallelProof
         public GraphicsBuffer Parameters => parameters;
         public int GrainCount => n;
         public int BodyCount => bodies;
+        public int SnapshotRequests => snapshotRequests;
         public Task<uint[]> DiagnosticsAsync()=>Read<uint>(diagnostics);
         public Task<ProofMetricsReadback> MetricsAsync()=>metrics.ReadAsync();
         public Task<ProofTraceReadback> TraceAsync()=>trace!=null?trace.ReadAsync():throw new InvalidOperationException("Proof tracing is disabled");
@@ -181,6 +183,7 @@ namespace Debris.Simulation.ParallelProof
         }
         public async Task<ProofSnapshot> SnapshotAsync()
         {
+            snapshotRequests++;
             var g=Read<LooseCell>(grains);var s=Read<BodyState>(committed);var d=Read<uint>(diagnostics);
             await Task.WhenAll(g,s,d);
             // The one-element allocation for an empty population is GPU backing
