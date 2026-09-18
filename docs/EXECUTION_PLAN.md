@@ -4,6 +4,8 @@ Authorized scope: implement phases A–E in order through playable alien-drone e
 
 Latest user scope (2026-09-17): finish the interrupted diagnostic work and deliver a working Mac build only. That checkpoint is complete; stop feature expansion here. The user accepts the measured penetration for this checkpoint. The numerical physics gate and gameplay cutover remain open. See [diagnostic/build evidence](evidence/B3R-packed-diagnosis.md).
 
+Follow-up startup investigation (2026-09-18 UTC): the single permitted candidate player launch reproduced `Page`. Grain-only page validation and empty-population readback are corrected; 11 focused tests and 110 fast-suite tests passed (one explicit skip), and the Mac rebuild succeeded. No second player launch; post-fix player acceptance remains unverified under the user's limit. See [startup evidence](evidence/B3R-page-startup.md). This does not close R2a or authorize feature expansion.
+
 ## Locked design interpretations
 
 - Physical commodity cargo is simulated cells. Fuel-tank and capacity-limited misc-storage inventories are explicit menu exceptions.
@@ -42,7 +44,7 @@ Latest user scope (2026-09-17): finish the interrupted diagnostic work and deliv
 - [x] B.3R.3 Dense piles, cargo mass counted once, fragment torque, anchored bodies and dynamic chips.
 - [x] B.3R.R0 Preserve unfinished contacts and freeze parallel redesign contract.
 - [ ] B.3R.R1 Parallel square-grain proof. Interim integration proceeds with a .002-cell solid-penetration gate. **TODO:** intentionally revisit the original .001-cell target; packed convergence is a known limitation, not a completed fix. Full R1 correctness/performance coverage remains incomplete. [Evidence](evidence/B3R-parallel-pieces.md).
-- [ ] B.3R.R2 Candidate mining/cargo/door/fuel/damage and exceptional limits.
+- [ ] B.3R.R2 Candidate mining/cargo/door/fuel/damage and exceptional limits. R2a bridge is opt-in under `-debrisParallelGameplay`; startup import, mass-aware grain endpoints, committed-state mirroring and acknowledged flight fuel are implemented. Cutter, suction/cavity classification, effective doors, capacity admission and candidate presentation still require acceptance evidence.
 - [ ] B.3R.R3 Schema-5/schema-3 migration, travel, restoration and default cutover.
 - [ ] B.3R.R4 Delete old architecture and verify final B.GATE. See [CONTACT_PHYSICS](CONTACT_PHYSICS.md).
 

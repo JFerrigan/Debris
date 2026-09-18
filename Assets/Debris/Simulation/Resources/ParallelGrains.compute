@@ -70,7 +70,9 @@ uint adjOffset(uint id){return _AdjOffsets[id]+_AdjBlockOffsets[id/256];}
 bool active(){return _D[0]==0 && _Substep<_D[2];}
 void fault(uint bit){InterlockedOr(_D[0],bit);}
 float dt(){return _Dt/max(1u,_D[2]);}
-uint bin(float2 p){int2 xy=(int2)floor((p+256)/2);if(any(xy<0)||any(xy>=(int)_BinSide))return 0xffffffff;return (uint)xy.y*_BinSide+(uint)xy.x;}
+// Keep the established 256x256 page table, but use four-unit bins so the
+// active 512x512 legacy world has a one-world-width motion envelope.
+uint bin(float2 p){int2 xy=(int2)floor((p+512.0)*0.25);if(any(xy<0)||any(xy>=(int)_BinSide))return 0xffffffff;return (uint)xy.y*_BinSide+(uint)xy.x;}
 
 #include "ParallelContactGeometry.hlsl"
 
@@ -123,7 +125,8 @@ void geometry(uint a,uint b,uint feature,out float2 n,out float sep,out float2 r
 [numthreads(256,1,1)] void ClearBins(uint id:SV_DispatchThreadID){if(id<_BinCount){_Counts[id]=0;_Cursors[id]=0;}}
 [numthreads(64,1,1)] void CountBins(uint id:SV_DispatchThreadID)
 {
-    if(id>=_N||!active())return;uint b=bin(_State[id].center);if(b==0xffffffff){fault(2);return;}uint old;InterlockedAdd(_Counts[b],1,old);InterlockedMax(_D[4],old+1);
+    if(id>=_N||!active())return;
+    State s=_State[id];uint b=bin(s.center);if(b==0xffffffff){fault(2);return;}uint old;InterlockedAdd(_Counts[b],1,old);InterlockedMax(_D[4],old+1);
 }
 groupshared uint scan[256];
 [numthreads(256,1,1)] void ScanBlocks(uint id:SV_DispatchThreadID,uint lane:SV_GroupThreadID,uint group:SV_GroupID)
@@ -140,7 +143,9 @@ groupshared uint scan[256];
 }
 [numthreads(64,1,1)] void ScatterBins(uint id:SV_DispatchThreadID)
 {
-    if(id>=_N||!active())return;uint b=bin(_State[id].center),slot;InterlockedAdd(_Cursors[b],1,slot);_Indices[offset(b)+slot]=id;
+    if(id>=_N||!active())return;uint b=bin(_State[id].center),slot;
+    if(b==0xffffffff){fault(2);return;}
+    InterlockedAdd(_Cursors[b],1,slot);_Indices[offset(b)+slot]=id;
 }
 void addCandidate(uint id,uint other,uint feature,inout uint count)
 {
@@ -154,7 +159,7 @@ void addCandidate(uint id,uint other,uint feature,inout uint count)
 [numthreads(64,1,1)] void Gather(uint id:SV_DispatchThreadID)
 {
     if(id>=_N)return;_RowCounts[id]=0;if(!active())return;
-    int2 xy=(int2)floor((_State[id].center+256)/2);uint count=0;
+    int2 xy=(int2)floor((_State[id].center+512.0)*0.25);uint count=0;
     for(int y=max(0,xy.y-2);y<=min((int)_BinSide-1,xy.y+2);y++)for(int x=max(0,xy.x-2);x<=min((int)_BinSide-1,xy.x+2);x++){
         uint b=(uint)y*_BinSide+(uint)x,first=offset(b);
         for(uint k=0;k<_Counts[b];k++){uint other=_Indices[first+k];if(_Grains[id].identity<_Grains[other].identity)addCandidate(id,other,0xffffffff,count);}
@@ -225,7 +230,10 @@ groupshared float4 reaction[64];
     if(_D[12]==0)return;
     if(id<_Endpoints){State s=_State[id];if(!all(isfinite(float4(s.center,s.velocity)))||!all(isfinite(float2(s.angle,s.spin))))fault(32);
         float4 start=_Starts[id];float radius=start.w; if(length(s.center-start.xy)+radius*abs(s.angle-start.z)>.375){fault(16);InterlockedAdd(_D[10],1);}
-        if(any(abs(s.center)+radius>=256))fault(2);}
+        // Only grain centres index the bin page. Rigid patches are gathered
+        // directly, including terrain/world borders larger than this page.
+        // Reject escaping grains before commit; never silently lose contacts.
+        if(id<_N && bin(s.center)==0xffffffff)fault(2); }
     if(id<_D[5]){Contact c=_Contacts[id];float2 n,ra,rb;float sep;geometry(c.a,c.b,c.feature,n,sep,ra,rb);float pen=max(0,-sep);
         if(c.feature==0xffffffff){InterlockedMax(_D[8],asuint(pen));if(pen>.01)fault(64);}else{
             InterlockedMax(_D[9],asuint(pen));
