@@ -38,7 +38,11 @@ namespace Debris.Presentation
             candidate=value?.Solver;
             if(candidate==null)return;
             foreach(var material in new[]{candidateLoose,candidateShip,candidateFragment})
-            {material.SetBuffer("_CandidateGrains",candidate.Grains);material.SetBuffer("_CandidateBodies",candidate.Bodies);material.SetBuffer("_CandidateParameters",candidate.Parameters);}
+            {
+                material.SetBuffer("_CandidateGrains",candidate.Grains);material.SetBuffer("_CandidateBodies",candidate.Bodies);material.SetBuffer("_CandidateParameters",candidate.Parameters);
+                material.SetBuffer("_FragmentHull",session.FragmentHull);material.SetBuffer("_Hull",session.Hull);material.SetBuffer("_Palette",session.Palette);material.SetBuffer("_Shadows",session.Shadows);material.SetBuffer("_Emissions",session.Emissions);
+                material.SetTexture("_Field",session.Field);material.SetInt("_ChunkSize",session.ChunkSize);material.SetInt("_Side",session.Side);material.SetVector("_Origin",new Vector4(session.Origin.x,session.Origin.y,0,0));
+            }
             candidateShip.SetInt("_CandidateBody",candidate.GrainCount);
         }
         public void DrawCandidate()

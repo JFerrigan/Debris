@@ -44,7 +44,7 @@ Shader "Debris/Matter"
                 else if(_Candidate>.5 && _Loose>1.5)
                 {
                     uint m=_Hull[instance];if(m==0){o.position=float4(2,2,2,1);o.world=0;return o;}
-                    CandidateBody b=_CandidateBodies[0];CandidateParameters q=_CandidateParameters[0];float2 local=float2(instance%128,instance/128)-64+vertex.xy-q.com;
+                    CandidateBody b=_CandidateBodies[_CandidateBody];CandidateParameters q=_CandidateParameters[_CandidateBody];float2 local=float2(instance%128,instance/128)-64+vertex.xy-q.com;
                     float c=cos(b.angle),s=sin(b.angle);p=b.center+float2(local.x*c-local.y*s,local.x*s+local.y*c);o.material=m==0xffffffff?2:m;
                 }
                 else if(_Candidate>.5 && _Loose>.5)
