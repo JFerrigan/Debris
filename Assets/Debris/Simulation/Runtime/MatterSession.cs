@@ -218,6 +218,11 @@ namespace Debris.Simulation
                 for(int substep=0;substep<steps;substep++){shader.Dispatch(fragmentKernel,1,1,1);Graphics.CopyBuffer(fragmentNextPose,FragmentPose);Dispatches++;}
             }
         }
+        // The legacy displacement argument remains internal compatibility only. New gameplay submits this form.
+        public void Step(MatterStepInput input)
+        {
+            Step(input.Tool,input.SuctionForce,input.SuctionPosition,default,input.DoorRequestedOpen,input.MountedCutter,input.MountedSuction,input.LocalForce);
+        }
         public void ClearImpact(){impact.SetData(new uint[4]);ImpactStats=new uint[4];}
         public void PollStats()
         {

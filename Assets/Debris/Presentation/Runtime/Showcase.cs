@@ -20,7 +20,7 @@ namespace Debris.Presentation
         string SavePath=>Path.Combine(shipBenchmark?Application.temporaryCachePath:Application.persistentDataPath,shipBenchmark?"DebrisVerification":"Saves","salvage.debris");
         WorldManifest worldManifest;string worldRoot,currentSiteId="00000000000000000000000000000001";ulong currentSeed=42;
         MatterSession session;MatterView view;MaterialCatalog catalog;
-        InputActionAsset input;Camera cameraView;bool paused,benchmark,shipBenchmark,contactBenchmark,islandBenchmark;
+        InputActionAsset input;Camera cameraView;bool paused,benchmark,shipBenchmark,contactBenchmark,islandBenchmark,parallelGameplay;
         float accumulator,statsTime;ushort inspected;Vector2 pointerWorld;
         readonly FrameTiming[] timings=new FrameTiming[1];
         readonly List<double> cpu=new List<double>(),gpu=new List<double>(),frames=new List<double>();
@@ -35,6 +35,7 @@ namespace Debris.Presentation
             contactBenchmark=Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisContactBenchmark");
             shipBenchmark=islandBenchmark||contactBenchmark||Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisShipBenchmark");
             benchmark=Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisBenchmark");
+            parallelGameplay=Array.Exists(Environment.GetCommandLineArgs(),a=>a=="-debrisParallelGameplay");
             worldRoot=Path.Combine(shipBenchmark?Application.temporaryCachePath:Application.persistentDataPath,shipBenchmark?"DebrisVerification/world-"+Guid.NewGuid().ToString("N"):"World");
             ResetSession(benchmark?2:4,8192);
             if(benchmark)StartCoroutine(CheckedBenchmark(Benchmark()));
@@ -97,7 +98,7 @@ namespace Debris.Presentation
                         bool cut=input["Cut"].IsPressed()&&ship.Has(UnitKind.Drill);
                         if(cut)command=new SiteCommand(SiteCommandType.CutterStroke,Vector2.zero,Vector2.zero,6,120,1);
                         bool suction=input["Suction"].IsPressed()&&ship.Has(UnitKind.Suction);
-                        session.Step(command,suction?40:0,default,default,ship.DoorOpen,cut,suction,force);
+                        session.Step(new MatterStepInput(command,suction?40:0,default,ship.DoorOpen,cut,suction,force));
                     }
                     else session.Step(command);
                     accumulator-=1f/60;
