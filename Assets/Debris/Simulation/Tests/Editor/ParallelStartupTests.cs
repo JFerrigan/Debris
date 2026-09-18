@@ -28,15 +28,12 @@ namespace Debris.Simulation.Tests
                     {
                         var input=new MatterStepInput(null,0,default,false,false,false,new Vector3(ship.MassProperties(catalog).Mass,0,0));
                         Assert.That(candidate.Submit(tick,input),Is.True);
-                        ParallelGameplaySession.Completion completion;MatterSnapshot committed;
-                        while(!candidate.TryAcknowledge(out completion,out committed))yield return null;
+                        ParallelGameplaySession.Completion completion;
+                        while(!candidate.TryAcknowledge(out completion))yield return null;
                         Assert.That(candidate.Faulted,Is.False,candidate.Fault);
                         Assert.That(completion.Fault,Is.EqualTo(SolverFault.None));
                         Assert.That(completion.Tick,Is.EqualTo(tick));
-                        Assert.That(committed,Is.Not.Null);
-                        Assert.That(committed.Cells,Is.Empty);
                         Assert.That(completion.ShipVelocity.x,Is.GreaterThan(0));
-                        source.Restore(committed);
                     }
                 }
             }

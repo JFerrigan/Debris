@@ -24,6 +24,8 @@ namespace Debris.Simulation.ParallelProof
         public GraphicsBuffer Bodies => committed;
         public GraphicsBuffer Boundaries => boundaries;
         public GraphicsBuffer Parameters => parameters;
+        public int GrainCount => n;
+        public int BodyCount => bodies;
         public Task<uint[]> DiagnosticsAsync()=>Read<uint>(diagnostics);
         public Task<ProofMetricsReadback> MetricsAsync()=>metrics.ReadAsync();
         public Task<ProofTraceReadback> TraceAsync()=>trace!=null?trace.ReadAsync():throw new InvalidOperationException("Proof tracing is disabled");
@@ -42,7 +44,9 @@ namespace Debris.Simulation.ParallelProof
             // all dispatches continue to use the real endpoint/grain counts.
             committed=Buffer(Math.Max(1,endpoints),32);state=Buffer(Math.Max(1,endpoints),32);grains=Buffer(Math.Max(1,n),48);parameters=Buffer(Math.Max(1,endpoints),32);boundaries=Buffer(Math.Max(1,patches.Length),32);
             diagnostics=Buffer(16,4);starts=Buffer(endpoints,16);
-            rigidContacts=Buffer(rigidContactCapacity,72);rigidCount=Buffer(1,4);rigidPairs=Buffer(17*17,4);
+            // 17 dynamic bodies (ship plus 16 fragments) and one anchored
+            // terrain endpoint share this bounded manifold table.
+            rigidContacts=Buffer(rigidContactCapacity,72);rigidCount=Buffer(1,4);rigidPairs=Buffer(18*18,4);
             args=Buffer(16*10*3,4,GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.IndirectArguments);
             counts=Buffer(65536,4);cursors=Buffer(65536,4);offsets=Buffer(65536,4);sums=Buffer(256,4);blockOffsets=Buffer(256,4);indices=Buffer(Math.Max(1,n),4);
             rows=Buffer(Math.Max(1,n*slots),64);rowCounts=Buffer(Math.Max(1,n),4);rowOffsets=Buffer(Math.Max(1,n),4);rowSums=Buffer(256,4);rowBlocks=Buffer(256,4);
@@ -100,7 +104,7 @@ namespace Debris.Simulation.ParallelProof
         static bool Finite(Vector2 value)=>Finite(value.x)&&Finite(value.y);
         static void ValidateInput(LooseCell[] grains,BodyState[] bodies,BodyParameters[] definitions,Boundary[] patches,int velocity,int position,float friction,int slots)
         {
-            if(grains==null||bodies==null||definitions==null||patches==null||grains.Length>10000||bodies.Length>17||bodies.Length!=definitions.Length)
+            if(grains==null||bodies==null||definitions==null||patches==null||grains.Length>10000||bodies.Length>18||bodies.Length!=definitions.Length)
                 throw new ArgumentException("Invalid proof population");
             if(!((velocity==4&&position==2)||(velocity==8&&position==4)||(velocity==12&&position==6)))throw new ArgumentException("Only locked profiles 4/2, 8/4, 12/6 are supported");
             if(slots<1||slots>64||!Finite(friction)||friction<0)throw new ArgumentOutOfRangeException();
@@ -183,10 +187,27 @@ namespace Debris.Simulation.ParallelProof
             // storage, not a real grain that callers may count or index.
             return new ProofSnapshot{Grains=n==0?Array.Empty<LooseCell>():g.Result,Endpoints=s.Result,Diagnostics=d.Result};
         }
+        // Normal gameplay reads only this compact, ordered completion. Full
+        // snapshots remain an explicit inspection/test operation.
+        public async Task<ProofCompletion> CompletionAsync(int endpoint)
+        {
+            if(endpoint<0||endpoint>=endpoints)throw new ArgumentOutOfRangeException(nameof(endpoint));
+            var s=Read<BodyState>(committed);var d=Read<uint>(diagnostics);
+            await Task.WhenAll(s,d);
+            return new ProofCompletion{State=s.Result[endpoint],Diagnostics=d.Result};
+        }
         static Task<T[]> Read<T>(GraphicsBuffer b) where T:struct
         {
             var source=new TaskCompletionSource<T[]>();AsyncGPUReadback.Request(b,r=>{if(r.hasError)source.SetException(new InvalidOperationException("Proof GPU readback failed"));else source.SetResult(r.GetData<T>().ToArray());});return source.Task;
         }
         public void Dispose(){trace?.Dispose();metrics.Dispose();commands.Dispose();foreach(var b in buffers)b.Dispose();if(Application.isPlaying)UnityEngine.Object.Destroy(shader);else UnityEngine.Object.DestroyImmediate(shader);}
+    }
+
+    public sealed class ProofCompletion
+    {
+        public BodyState State;
+        public uint[] Diagnostics;
+        public SolverFault Fault => (SolverFault)Diagnostics[0];
+        public uint CompletedTick => Diagnostics[1];
     }
 }

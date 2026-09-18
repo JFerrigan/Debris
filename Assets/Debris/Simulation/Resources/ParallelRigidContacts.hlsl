@@ -1,5 +1,5 @@
 // Bounded body-only manifolds. Grain work remains in the parallel solver.
-#define RIGID_MAX_BODIES 17u
+#define RIGID_MAX_BODIES 18u
 #define RIGID_MAX_POINTS_PER_PAIR 64u
 #define RIGID_MAX_POINTS 4096u
 #define RIGID_MAX_MANIFOLD_POINTS 2u
@@ -177,12 +177,22 @@ void RigidGatherContacts(uint id : SV_DispatchThreadID)
     if(endpointA<_N||endpointB<_N||endpointA>=_Endpoints||endpointB>=_Endpoints){fault(RIGID_FAULT_TOPOLOGY);return;}
     uint bodyA=endpointA-_N,bodyB=endpointB-_N;
     if (bodyA == bodyB) return;
+    if(_Parameters[endpointA].mobility==0 && _Parameters[endpointB].mobility==0)return;
     if (bodyB < bodyA)
     {
         uint swapBody = bodyA; bodyA = bodyB; bodyB = swapBody;
         uint swapEndpoint = endpointA; endpointA = endpointB; endpointB = swapEndpoint;
         uint swapFeature = featureA; featureA = featureB; featureB = swapFeature;
     }
+    // Reject patch pairs before SAT/clipping. The radius includes rotation,
+    // swept/correction margin, so this cannot remove a valid manifold.
+    Boundary broadA=_Boundaries[featureA],broadB=_Boundaries[featureB];
+    State stateA=_State[endpointA],stateB=_State[endpointB];
+    Parameters paramsA=_Parameters[endpointA],paramsB=_Parameters[endpointB];
+    float2 centreA=stateA.center+RigidRotate(broadA.center-paramsA.com,stateA.angle);
+    float2 centreB=stateB.center+RigidRotate(broadB.center-paramsB.com,stateB.angle);
+    float radiusA=length(broadA.halfSize),radiusB=length(broadB.halfSize);
+    if(length(centreB-centreA)>radiusA+radiusB+_RigidGatherMargin)return;
     float2 n, p0, p1;
     float separation;
     uint pointCount;

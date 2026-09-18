@@ -19,7 +19,7 @@ namespace Debris.Presentation
         ShipRuntime ship;ShipBlueprint loadedBlueprint;bool saveBusy;string saveStatus="F5 save • F9 load • P pump fuel • J release fuel • T other site";
         string SavePath=>Path.Combine(shipBenchmark?Application.temporaryCachePath:Application.persistentDataPath,shipBenchmark?"DebrisVerification":"Saves","salvage.debris");
         WorldManifest worldManifest;string worldRoot,currentSiteId="00000000000000000000000000000001";ulong currentSeed=42;
-        MatterSession session;MatterView view;MaterialCatalog catalog;
+        MatterSession session;MatterView view;MaterialCatalog catalog;ParallelGameplaySession parallel;int parallelGeneration;
         InputActionAsset input;Camera cameraView;bool paused,benchmark,shipBenchmark,contactBenchmark,islandBenchmark,parallelGameplay;
         float accumulator,statsTime;ushort inspected;Vector2 pointerWorld;
         readonly FrameTiming[] timings=new FrameTiming[1];
@@ -46,16 +46,31 @@ namespace Debris.Presentation
         }
         void ResetSession(int side,int capacity)
         {
-            view?.Dispose();session?.Dispose();if(loadedBlueprint){Destroy(loadedBlueprint);loadedBlueprint=null;}
+            parallelGeneration++;parallel?.Dispose();parallel=null;view?.Dispose();session?.Dispose();if(loadedBlueprint){Destroy(loadedBlueprint);loadedBlueprint=null;}
             session=new MatterSession(catalog,Resources.Load<AsteroidProfile>("Asteroid"),side,128,capacity);
             ship=benchmark?null:new ShipRuntime(Resources.Load<ShipBlueprint>("StarterShip"));
             if(ship!=null){session.ConfigureShip(ship.CollisionMask(),ship.Position);session.ConfigureShipBody(ship.MassProperties(catalog));cameraView.orthographicSize=180;}
-            view=new MatterView(session);accumulator=0;inspected=0;
+            view=new MatterView(session);accumulator=0;inspected=0;paused=false;
+            if(parallelGameplay)_ = ActivateParallelAfterLoad(session,ship,parallelGeneration);
+        }
+        async Task ActivateParallelAfterLoad(MatterSession source,ShipRuntime sourceShip,int generation)
+        {
+            try
+            {
+                var imported=await source.SnapshotAsync();
+                var candidate=ParallelGameplaySession.Import(imported,sourceShip,catalog);
+                if(generation!=parallelGeneration||source!=session||sourceShip!=ship){candidate.Dispose();return;}
+                parallel=candidate;
+                view.BindCandidate(candidate);
+                saveStatus="Parallel candidate active: persistence, travel, fuel transfer and damage are gated for R2a.";
+                Debug.Log("DEBRIS_PARALLEL_GAMEPLAY active");
+            }
+            catch(Exception e){saveStatus="Parallel candidate activation refused: "+e.Message;Debug.LogWarning(saveStatus);}
         }
         void Update()
         {
             if(session==null)return;
-            if(!benchmark&&!shipBenchmark&&!saveBusy)
+            if(!benchmark&&!shipBenchmark&&!saveBusy&&!parallelGameplay)
             {
                 if(input["Save"].WasPressedThisFrame())_ = SaveCheckpoint();
                 else if(input["Load"].WasPressedThisFrame())_ = LoadCheckpoint();
@@ -63,28 +78,41 @@ namespace Debris.Presentation
                 else if(input["SpillFuel"].WasPressedThisFrame())_ = TransferFuel(false);
                 else if(input["VisitSite"].WasPressedThisFrame())_ = TravelTo(currentSiteId.EndsWith("1",StringComparison.Ordinal)?"00000000000000000000000000000002":"00000000000000000000000000000001");
             }
-            if(!saveBusy&&!benchmark&&!shipBenchmark&&session.ImpactStats[3]!=0)
+            if(!parallelGameplay&&!saveBusy&&!benchmark&&!shipBenchmark&&session.ImpactStats[3]!=0)
             {
                 float speed=BitConverter.ToSingle(BitConverter.GetBytes(session.ImpactStats[2]),0);
                 var point=new Vector2Int((int)session.ImpactStats[0]-64,(int)session.ImpactStats[1]-64);
                 if(speed>6)_ = ApplyDamage(new[]{point},(speed-6)*10);else session.ClearImpact();
             }
-            if(input["Pause"].WasPressedThisFrame())paused=!paused;
-            if(input["Reset"].WasPressedThisFrame()&&!benchmark&&!shipBenchmark&&!saveBusy){if(WorldStore.Exists(worldRoot))_ = LoadCheckpoint();else ResetSession(4,8192);}
+            if(input["Pause"].WasPressedThisFrame()||(Keyboard.current?.spaceKey.wasPressedThisFrame??false))paused=!paused;
+            if(input["Reset"].WasPressedThisFrame()&&!benchmark&&!shipBenchmark&&!saveBusy)
+            {
+                // R2a reset deliberately reconstructs the startup source.  A
+                // faulted candidate must never survive a reset and immediately
+                // re-pause the rebuilt world.
+                if(parallelGameplay)ResetSession(4,8192);
+                else if(WorldStore.Exists(worldRoot))_ = LoadCheckpoint();
+                else ResetSession(4,8192);
+            }
             var pointer=input["Pointer"].ReadValue<Vector2>();pointerWorld=cameraView.ScreenToWorldPoint(new Vector3(pointer.x,pointer.y,10));
             var movement=input["Move"].ReadValue<Vector2>();if(ship==null)cameraView.transform.position+=(Vector3)(movement*(cameraView.orthographicSize*Time.unscaledDeltaTime));
             else
             {
-                if(!saveBusy&&input["CargoDoor"].WasPressedThisFrame()&&ship.Has(UnitKind.Door))ship.DoorOpen=!ship.DoorOpen;
-                var pose=session.ShipStats[0];cameraView.transform.position=Vector3.Lerp(cameraView.transform.position,new Vector3(pose.x+50,pose.y,-10),1-Mathf.Exp(-4*Time.unscaledDeltaTime));
-                ship.CargoMass=session.ShipStats[2].y;
-                ship.Angle=session.ShipStats[0].z;
-                ship.Position=new Vector2(pose.x,pose.y);
-                ship.AngularVelocity=session.ShipStats[1].z;
-                ship.Velocity=ContactPhysics.Surface(new Vector2(session.ShipStats[1].x,session.ShipStats[1].y),-ship.AngularVelocity,ship.ToWorld(ship.MassProperties(catalog).Center)-ship.Position);
+                if(!parallelGameplay&&!saveBusy&&input["CargoDoor"].WasPressedThisFrame()&&ship.Has(UnitKind.Door))ship.DoorOpen=!ship.DoorOpen;
+                var pose=parallelGameplay?new Vector4(ship.Position.x,ship.Position.y,ship.Angle,1):session.ShipStats[0];cameraView.transform.position=Vector3.Lerp(cameraView.transform.position,new Vector3(pose.x+50,pose.y,-10),1-Mathf.Exp(-4*Time.unscaledDeltaTime));
+                if(!parallelGameplay){ship.CargoMass=session.ShipStats[2].y;ship.Angle=session.ShipStats[0].z;ship.Position=new Vector2(pose.x,pose.y);ship.AngularVelocity=session.ShipStats[1].z;ship.Velocity=ContactPhysics.Surface(new Vector2(session.ShipStats[1].x,session.ShipStats[1].y),-ship.AngularVelocity,ship.ToWorld(ship.MassProperties(catalog).Center)-ship.Position);}
             }
             cameraView.orthographicSize=Mathf.Clamp(cameraView.orthographicSize-input["Zoom"].ReadValue<float>()*.025f,30,400);
-            if(!paused&&!benchmark&&!shipBenchmark&&!saveBusy)
+            if(parallel!=null)
+            {
+                while(parallel.TryAcknowledge(out var completion))
+                {
+                    if(completion.Fault!=Debris.Simulation.ParallelProof.SolverFault.None){saveStatus=parallel.Fault;Debug.LogError("DEBRIS_PARALLEL_GAMEPLAY "+saveStatus);paused=true;break;}
+                    var body=ship.MassProperties(catalog);ship.Angle=completion.ShipAngle;ship.Position=completion.ShipCenter-ship.ToWorld(body.Center)+ship.Position;ship.Velocity=completion.ShipVelocity;ship.AngularVelocity=completion.ShipSpin;ship.Fuel.Consume(completion.FuelBurn);ship.CargoMass=completion.CargoMass;
+                }
+                if(parallel.Faulted){paused=true;saveStatus=parallel.Fault;}
+            }
+            if(!paused&&!benchmark&&!shipBenchmark&&!saveBusy&&(!parallelGameplay||parallel!=null))
             {
                 accumulator=Mathf.Min(accumulator+Time.deltaTime,4f/60);
                 while(accumulator>=1f/60)
@@ -93,12 +121,15 @@ namespace Debris.Presentation
                     if(ship!=null)
                     {
                         float turn=input["Turn"].ReadValue<float>();
-                        var force=ship.FlightForce(new Vector2(movement.y,-movement.x),-turn,1f/60,ship.MassProperties(catalog));
+                        double provisional=0;
+                        var force=parallelGameplay?ship.PrepareFlightForce(new Vector2(movement.y,-movement.x),-turn,1f/60,ship.MassProperties(catalog),out provisional,ship.Fuel.Energy-parallel.ProvisionalFuel):ship.FlightForce(new Vector2(movement.y,-movement.x),-turn,1f/60,ship.MassProperties(catalog));
                         session.ConfigureShipBody(ship.MassProperties(catalog));
-                        bool cut=input["Cut"].IsPressed()&&ship.Has(UnitKind.Drill);
+                        bool cut=!parallelGameplay&&input["Cut"].IsPressed()&&ship.Has(UnitKind.Drill);
                         if(cut)command=new SiteCommand(SiteCommandType.CutterStroke,Vector2.zero,Vector2.zero,6,120,1);
-                        bool suction=input["Suction"].IsPressed()&&ship.Has(UnitKind.Suction);
-                        session.Step(new MatterStepInput(command,suction?40:0,default,ship.DoorOpen,cut,suction,force));
+                        bool suction=!parallelGameplay&&input["Suction"].IsPressed()&&ship.Has(UnitKind.Suction);
+                        var step=new MatterStepInput(command,suction?40:0,default,ship.DoorOpen,cut,suction,force);
+                        if(parallelGameplay){if(!parallel.Submit((uint)(session.ShipStats[2].x+parallel.PendingTicks+1),step,provisional)){break;}}
+                        else session.Step(step);
                     }
                     else session.Step(command);
                     accumulator-=1f/60;
@@ -108,7 +139,7 @@ namespace Debris.Presentation
             if(statsTime>.2f){statsTime=0;
                 if(!saveBusy&&!benchmark&&!shipBenchmark&&ship!=null&&ship.Fuel.Count>0&&ship.Units.Exists(u=>u.Placement.Definition.Kind==UnitKind.Tank&&(u.Destroyed||!u.Supported)))_ = TransferFuel(false);
                 session.PollStats();session.Inspect(Vector2Int.FloorToInt(pointerWorld),m=>inspected=m);}
-            view.Draw();
+            if(parallelGameplay&&parallel!=null)view.DrawCandidate();else view.Draw();
             FrameTimingManager.CaptureFrameTimings();
             if(FrameTimingManager.GetLatestTimings(1,timings)>0){if(benchmark||shipBenchmark){cpu.Add(timings[0].cpuFrameTime);if(timings[0].gpuFrameTime>0)gpu.Add(timings[0].gpuFrameTime);}}
             if(benchmark||shipBenchmark)frames.Add(Time.unscaledDeltaTime*1000);
@@ -417,7 +448,7 @@ namespace Debris.Presentation
             Panel(new Rect(28,28,4,72),new Color(.26f,.86f,.69f));
             GUI.Label(new Rect(48,22,650,48),"D E B R I S",title);
             GUI.Label(new Rect(50,76,700,26),"SALVAGE FLIGHT   /   EE INC. CONTRACTOR VESSEL",small);
-            GUI.Label(new Rect(50,101,850,22),"W/S thrust • A/D strafe • Q/E turn • LMB drill • RMB suction • G cargo door • scroll zoom • Esc pause • R restore • T other site",small);
+            GUI.Label(new Rect(50,101,850,22),"W/S thrust • A/D strafe • Q/E turn • LMB drill • RMB suction • G cargo door • scroll zoom • Space/Esc pause • R reset • T other site",small);
             float x=Screen.width-262;
             Panel(new Rect(x-18,152,262,Screen.height-180),new Color(.025f,.045f,.065f,.94f));
             GUI.Label(new Rect(x,174,230,30),"SITE  /  "+currentSiteId.Substring(28),label);
@@ -434,6 +465,6 @@ namespace Debris.Presentation
             if(!paused&&Event.current.type==EventType.Repaint){var p=input["Pointer"].ReadValue<Vector2>();GUI.color=new Color(.25f,.95f,.75f);GUI.DrawTexture(new Rect(p.x-10,Screen.height-p.y,20,1),solid);GUI.DrawTexture(new Rect(p.x,Screen.height-p.y-10,1,20),solid);GUI.color=Color.white;}
             GUI.Label(new Rect(30,Screen.height-35,1050,24),saveStatus,small);
         }
-        void OnDestroy(){if(loadedBlueprint)Destroy(loadedBlueprint);view?.Dispose();session?.Dispose();if(input){input.Disable();Destroy(input);}if(solid)Destroy(solid);}
+        void OnDestroy(){parallelGeneration++;parallel?.Dispose();parallel=null;if(loadedBlueprint)Destroy(loadedBlueprint);view?.Dispose();session?.Dispose();if(input){input.Disable();Destroy(input);}if(solid)Destroy(solid);}
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using Debris.Simulation;
+using Debris.Simulation.ParallelProof;
 using UnityEngine;
 using UnityEngine.Rendering;
 namespace Debris.Presentation
@@ -7,7 +8,7 @@ namespace Debris.Presentation
     public sealed class MatterView : IDisposable
     {
         readonly Mesh quad;
-        readonly Material fixedMaterial,looseMaterial,shipMaterial,fragmentMaterial;
+        readonly Material fixedMaterial,looseMaterial,shipMaterial,fragmentMaterial,candidateLoose,candidateShip,candidateFragment;
         readonly MatterSession session;
         readonly RenderParams fixedParams,looseParams,shipParams,fragmentParams;
         public MatterView(MatterSession value)
@@ -15,6 +16,9 @@ namespace Debris.Presentation
             session=value;
             quad=new Mesh{name="Universal material cell"};quad.vertices=new[]{Vector3.zero,Vector3.right,new Vector3(1,1,0),Vector3.up};quad.triangles=new[]{0,2,1,0,3,2};quad.RecalculateBounds();
             fixedMaterial=new Material(Resources.Load<Shader>("Matter")){enableInstancing=true};looseMaterial=new Material(fixedMaterial);looseMaterial.SetFloat("_Loose",1);shipMaterial=new Material(fixedMaterial);shipMaterial.SetFloat("_Loose",2);fragmentMaterial=new Material(fixedMaterial);fragmentMaterial.SetFloat("_Loose",3);
+            candidateLoose=new Material(fixedMaterial);candidateLoose.SetFloat("_Loose",1);candidateLoose.SetFloat("_Candidate",1);
+            candidateShip=new Material(fixedMaterial);candidateShip.SetFloat("_Loose",2);candidateShip.SetFloat("_Candidate",1);
+            candidateFragment=new Material(fixedMaterial);candidateFragment.SetFloat("_Loose",3);candidateFragment.SetFloat("_Candidate",1);
             foreach(var material in new[]{fixedMaterial,looseMaterial,shipMaterial,fragmentMaterial})
             {
                 material.SetBuffer("_FragmentHull",session.FragmentHull);material.SetBuffer("_FragmentPose",session.FragmentPose);material.SetBuffer("_Hull",session.Hull);material.SetBuffer("_ShipPose",session.ShipPose);
@@ -28,7 +32,24 @@ namespace Debris.Presentation
             shipParams=new RenderParams(shipMaterial){worldBounds=bounds,shadowCastingMode=ShadowCastingMode.Off,receiveShadows=false};
             looseParams=new RenderParams(looseMaterial){worldBounds=bounds,shadowCastingMode=ShadowCastingMode.Off,receiveShadows=false};
         }
+        ParallelGrainSolver candidate;
+        public void BindCandidate(ParallelGameplaySession value)
+        {
+            candidate=value?.Solver;
+            if(candidate==null)return;
+            foreach(var material in new[]{candidateLoose,candidateShip,candidateFragment})
+            {material.SetBuffer("_CandidateGrains",candidate.Grains);material.SetBuffer("_CandidateBodies",candidate.Bodies);material.SetBuffer("_CandidateParameters",candidate.Parameters);}
+            candidateShip.SetInt("_CandidateBody",candidate.GrainCount);
+        }
+        public void DrawCandidate()
+        {
+            if(candidate==null){Draw();return;}
+            Graphics.RenderMeshPrimitives(fixedParams,quad,0,session.Side*session.Side);
+            Graphics.RenderMeshPrimitives(new RenderParams(candidateLoose){worldBounds=looseParams.worldBounds,shadowCastingMode=ShadowCastingMode.Off,receiveShadows=false},quad,0,candidate.GrainCount);
+            Graphics.RenderMeshPrimitives(new RenderParams(candidateShip){worldBounds=shipParams.worldBounds,shadowCastingMode=ShadowCastingMode.Off,receiveShadows=false},quad,0,128*128);
+            for(int f=1;f<candidate.BodyCount-1;f++){candidateFragment.SetInt("_CandidateBody",candidate.GrainCount+f);candidateFragment.SetInt("_CandidateFragment",f-1);Graphics.RenderMeshPrimitives(new RenderParams(candidateFragment){worldBounds=fragmentParams.worldBounds,shadowCastingMode=ShadowCastingMode.Off,receiveShadows=false},quad,0,16384);}
+        }
         public void Draw(){Graphics.RenderMeshPrimitives(fixedParams,quad,0,session.Side*session.Side);Graphics.RenderMeshPrimitives(looseParams,quad,0,session.Capacity);if(session.FragmentCount>0)Graphics.RenderMeshPrimitives(fragmentParams,quad,0,session.FragmentCount*16384);if(session.ShipEnabled)Graphics.RenderMeshPrimitives(shipParams,quad,0,128*128);}
-        public void Dispose(){UnityEngine.Object.DestroyImmediate(quad);UnityEngine.Object.DestroyImmediate(fixedMaterial);UnityEngine.Object.DestroyImmediate(looseMaterial);UnityEngine.Object.DestroyImmediate(shipMaterial);UnityEngine.Object.DestroyImmediate(fragmentMaterial);}
+        public void Dispose(){UnityEngine.Object.DestroyImmediate(quad);foreach(var m in new[]{fixedMaterial,looseMaterial,shipMaterial,fragmentMaterial,candidateLoose,candidateShip,candidateFragment})UnityEngine.Object.DestroyImmediate(m);}
     }
 }

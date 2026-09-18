@@ -20,17 +20,19 @@ namespace Debris.Simulation
         readonly MaterialCatalog catalog;
         readonly MatterSnapshot source;
         readonly bool[] cargo;
-        bool faulted;
+        bool faulted,disposed;
+        double unresolvedFuel;
         public bool Faulted=>faulted;
         public string Fault { get; private set; }
         public int PendingTicks=>pending.Count;
-        public double ProvisionalFuel=>pending.Sum(p=>p.Fuel);
+        public ParallelGrainSolver Solver=>solver;
+        public double ProvisionalFuel=>unresolvedFuel+pending.Sum(p=>p.Fuel);
 
         sealed class Pending
         {
             public uint Tick;
             public double Fuel;
-            public Task<ProofSnapshot> Readback;
+            public Task<ProofCompletion> Readback;
         }
         public readonly struct Completion
         {
@@ -74,15 +76,19 @@ namespace Debris.Simulation
                 grains[i]=new Debris.Simulation.ParallelProof.LooseCell{Center=center,Velocity=cell.Velocity,Angle=flags[i]?pose.z:0,AngularVelocity=flags[i]?snapshot.ShipPose[1].z:0,Material=cell.Material,Identity=cell.Identity,Flags=cell.Flags};
             }
             var bodies=new List<BodyState>();var parameters=new List<BodyParameters>();var patches=new List<Boundary>();
-            AddBody(bodies,parameters,patches,grains.Length,ship.CollisionMask(),pose,snapshot.ShipPose[1],ship.MassProperties(catalog),1,0);
+            AddBody(bodies,parameters,patches,grains.Length,ship.CollisionMask(),pose,snapshot.ShipPose[1],ship.MassProperties(catalog),1,0,-64,-64);
             foreach(var fragment in snapshot.Fragments)
-                AddBody(bodies,parameters,patches,grains.Length,fragment.Hull,fragment.Pose,fragment.Motion,fragment.Mass,1,(uint)bodies.Count);
+                AddBody(bodies,parameters,patches,grains.Length,fragment.Hull,fragment.Pose,fragment.Motion,fragment.Mass,1,(uint)bodies.Count,-64,-64);
             // Terrain is represented by an explicit anchored mask body.  Its
             // geometry must fit the solver cache; importing a partial world is
             // never acceptable.
             var terrain=TerrainMask(snapshot);
-            AddBody(bodies,parameters,patches,grains.Length,terrain,new Vector4(snapshot.OriginX+snapshot.ChunkSize*snapshot.Side*.5f,snapshot.OriginY+snapshot.ChunkSize*snapshot.Side*.5f,0,1),Vector4.zero,new BodyMass{Mass=1,Inertia=1},0,uint.MaxValue,snapshot.OriginX,snapshot.OriginY,true);
+            // Patch coordinates are terrain-local; pose is its hull origin.
+            // Keeping these spaces separate prevents translated terrain from
+            // receiving its world offset twice in the rigid contact shader.
+            AddBody(bodies,parameters,patches,grains.Length,terrain,new Vector4(snapshot.OriginX,snapshot.OriginY,0,1),Vector4.zero,new BodyMass{Mass=1,Inertia=1},0,uint.MaxValue,0,0,true);
             if(patches.Count>4096)throw new InvalidOperationException("Candidate import exceeds the 4,096 collision-patch cache; world activation was refused.");
+            if(bodies.Count!=snapshot.Fragments.Length+2)throw new InvalidOperationException("Candidate endpoint accounting is invalid.");
             var solver=new ParallelGrainSolver(grains,bodies.ToArray(),parameters.ToArray(),patches.ToArray(),velocityIterations,positionIterations,grainMasses:grainMasses);
             return new ParallelGameplaySession(solver,snapshot,catalog,flags);
         }
@@ -143,27 +149,27 @@ namespace Debris.Simulation
         }
         public bool Submit(uint tick,MatterStepInput input,double provisionalFuel=0)
         {
-            if(faulted||pending.Count>=MaximumPendingTicks)return false;
+            if(disposed||faulted||pending.Count>=MaximumPendingTicks||provisionalFuel<0||double.IsNaN(provisionalFuel)||double.IsInfinity(provisionalFuel))return false;
             solver.Step(new Vector2(input.LocalForce.x,input.LocalForce.y),input.LocalForce.z);
-            pending.Enqueue(new Pending{Tick=tick,Fuel=provisionalFuel,Readback=solver.SnapshotAsync()});return true;
+            pending.Enqueue(new Pending{Tick=tick,Fuel=provisionalFuel,Readback=solver.CompletionAsync(source.Cells.Length)});return true;
         }
-        public bool TryAcknowledge(out Completion completion,out MatterSnapshot committed)
+        public bool TryAcknowledge(out Completion completion)
         {
-            completion=default;committed=null;if(pending.Count==0||!pending.Peek().Readback.IsCompleted)return false;
-            var next=pending.Dequeue();if(next.Readback.IsFaulted){faulted=true;Fault=next.Readback.Exception?.GetBaseException().Message??"Candidate GPU readback failed.";pending.Clear();return true;}
-            var result=next.Readback.Result;if(result.Fault!=SolverFault.None){faulted=true;Fault="Candidate solver fault: "+result.Fault;pending.Clear();completion=new Completion(next.Tick,result.Fault,default,0,0);return true;}
-            var state=CopyCommitted(result);int count=0;float cargoMass=0;
-            for(int i=0;i<result.Grains.Length;i++)if(cargo[i]){count++;cargoMass+=catalog.DefinitionAt((ushort)result.Grains[i].Material).Density;}
-            if(count>StarterCargoCapacity){faulted=true;Fault="Candidate cargo capacity rejected the 2,501st grain.";pending.Clear();return true;}
-            completion=new Completion(next.Tick,SolverFault.None,result.Endpoints[source.Cells.Length],count,cargoMass,next.Fuel);committed=state;return true;
+            completion=default;if(disposed||pending.Count==0||!pending.Peek().Readback.IsCompleted)return false;
+            var next=pending.Dequeue();if(next.Readback.IsFaulted)
+            {
+                faulted=true;Fault=next.Readback.Exception?.GetBaseException().Message??"Candidate GPU readback failed.";
+                // Commit state is unknowable after readback failure. Keep all
+                // reservations until reset so a possible thrust is never free.
+                unresolvedFuel+=next.Fuel+pending.Sum(p=>p.Fuel);pending.Clear();return true;
+            }
+            var result=next.Readback.Result;if(result.Fault!=SolverFault.None)
+            {
+                faulted=true;Fault="Candidate solver fault: "+result.Fault;pending.Clear();completion=new Completion(next.Tick,result.Fault,default,0,0);return true;
+            }
+            int count=0;float cargoMass=0;for(int i=0;i<cargo.Length;i++)if(cargo[i]){count++;cargoMass+=catalog.DefinitionAt((ushort)source.Cells[i].Material).Density;}
+            completion=new Completion(next.Tick,SolverFault.None,result.State,count,cargoMass,next.Fuel);return true;
         }
-        MatterSnapshot CopyCommitted(ProofSnapshot result)
-        {
-            var copy=FuelTransfers.Copy(source);var pose=copy.ShipPose[0];var endpoint=result.Endpoints[source.Cells.Length];pose.x=endpoint.Center.x;pose.y=endpoint.Center.y;pose.z=endpoint.Angle;copy.ShipPose[0]=pose;copy.ShipPose[1]=new Vector4(endpoint.Velocity.x,endpoint.Velocity.y,endpoint.AngularVelocity,0);
-            for(int i=0;i<copy.Cells.Length;i++){var grain=result.Grains[i];var position=grain.Center-Vector2.one*.5f;if(cargo[i])position=Local(grain.Center,pose)-Vector2.one*.5f;copy.Cells[i].Position=position;copy.Cells[i].Velocity=grain.Velocity;}
-            return copy;
-        }
-        static Vector2 Local(Vector2 world,Vector4 pose){var p=world-new Vector2(pose.x,pose.y);float c=Mathf.Cos(pose.z),s=Mathf.Sin(pose.z);return new Vector2(p.x*c+p.y*s,-p.x*s+p.y*c);}
-        public void Dispose()=>solver.Dispose();
+        public void Dispose(){if(disposed)return;disposed=true;pending.Clear();solver.Dispose();}
     }
 }

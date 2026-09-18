@@ -136,11 +136,19 @@ namespace Debris.Ships
         // Translation is allocated at engine mounts; differential thrust supplies the control couple.
         public Vector3 FlightForce(Vector2 thrust,float turn,float delta,BodyMass body)
         {
+            var force=PrepareFlightForce(thrust,turn,delta,body,out var burn);
+            return burn>0&&Fuel.Consume(burn)?force:Vector3.zero;
+        }
+        // Candidate ticks reserve this amount and consume it only on acknowledgement.
+        public Vector3 PrepareFlightForce(Vector2 thrust,float turn,float delta,BodyMass body,out double burn,double availableEnergy=double.NaN)
+        {
+            burn=0;
             if(!float.IsFinite(delta)||delta<=0||delta>.1f||!float.IsFinite(thrust.x)||!float.IsFinite(thrust.y)||!float.IsFinite(turn))throw new ArgumentOutOfRangeException(nameof(delta));
             if(!Has(UnitKind.Command)||!Has(UnitKind.Tank))return Vector3.zero;
             int engines=Units.FindAll(u=>u.Placement.Definition.Kind==UnitKind.Thruster&&u.Operational).Count;
             float effort=Mathf.Clamp01(thrust.magnitude)+Mathf.Abs(Mathf.Clamp(turn,-1,1))*.4f;
-            if(engines==0||!Fuel.Consume(effort*delta*.9))return Vector3.zero;
+            burn=effort*delta*.9;
+            if(engines==0||(double.IsNaN(availableEnergy)?Fuel.Energy:availableEnergy)<burn){burn=0;return Vector3.zero;}
             body.Validate();var local=Vector2.ClampMagnitude(thrust,1)*6000;float torque=Mathf.Clamp(turn,-1,1)*180000*engines;
             foreach(var unit in Units)if(unit.Operational&&unit.Placement.Definition.Kind==UnitKind.Thruster)
             {

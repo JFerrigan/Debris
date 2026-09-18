@@ -20,7 +20,14 @@ Shader "Debris/Matter"
             StructuredBuffer<float4> _ShipPose, _FragmentPose;
             float2 ShipWorld(float2 p){float4 pose=_ShipPose[0];float c=cos(pose.z),s=sin(pose.z);return pose.xy+float2(p.x*c-p.y*s,p.x*s+p.y*c);}
             StructuredBuffer<float4> _Palette, _Shadows, _Emissions;
-            float _Loose;
+            struct CandidateGrain { float2 center, velocity; float angle, spin; uint material, identity, flags, r0, r1, r2; };
+            struct CandidateBody { float2 center, velocity; float angle, spin; uint r0, r1; };
+            struct CandidateParameters { float im, ii; float2 com; uint start, count, mobility, revision; };
+            StructuredBuffer<CandidateGrain> _CandidateGrains;
+            StructuredBuffer<CandidateBody> _CandidateBodies;
+            StructuredBuffer<CandidateParameters> _CandidateParameters;
+            float _Loose,_Candidate;
+            int _CandidateBody,_CandidateFragment;
             int _ChunkSize,_Side;
             float2 _Origin;
             struct Out { float4 position:SV_POSITION;float2 uv:TEXCOORD0;nointerpolation uint slice:TEXCOORD1;nointerpolation uint material:TEXCOORD2;float2 world:TEXCOORD3; };
@@ -28,7 +35,23 @@ Shader "Debris/Matter"
             {
                 Out o;o.uv=vertex.xy;o.slice=instance;o.material=0;
                 float2 p;
-                if(_Loose>2.5)
+                if(_Candidate>.5 && _Loose>2.5)
+                {
+                    uint m=_FragmentHull[_CandidateFragment*16384+instance];if(m==0){o.position=float4(2,2,2,1);o.world=0;return o;}
+                    CandidateBody b=_CandidateBodies[_CandidateBody];CandidateParameters q=_CandidateParameters[_CandidateBody];float2 local=float2(instance%128,instance/128)-64+vertex.xy-q.com;
+                    float c=cos(b.angle),s=sin(b.angle);p=b.center+float2(local.x*c-local.y*s,local.x*s+local.y*c);o.material=m;
+                }
+                else if(_Candidate>.5 && _Loose>1.5)
+                {
+                    uint m=_Hull[instance];if(m==0){o.position=float4(2,2,2,1);o.world=0;return o;}
+                    CandidateBody b=_CandidateBodies[0];CandidateParameters q=_CandidateParameters[0];float2 local=float2(instance%128,instance/128)-64+vertex.xy-q.com;
+                    float c=cos(b.angle),s=sin(b.angle);p=b.center+float2(local.x*c-local.y*s,local.x*s+local.y*c);o.material=m==0xffffffff?2:m;
+                }
+                else if(_Candidate>.5 && _Loose>.5)
+                {
+                    CandidateGrain g=_CandidateGrains[instance];float2 local=vertex.xy-float2(.5,.5);float c=cos(g.angle),s=sin(g.angle);p=g.center+float2(local.x*c-local.y*s,local.x*s+local.y*c);o.material=g.material;
+                }
+                else if(_Loose>2.5)
                 {
                     uint m=_FragmentHull[instance];if(m==0){o.position=float4(2,2,2,1);o.world=0;return o;}
                     float4 pose=_FragmentPose[(instance/16384)*2];uint cell=instance%16384;float2 local=float2(cell%128,cell/128)-64+vertex.xy;

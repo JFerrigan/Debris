@@ -1,14 +1,14 @@
 # Implementation status
 
-Current handoff: **R2a startup Page fault corrected; candidate integration remains in progress**. The single permitted player launch reproduced the old failure. Grain-grid checks now exclude rigid terrain, retain safe grain rejection at the page edge, and empty populations read back as empty. See [startup diagnosis](evidence/B3R-page-startup.md). Legacy remains the default; the original .001-cell target remains a TODO against the interim .002 gate.
+Current handoff: **B.3R opt-in GPU flight/collision implementation is automated-verified; player acceptance remains unverified.** Candidate masks now use their local [-64,64) coordinates, terrain patches use their terrain-local origin, and 17 dynamics plus anchored terrain use 18 endpoints. Compact completion records drive ship motion and direct GPU-buffer rendering; full snapshots are inspection-only. Legacy remains the default; the original .001-cell target remains a TODO against the interim .002 gate.
 
 ## Latest validation
 
-Startup/boundary fixtures passed 11/11. The final fast EditMode suite passed 110 with one explicit scale test skipped. The Mac rebuild succeeded (runner exit 0). The user allowed one game launch, used to reproduce the original Page fault; no post-fix player launch is authorized in this test. Windows/Linux are unverified.
+The final fast EditMode suite passed 110 with one explicit scale test skipped (111 total, 2026-09-18 05:03–05:04 UTC). The Mac build succeeded. No player run was made; the single-player allowance was already exhausted. Windows/Linux are unverified.
 
 ## Remaining limitation and next work
 
-The generated startup world now imports and acknowledges three thrust ticks in an automated GPU test without a Page fault or fake loose cell. Candidate tools, doors, cargo capacity/classification, fragment acceptance, saved-world import and player presentation still require acceptance. The existing unfinished rigid-terrain exclusion and pose conversion need review before collision acceptance; this startup fix does not certify them. Full R1 and B.GATE remain open.
+Candidate mining, suction, doors, damage, fuel transfer, persistence, travel and streaming remain gated and report unavailable. Player collision/render acceptance, packed-cargo/performance, R1 convergence and B.GATE remain open. The test suite does not replace the required terrain-contact, high-speed, completion-ordering and render acceptance cases specified for the next verification pass.
 
 ## Preserved unfinished work
 
