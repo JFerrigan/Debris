@@ -51,6 +51,7 @@ namespace Debris.Simulation
             result=CandidateEditStatus.Busy;if(awaiting)return false;if(edit==null){result=CandidateEditStatus.Unavailable;return true;}
             result=placementStatus==0?edit.Status:placementStatus==uint.MaxValue?CandidateEditStatus.Faulted:CandidateEditStatus.PlacementBlocked;return true;
         }
+        internal void Abort(){if(awaiting)return;edit=null;replacement=null;placementStatus=0;}
         internal CandidateEditStatus TryPublish()
         {
             if(disposed||edit==null||awaiting||placementStatus!=0||!terrain.IsCurrent(edit))return CandidateEditStatus.StaleEdit;
