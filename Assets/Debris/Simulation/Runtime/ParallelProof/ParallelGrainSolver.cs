@@ -13,6 +13,7 @@ namespace Debris.Simulation.ParallelProof
         readonly ProofTrace trace;
         readonly CommandBuffer commands = new CommandBuffer { name="B3R parallel grain proof" };
         readonly List<GraphicsBuffer> buffers = new List<GraphicsBuffer>();
+        readonly HashSet<uint> identities = new HashSet<uint>();
         readonly Dictionary<string,int> kernels = new Dictionary<string,int>();
         readonly GraphicsBuffer rigidContacts,rigidCount,rigidPairs;
         readonly GraphicsBuffer committed,state,grains,parameters,boundaries,diagnostics,args,starts;
@@ -59,7 +60,7 @@ namespace Debris.Simulation.ParallelProof
             rows=Buffer(Math.Max(1,capacity*slots),64);rowCounts=Buffer(Math.Max(1,capacity),4);rowOffsets=Buffer(Math.Max(1,capacity),4);rowSums=Buffer(256,4);rowBlocks=Buffer(256,4);
             contacts=Buffer(Math.Max(1,capacity*slots),64);degrees=Buffer(Math.Max(1,endpoints),4);adjOffsets=Buffer(Math.Max(1,endpoints),4);adjSums=Buffer(256,4);adjBlocks=Buffer(256,4);adjCursors=Buffer(Math.Max(1,endpoints),4);
             adjacency=Buffer(Math.Max(1,capacity*slots*2),4);increments=Buffer(Math.Max(1,capacity*slots),16);
-            var initial=new BodyState[endpoints];var physical=new BodyParameters[endpoints];var initialGrainBuffer=new LooseCell[capacity];var identities=new HashSet<uint>();
+            var initial=new BodyState[endpoints];var physical=new BodyParameters[endpoints];var initialGrainBuffer=new LooseCell[capacity];
             for(int i=0;i<active;i++)
             {
                 var g=initialGrains[i];if(g.Material==0||g.Identity==0||!identities.Add(g.Identity))throw new ArgumentException("Grain material and identities must be valid and unique");
@@ -201,12 +202,12 @@ namespace Debris.Simulation.ParallelProof
         // all boundary references remain stable across admission.
         public bool TryAppend(LooseCell grain,float mass)
         {
-            if(active>=capacity||grain.Material==0||grain.Identity==0||!Finite(grain.Center)||!Finite(grain.Velocity)||!Finite(grain.Angle)||!Finite(grain.AngularVelocity)||!Finite(mass)||mass<=0)return false;
+            if(active>=capacity||grain.Material==0||grain.Identity==0||identities.Contains(grain.Identity)||!Finite(grain.Center)||!Finite(grain.Velocity)||!Finite(grain.Angle)||!Finite(grain.AngularVelocity)||!Finite(mass)||mass<=0)return false;
             grains.SetData(new[]{grain},0,active,1);
             var body=new BodyState{Center=grain.Center,Velocity=grain.Velocity,Angle=grain.Angle,AngularVelocity=grain.AngularVelocity};
             var parametersValue=new BodyParameters{InverseMass=1/mass,InverseInertia=6/mass,Mobility=1};
             committed.SetData(new[]{body},0,active,1);state.SetData(new[]{body},0,active,1);parameters.SetData(new[]{parametersValue},0,active,1);
-            active++;shader.SetInt("_N",active);return true;
+            identities.Add(grain.Identity);active++;shader.SetInt("_N",active);return true;
         }
         // Normal gameplay reads only this compact, ordered completion. Full
         // snapshots remain an explicit inspection/test operation.

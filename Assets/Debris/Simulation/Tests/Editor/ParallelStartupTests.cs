@@ -96,7 +96,7 @@ namespace Debris.Simulation.Tests
                     var before=candidate.Solver.SnapshotAsync();while(!before.IsCompleted)yield return null;int endpoint=candidate.Solver.BodyStart;var material=(ushort)1;
                     Assert.That(candidate.Solver.GrainCapacity,Is.EqualTo(8192));Assert.That(candidate.Solver.TryAppend(new Debris.Simulation.ParallelProof.LooseCell{Center=new Vector2(-300,0),Material=material,Identity=999999},catalog.DefinitionAt(material).Density),Is.True);
                     var after=candidate.Solver.SnapshotAsync();while(!after.IsCompleted)yield return null;
-                    Assert.That(candidate.Solver.GrainCount,Is.EqualTo(1));Assert.That(after.Result.Grains[0].Identity,Is.EqualTo(999999));Assert.That(after.Result.Endpoints[endpoint].Center,Is.EqualTo(before.Result.Endpoints[endpoint].Center).Using(new Vector2Comparer(.0001f)));
+                    Assert.That(candidate.Solver.TryAppend(new Debris.Simulation.ParallelProof.LooseCell{Center=new Vector2(-302,0),Material=material,Identity=999999},catalog.DefinitionAt(material).Density),Is.False);Assert.That(candidate.Solver.GrainCount,Is.EqualTo(1));Assert.That(after.Result.Grains[0].Identity,Is.EqualTo(999999));Assert.That(after.Result.Endpoints[endpoint].Center,Is.EqualTo(before.Result.Endpoints[endpoint].Center).Using(new Vector2Comparer(.0001f)));
                 }
             }
         }
