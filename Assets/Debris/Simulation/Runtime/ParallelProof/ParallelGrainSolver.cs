@@ -315,9 +315,11 @@ namespace Debris.Simulation.ParallelProof
         // enqueued. It cannot allocate or invoke callbacks.
         internal void PublishTerrainEdit(Debris.Simulation.CandidateBoundaryBuilder.CandidateBoundaryReplacement replacement,LooseCell appended,float mass,bool append)
         {
-            if(ValidateBoundaryReplacement(replacement)!=Debris.Simulation.CandidateEditStatus.Released)throw new InvalidOperationException("Invalid published terrain replacement.");
-            if(append&&ValidateAppend(appended,mass)!=Debris.Simulation.CandidateEditStatus.Released)throw new InvalidOperationException("Invalid published terrain append.");
-            bodyDefinitions=(BodyParameters[])replacement.Definitions.Clone();BoundaryCount=replacement.Patches.Length;
+            // CandidateTerrainTransaction performs both validations before it
+            // records its first live command. This method is intentionally a
+            // non-allocating host-fact publication after that command buffer
+            // has been enqueued; it must not introduce a new fallible stage.
+            Array.Copy(replacement.Definitions,bodyDefinitions,bodies);BoundaryCount=replacement.Patches.Length;
             if(append){identities.Add(appended.Identity);active++;}
             metrics.SetPopulation(active,capacity);
         }
