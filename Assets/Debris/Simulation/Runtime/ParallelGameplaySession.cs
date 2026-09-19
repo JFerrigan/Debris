@@ -82,9 +82,9 @@ namespace Debris.Simulation
                 grains[i]=new Debris.Simulation.ParallelProof.LooseCell{Center=center,Velocity=cell.Velocity,Angle=flags[i]?pose.z:0,AngularVelocity=flags[i]?snapshot.ShipPose[1].z:0,Material=cell.Material,Identity=cell.Identity,Flags=cell.Flags};
             }
             var bodies=new List<BodyState>();var parameters=new List<BodyParameters>();var patches=new List<Boundary>();
-            AddBody(bodies,parameters,patches,grains.Length,ship.CollisionMask(),pose,snapshot.ShipPose[1],ship.MassProperties(catalog),1,0,-64,-64);
+            AddBody(bodies,parameters,patches,snapshot.Capacity,ship.CollisionMask(),pose,snapshot.ShipPose[1],ship.MassProperties(catalog),1,0,-64,-64);
             foreach(var fragment in snapshot.Fragments)
-                AddBody(bodies,parameters,patches,grains.Length,fragment.Hull,fragment.Pose,fragment.Motion,fragment.Mass,1,(uint)bodies.Count,-64,-64);
+                AddBody(bodies,parameters,patches,snapshot.Capacity,fragment.Hull,fragment.Pose,fragment.Motion,fragment.Mass,1,(uint)bodies.Count,-64,-64);
             // Terrain is represented by an explicit anchored mask body.  Its
             // geometry must fit the solver cache; importing a partial world is
             // never acceptable.
@@ -92,10 +92,10 @@ namespace Debris.Simulation
             // Patch coordinates are terrain-local; pose is its hull origin.
             // Keeping these spaces separate prevents translated terrain from
             // receiving its world offset twice in the rigid contact shader.
-            AddBody(bodies,parameters,patches,grains.Length,terrain,new Vector4(snapshot.OriginX,snapshot.OriginY,0,1),Vector4.zero,new BodyMass{Mass=1,Inertia=1},0,uint.MaxValue,0,0,true);
+            AddBody(bodies,parameters,patches,snapshot.Capacity,terrain,new Vector4(snapshot.OriginX,snapshot.OriginY,0,1),Vector4.zero,new BodyMass{Mass=1,Inertia=1},0,uint.MaxValue,0,0,true);
             if(patches.Count>4096)throw new InvalidOperationException("Candidate import exceeds the 4,096 collision-patch cache; world activation was refused.");
             if(bodies.Count!=snapshot.Fragments.Length+2)throw new InvalidOperationException("Candidate endpoint accounting is invalid.");
-            var solver=new ParallelGrainSolver(grains,bodies.ToArray(),parameters.ToArray(),patches.ToArray(),velocityIterations,positionIterations,grainMasses:grainMasses);
+            var solver=new ParallelGrainSolver(grains,bodies.ToArray(),parameters.ToArray(),patches.ToArray(),velocityIterations,positionIterations,grainMasses:grainMasses,allocatedGrainCapacity:snapshot.Capacity);
             return new ParallelGameplaySession(solver,snapshot,catalog,flags);
         }
         static uint[] TerrainMask(MatterSnapshot s)
@@ -157,7 +157,7 @@ namespace Debris.Simulation
         {
             if(disposed||faulted||tick==0||tick<=lastSubmittedTick||pendingCount>=MaximumPendingTicks||provisionalFuel<0||double.IsNaN(provisionalFuel)||double.IsInfinity(provisionalFuel))return false;
             solver.Step(new Vector2(input.LocalForce.x,input.LocalForce.y),input.LocalForce.z);
-            pending[(pendingHead+pendingCount)%MaximumPendingTicks]=new Pending{Tick=tick,Fuel=provisionalFuel,Readback=solver.CompletionAsync(source.Cells.Length)};pendingCount++;lastSubmittedTick=tick;return true;
+            pending[(pendingHead+pendingCount)%MaximumPendingTicks]=new Pending{Tick=tick,Fuel=provisionalFuel,Readback=solver.CompletionAsync(solver.BodyStart)};pendingCount++;lastSubmittedTick=tick;return true;
         }
         public bool TryAcknowledge(out Completion completion)
         {

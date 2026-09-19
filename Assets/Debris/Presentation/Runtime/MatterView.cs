@@ -51,7 +51,7 @@ namespace Debris.Presentation
                 material.SetBuffer("_Cells",session.Cells);material.SetBuffer("_Counters",session.Counters);material.SetBuffer("_ShipPose",session.ShipPose);material.SetBuffer("_FragmentPose",session.FragmentPose);material.SetBuffer("_FragmentHull",session.FragmentHull);material.SetBuffer("_Hull",session.Hull);material.SetBuffer("_Palette",session.Palette);material.SetBuffer("_Shadows",session.Shadows);material.SetBuffer("_Emissions",session.Emissions);
                 material.SetTexture("_Field",session.Field);material.SetInt("_ChunkSize",session.ChunkSize);material.SetInt("_Side",session.Side);material.SetVector("_Origin",new Vector4(session.Origin.x,session.Origin.y,0,0));
             }
-            candidateShip.SetInt("_CandidateBody",candidate.GrainCount);
+            candidateShip.SetInt("_CandidateBody",candidate.BodyStart);
         }
         public void DrawCandidate()
         {
@@ -59,7 +59,7 @@ namespace Debris.Presentation
             Graphics.RenderMeshPrimitives(fixedParams,quad,0,session.Side*session.Side);
             Graphics.RenderMeshPrimitives(new RenderParams(candidateLoose){worldBounds=looseParams.worldBounds,shadowCastingMode=ShadowCastingMode.Off,receiveShadows=false},quad,0,candidate.GrainCount);
             Graphics.RenderMeshPrimitives(new RenderParams(candidateShip){worldBounds=shipParams.worldBounds,shadowCastingMode=ShadowCastingMode.Off,receiveShadows=false},quad,0,128*128);
-            for(int f=1;f<candidate.BodyCount-1;f++){candidateFragment.SetInt("_CandidateBody",candidate.GrainCount+f);candidateFragment.SetInt("_CandidateFragment",f-1);Graphics.RenderMeshPrimitives(new RenderParams(candidateFragment){worldBounds=fragmentParams.worldBounds,shadowCastingMode=ShadowCastingMode.Off,receiveShadows=false},quad,0,16384);}
+            for(int f=1;f<candidate.BodyCount-1;f++){candidateFragment.SetInt("_CandidateBody",candidate.BodyStart+f);candidateFragment.SetInt("_CandidateFragment",f-1);Graphics.RenderMeshPrimitives(new RenderParams(candidateFragment){worldBounds=fragmentParams.worldBounds,shadowCastingMode=ShadowCastingMode.Off,receiveShadows=false},quad,0,16384);}
         }
         public void Draw(){Graphics.RenderMeshPrimitives(fixedParams,quad,0,session.Side*session.Side);Graphics.RenderMeshPrimitives(looseParams,quad,0,session.Capacity);if(session.FragmentCount>0)Graphics.RenderMeshPrimitives(fragmentParams,quad,0,session.FragmentCount*16384);if(session.ShipEnabled)Graphics.RenderMeshPrimitives(shipParams,quad,0,128*128);}
         public void Dispose(){fallbackCandidateGrains.Dispose();fallbackCandidateBodies.Dispose();fallbackCandidateParameters.Dispose();UnityEngine.Object.DestroyImmediate(quad);foreach(var m in new[]{fixedMaterial,looseMaterial,shipMaterial,fragmentMaterial,candidateLoose,candidateShip,candidateFragment})UnityEngine.Object.DestroyImmediate(m);}

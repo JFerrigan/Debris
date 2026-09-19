@@ -80,8 +80,23 @@ namespace Debris.Simulation.Tests
                 float c=Mathf.Cos(snapshot.ShipPose[0].z),s=Mathf.Sin(snapshot.ShipPose[0].z);var expected=new Vector2(snapshot.ShipPose[0].x+mass.Center.x*c-mass.Center.y*s,snapshot.ShipPose[0].y+mass.Center.x*s+mass.Center.y*c);
                 using(var candidate=ParallelGameplaySession.Import(snapshot,ship,catalog))
                 {
-                    var state=candidate.Solver.SnapshotAsync();while(!state.IsCompleted)yield return null;var shipState=state.Result.Endpoints[snapshot.Cells.Length];
-                    Assert.That(shipState.Center,Is.EqualTo(expected).Using(new Vector2Comparer(.0001f)));Assert.That(shipState.Angle,Is.EqualTo(.61f).Within(.0001f));Assert.That(shipState.Velocity,Is.EqualTo(new Vector2(3,-2)).Using(new Vector2Comparer(.0001f)));Assert.That(shipState.AngularVelocity,Is.EqualTo(.17f).Within(.0001f));Assert.That(state.Result.Endpoints[snapshot.Cells.Length+1].Center,Is.EqualTo(new Vector2(121,-95)).Using(new Vector2Comparer(.0001f)));
+                    var state=candidate.Solver.SnapshotAsync();while(!state.IsCompleted)yield return null;var shipState=state.Result.Endpoints[candidate.Solver.BodyStart];
+                    Assert.That(candidate.Solver.BodyStart,Is.EqualTo(snapshot.Capacity));Assert.That(shipState.Center,Is.EqualTo(expected).Using(new Vector2Comparer(.0001f)));Assert.That(shipState.Angle,Is.EqualTo(.61f).Within(.0001f));Assert.That(shipState.Velocity,Is.EqualTo(new Vector2(3,-2)).Using(new Vector2Comparer(.0001f)));Assert.That(shipState.AngularVelocity,Is.EqualTo(.17f).Within(.0001f));Assert.That(state.Result.Endpoints[candidate.Solver.BodyStart+1].Center,Is.EqualTo(new Vector2(121,-95)).Using(new Vector2Comparer(.0001f)));
+                }
+            }
+        }
+        [UnityTest,Timeout(120000)] public IEnumerator ReservedGrainCapacityKeepsShipEndpointStableOnGrowth()
+        {
+            var catalog=Resources.Load<MaterialCatalog>("Materials");var ship=new ShipRuntime(Resources.Load<ShipBlueprint>("StarterShip"));
+            using(var source=new MatterSession(catalog,Resources.Load<AsteroidProfile>("Asteroid"),4,128,8192))
+            {
+                source.ConfigureShip(ship.CollisionMask(),ship.Position);source.ConfigureShipBody(ship.MassProperties(catalog));var read=source.SnapshotAsync();while(!read.IsCompleted)yield return null;
+                using(var candidate=ParallelGameplaySession.Import(read.Result,ship,catalog))
+                {
+                    var before=candidate.Solver.SnapshotAsync();while(!before.IsCompleted)yield return null;int endpoint=candidate.Solver.BodyStart;var material=(ushort)1;
+                    Assert.That(candidate.Solver.GrainCapacity,Is.EqualTo(8192));Assert.That(candidate.Solver.TryAppend(new Debris.Simulation.ParallelProof.LooseCell{Center=new Vector2(-300,0),Material=material,Identity=999999},catalog.DefinitionAt(material).Density),Is.True);
+                    var after=candidate.Solver.SnapshotAsync();while(!after.IsCompleted)yield return null;
+                    Assert.That(candidate.Solver.GrainCount,Is.EqualTo(1));Assert.That(after.Result.Grains[0].Identity,Is.EqualTo(999999));Assert.That(after.Result.Endpoints[endpoint].Center,Is.EqualTo(before.Result.Endpoints[endpoint].Center).Using(new Vector2Comparer(.0001f)));
                 }
             }
         }

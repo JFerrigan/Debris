@@ -18,55 +18,60 @@ namespace Debris.Simulation.ParallelProof
         readonly GraphicsBuffer committed,state,grains,parameters,boundaries,diagnostics,args,starts;
         readonly GraphicsBuffer counts,cursors,offsets,sums,blockOffsets,indices;
         readonly GraphicsBuffer rows,rowCounts,rowOffsets,rowSums,rowBlocks,contacts,degrees,adjOffsets,adjSums,adjBlocks,adjCursors,adjacency,increments;
-        readonly int n,bodies,endpoints,slots,velocityIterations,positionIterations;
+        readonly int capacity,bodies,endpoints,slots,velocityIterations,positionIterations;
+        int active;
         int snapshotRequests;
         public long BufferBytes { get; private set; }
         public GraphicsBuffer Grains => grains;
         public GraphicsBuffer Bodies => committed;
         public GraphicsBuffer Boundaries => boundaries;
         public GraphicsBuffer Parameters => parameters;
-        public int GrainCount => n;
+        public int GrainCount => active;
+        public int GrainCapacity => capacity;
+        public int BodyStart => capacity;
         public int BodyCount => bodies;
         public int SnapshotRequests => snapshotRequests;
         public Task<uint[]> DiagnosticsAsync()=>Read<uint>(diagnostics);
         public Task<ProofMetricsReadback> MetricsAsync()=>metrics.ReadAsync();
         public Task<ProofTraceReadback> TraceAsync()=>trace!=null?trace.ReadAsync():throw new InvalidOperationException("Proof tracing is disabled");
         public ParallelGrainSolver(LooseCell[] initialGrains, BodyState[] initialBodies, BodyParameters[] bodyParameters, Boundary[] patches,
-            int velocityIterations=8,int positionIterations=4,float friction=.3f,int candidateSlots=64,int rigidContactCapacity=4096,ProofTraceConfiguration traceConfiguration=null,float[] grainMasses=null)
+            int velocityIterations=8,int positionIterations=4,float friction=.3f,int candidateSlots=64,int rigidContactCapacity=4096,ProofTraceConfiguration traceConfiguration=null,float[] grainMasses=null,int allocatedGrainCapacity=0)
         {
-            ValidateInput(initialGrains,initialBodies,bodyParameters,patches,velocityIterations,positionIterations,friction,candidateSlots);
+            capacity=allocatedGrainCapacity==0?initialGrains.Length:allocatedGrainCapacity;
+            if(capacity<initialGrains.Length||capacity>8192)throw new ArgumentOutOfRangeException(nameof(allocatedGrainCapacity));
+            ValidateInput(initialGrains,initialBodies,bodyParameters,patches,velocityIterations,positionIterations,friction,candidateSlots,capacity);
             if(grainMasses!=null&&(grainMasses.Length!=initialGrains.Length||Array.Exists(grainMasses,m=>!Finite(m)||m<=0)))throw new ArgumentException("Grain masses must be finite, positive, and match the grain population.");
             if(rigidContactCapacity<1||rigidContactCapacity>4096||patches.Length>4096)throw new ArgumentOutOfRangeException();
             traceConfiguration?.Validate(initialGrains.Length,initialGrains.Length+initialBodies.Length,patches.Length,initialGrains.Length*candidateSlots,velocityIterations,positionIterations);
-            n=initialGrains.Length;bodies=initialBodies.Length;endpoints=n+bodies;slots=candidateSlots;
+            active=initialGrains.Length;bodies=initialBodies.Length;endpoints=capacity+bodies;slots=candidateSlots;
             this.velocityIterations=velocityIterations;this.positionIterations=positionIterations;
             shader=UnityEngine.Object.Instantiate(Resources.Load<ComputeShader>("ParallelGrains"));
             // A world may contain no loose grains.  Allocate a harmless backing
             // element because GraphicsBuffer does not accept a zero count, while
             // all dispatches continue to use the real endpoint/grain counts.
-            committed=Buffer(Math.Max(1,endpoints),32);state=Buffer(Math.Max(1,endpoints),32);grains=Buffer(Math.Max(1,n),48);parameters=Buffer(Math.Max(1,endpoints),32);boundaries=Buffer(Math.Max(1,patches.Length),32);
+            committed=Buffer(Math.Max(1,endpoints),32);state=Buffer(Math.Max(1,endpoints),32);grains=Buffer(Math.Max(1,capacity),48);parameters=Buffer(Math.Max(1,endpoints),32);boundaries=Buffer(Math.Max(1,patches.Length),32);
             diagnostics=Buffer(16,4);starts=Buffer(endpoints,16);
             // 17 dynamic bodies (ship plus 16 fragments) and one anchored
             // terrain endpoint share this bounded manifold table.
             rigidContacts=Buffer(rigidContactCapacity,72);rigidCount=Buffer(1,4);rigidPairs=Buffer(18*18,4);
             args=Buffer(16*10*3,4,GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.IndirectArguments);
-            counts=Buffer(65536,4);cursors=Buffer(65536,4);offsets=Buffer(65536,4);sums=Buffer(256,4);blockOffsets=Buffer(256,4);indices=Buffer(Math.Max(1,n),4);
-            rows=Buffer(Math.Max(1,n*slots),64);rowCounts=Buffer(Math.Max(1,n),4);rowOffsets=Buffer(Math.Max(1,n),4);rowSums=Buffer(256,4);rowBlocks=Buffer(256,4);
-            contacts=Buffer(Math.Max(1,n*slots),64);degrees=Buffer(Math.Max(1,endpoints),4);adjOffsets=Buffer(Math.Max(1,endpoints),4);adjSums=Buffer(256,4);adjBlocks=Buffer(256,4);adjCursors=Buffer(Math.Max(1,endpoints),4);
-            adjacency=Buffer(Math.Max(1,n*slots*2),4);increments=Buffer(Math.Max(1,n*slots),16);
-            var initial=new BodyState[endpoints];var physical=new BodyParameters[endpoints];var identities=new HashSet<uint>();
-            for(int i=0;i<n;i++)
+            counts=Buffer(65536,4);cursors=Buffer(65536,4);offsets=Buffer(65536,4);sums=Buffer(256,4);blockOffsets=Buffer(256,4);indices=Buffer(Math.Max(1,capacity),4);
+            rows=Buffer(Math.Max(1,capacity*slots),64);rowCounts=Buffer(Math.Max(1,capacity),4);rowOffsets=Buffer(Math.Max(1,capacity),4);rowSums=Buffer(256,4);rowBlocks=Buffer(256,4);
+            contacts=Buffer(Math.Max(1,capacity*slots),64);degrees=Buffer(Math.Max(1,endpoints),4);adjOffsets=Buffer(Math.Max(1,endpoints),4);adjSums=Buffer(256,4);adjBlocks=Buffer(256,4);adjCursors=Buffer(Math.Max(1,endpoints),4);
+            adjacency=Buffer(Math.Max(1,capacity*slots*2),4);increments=Buffer(Math.Max(1,capacity*slots),16);
+            var initial=new BodyState[endpoints];var physical=new BodyParameters[endpoints];var initialGrainBuffer=new LooseCell[capacity];var identities=new HashSet<uint>();
+            for(int i=0;i<active;i++)
             {
                 var g=initialGrains[i];if(g.Material==0||g.Identity==0||!identities.Add(g.Identity))throw new ArgumentException("Grain material and identities must be valid and unique");
                 initial[i]=new BodyState{Center=g.Center,Velocity=g.Velocity,Angle=g.Angle,AngularVelocity=g.AngularVelocity};
                 float mass=grainMasses==null?1:grainMasses[i];
                 physical[i]=new BodyParameters{InverseMass=1/mass,InverseInertia=6/mass,Mobility=1};
             }
-            Array.Copy(initialBodies,0,initial,n,bodies);Array.Copy(bodyParameters,0,physical,n,bodies);
-            foreach(var patch in patches)if(patch.Body<n||patch.Body>=endpoints)throw new ArgumentException("Boundary body is an endpoint index");
-            committed.SetData(initial);state.SetData(initial);grains.SetData(initialGrains);parameters.SetData(physical);if(patches.Length>0)boundaries.SetData(patches);diagnostics.SetData(new uint[16]);
+            Array.Copy(initialBodies,0,initial,capacity,bodies);Array.Copy(bodyParameters,0,physical,capacity,bodies);Array.Copy(initialGrains,initialGrainBuffer,active);
+            foreach(var patch in patches)if(patch.Body<capacity||patch.Body>=endpoints)throw new ArgumentException("Boundary body is an endpoint index");
+            committed.SetData(initial);state.SetData(initial);grains.SetData(initialGrainBuffer);parameters.SetData(physical);if(patches.Length>0)boundaries.SetData(patches);diagnostics.SetData(new uint[16]);
             shader.SetInt("_RigidCapacity",rigidContactCapacity);shader.SetFloat("_RigidGatherMargin",.75f);shader.SetFloat("_RigidSolidTarget",.0001f);
-            shader.SetInt("_N",n);shader.SetInt("_Bodies",bodies);shader.SetInt("_Endpoints",endpoints);shader.SetInt("_BoundaryCount",patches.Length);
+            shader.SetInt("_N",active);shader.SetInt("_BodyStart",capacity);shader.SetInt("_Bodies",bodies);shader.SetInt("_Endpoints",endpoints);shader.SetInt("_BoundaryCount",patches.Length);
             shader.SetInt("_BinSide",256);shader.SetInt("_BinCount",65536);shader.SetInt("_Slots",slots);shader.SetFloat("_Dt",1f/60);shader.SetFloat("_Friction",friction);
             Bind("Begin",("_Committed",committed),("_State",state),("_D",diagnostics));
             Bind("Speed",("_State",state),("_Parameters",parameters),("_Boundaries",boundaries),("_D",diagnostics));
@@ -96,15 +101,15 @@ namespace Debris.Simulation.ParallelProof
             foreach(string kernel in new[]{"RigidSolvePosition","RigidValidate"})Bind(kernel,("_D",diagnostics),("_State",state),("_Parameters",parameters),("_Boundaries",boundaries),("_RigidContacts",rigidContacts),("_RigidContactCount",rigidCount));
             if(traceConfiguration!=null)
             {
-                trace=new ProofTrace(n,endpoints,n*slots,positionIterations,velocityIterations,initialGrains,physical,patches,traceConfiguration,friction);
+                trace=new ProofTrace(active,endpoints,active*slots,positionIterations,velocityIterations,initialGrains,physical,patches,traceConfiguration,friction);
                 BufferBytes+=trace.AllocatedBytes;
             }
-            metrics=new ProofMetrics(n,bodies);BufferBytes+=metrics.AllocatedBytes;
+            metrics=new ProofMetrics(active,bodies);BufferBytes+=metrics.AllocatedBytes;
             metrics.Record(commands,committed,parameters,grains);Graphics.ExecuteCommandBuffer(commands);commands.Clear();
         }
         static bool Finite(float value)=>!float.IsNaN(value)&&!float.IsInfinity(value);
         static bool Finite(Vector2 value)=>Finite(value.x)&&Finite(value.y);
-        static void ValidateInput(LooseCell[] grains,BodyState[] bodies,BodyParameters[] definitions,Boundary[] patches,int velocity,int position,float friction,int slots)
+        static void ValidateInput(LooseCell[] grains,BodyState[] bodies,BodyParameters[] definitions,Boundary[] patches,int velocity,int position,float friction,int slots,int bodyStart)
         {
             if(grains==null||bodies==null||definitions==null||patches==null||grains.Length>10000||bodies.Length>18||bodies.Length!=definitions.Length)
                 throw new ArgumentException("Invalid proof population");
@@ -126,7 +131,7 @@ namespace Debris.Simulation.ParallelProof
                 for(uint f=body.BoundaryStart;f<body.BoundaryStart+body.BoundaryCount;f++)
                 {
                     var patch=patches[f];
-                    if(owned[f]||patch.Body!=grains.Length+i||!Finite(patch.Center)||!Finite(patch.HalfSize)||patch.HalfSize.x<=0||patch.HalfSize.y<=0)throw new ArgumentException("Invalid or multiply owned boundary patch");
+                    if(owned[f]||patch.Body!=bodyStart+i||!Finite(patch.Center)||!Finite(patch.HalfSize)||patch.HalfSize.x<=0||patch.HalfSize.y<=0)throw new ArgumentException("Invalid or multiply owned boundary patch");
                     owned[f]=true;
                 }
             }
@@ -157,7 +162,7 @@ namespace Debris.Simulation.ParallelProof
             {
                 commands.SetComputeIntParam(shader,"_Substep",s);Indirect("Prepare",s,0);Trace(s,ProofTraceStage.SubstepStart);
                 commands.BeginSample("B3R.Bins");Indirect("ClearBins",s,4);Indirect("CountBins",s,1);Scan(counts,offsets,sums,blockOffsets,65536,s,4);Indirect("ScatterBins",s,1);commands.EndSample("B3R.Bins");
-                commands.BeginSample("B3R.Gather");Indirect("Gather",s,1);Scan(rowCounts,rowOffsets,rowSums,rowBlocks,n,s,5);Indirect("ClearDegrees",s,0);Indirect("Compact",s,1);Indirect("ValidateDegrees",s,0);Scan(degrees,adjOffsets,adjSums,adjBlocks,endpoints,s,6);Indirect("ScatterAdjacency",s,2);if(bodies>1){Indirect("RigidClearContacts",s,7);Indirect("RigidGatherContacts",s,9);Indirect("RigidCheckCapacity",s,7);}commands.EndSample("B3R.Gather");
+                commands.BeginSample("B3R.Gather");Indirect("Gather",s,1);Scan(rowCounts,rowOffsets,rowSums,rowBlocks,active,s,5);Indirect("ClearDegrees",s,0);Indirect("Compact",s,1);Indirect("ValidateDegrees",s,0);Scan(degrees,adjOffsets,adjSums,adjBlocks,endpoints,s,6);Indirect("ScatterAdjacency",s,2);if(bodies>1){Indirect("RigidClearContacts",s,7);Indirect("RigidGatherContacts",s,9);Indirect("RigidCheckCapacity",s,7);}commands.EndSample("B3R.Gather");
                 Trace(s,ProofTraceStage.BeforeVelocity);
                 commands.BeginSample("B3R.Velocity");commands.SetComputeIntParam(shader,"_Position",0);
                 for(int i=0;i<velocityIterations;i++)
@@ -188,7 +193,20 @@ namespace Debris.Simulation.ParallelProof
             await Task.WhenAll(g,s,d);
             // The one-element allocation for an empty population is GPU backing
             // storage, not a real grain that callers may count or index.
-            return new ProofSnapshot{Grains=n==0?Array.Empty<LooseCell>():g.Result,Endpoints=s.Result,Diagnostics=d.Result};
+            if(active==0)return new ProofSnapshot{Grains=Array.Empty<LooseCell>(),Endpoints=s.Result,Diagnostics=d.Result};
+            var values=g.Result;Array.Resize(ref values,active);return new ProofSnapshot{Grains=values,Endpoints=s.Result,Diagnostics=d.Result};
+        }
+        // Topology transactions call this only with no unresolved GPU tick.
+        // The allocated grain region never moves, therefore body endpoints and
+        // all boundary references remain stable across admission.
+        public bool TryAppend(LooseCell grain,float mass)
+        {
+            if(active>=capacity||grain.Material==0||grain.Identity==0||!Finite(grain.Center)||!Finite(grain.Velocity)||!Finite(grain.Angle)||!Finite(grain.AngularVelocity)||!Finite(mass)||mass<=0)return false;
+            grains.SetData(new[]{grain},0,active,1);
+            var body=new BodyState{Center=grain.Center,Velocity=grain.Velocity,Angle=grain.Angle,AngularVelocity=grain.AngularVelocity};
+            var parametersValue=new BodyParameters{InverseMass=1/mass,InverseInertia=6/mass,Mobility=1};
+            committed.SetData(new[]{body},0,active,1);state.SetData(new[]{body},0,active,1);parameters.SetData(new[]{parametersValue},0,active,1);
+            active++;shader.SetInt("_N",active);return true;
         }
         // Normal gameplay reads only this compact, ordered completion. Full
         // snapshots remain an explicit inspection/test operation.

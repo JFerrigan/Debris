@@ -58,7 +58,7 @@ RWStructuredBuffer<uint> _Degrees;
 StructuredBuffer<uint> _AdjOffsets,_AdjBlockOffsets;
 RWStructuredBuffer<uint> _AdjCursors,_Adjacency;
 RWStructuredBuffer<float4> _Increments;
-uint _N,_Bodies,_Endpoints,_BoundaryCount,_BinSide,_BinCount,_Slots,_ScanCount,_SumCount,_Substep,_Position;
+uint _N,_BodyStart,_Bodies,_Endpoints,_BoundaryCount,_BinSide,_BinCount,_Slots,_ScanCount,_SumCount,_Substep,_Position;
 float _Dt,_Friction;
 float4 _Force; // local ship force xy, torque z; proof fixture
 
@@ -99,9 +99,9 @@ void geometry(uint a,uint b,uint feature,out float2 n,out float sep,out float2 r
 {
     if(id>=_Endpoints || _D[0]!=0)return;State s=_State[id];Parameters p=_Parameters[id];
     float radius=.707107;
-    if(id>=_N){radius=0;for(uint f=p.first;f<p.first+p.count;f++){Boundary b=_Boundaries[f];radius=max(radius,length(b.center-p.com)+length(b.halfSize));}}
+    if(id>=_BodyStart){radius=0;for(uint f=p.first;f<p.first+p.count;f++){Boundary b=_Boundaries[f];radius=max(radius,length(b.center-p.com)+length(b.halfSize));}}
     float speed=length(s.velocity)+abs(s.spin)*radius;
-    if(id==_N)speed+=_Dt*(length(_Force.xy)*p.im+abs(_Force.z)*p.ii*radius);
+    if(id==_BodyStart)speed+=_Dt*(length(_Force.xy)*p.im+abs(_Force.z)*p.ii*radius);
     if(!isfinite(speed)){fault(32);return;}InterlockedMax(_D[3],asuint(speed));
 }
 [numthreads(1,1,1)] void SelectSubsteps(uint id:SV_DispatchThreadID)
@@ -118,9 +118,9 @@ void geometry(uint a,uint b,uint feature,out float2 n,out float sep,out float2 r
 [numthreads(64,1,1)] void Prepare(uint id:SV_DispatchThreadID)
 {
     if(id>=_Endpoints||!active())return;State s=_State[id];float radius=.707107;
-    if(id>=_N){Parameters p=_Parameters[id];radius=0;for(uint f=p.first;f<p.first+p.count;f++){Boundary b=_Boundaries[f];radius=max(radius,length(b.center-p.com)+length(b.halfSize));}}
+    if(id>=_BodyStart){Parameters p=_Parameters[id];radius=0;for(uint f=p.first;f<p.first+p.count;f++){Boundary b=_Boundaries[f];radius=max(radius,length(b.center-p.com)+length(b.halfSize));}}
     _Starts[id]=float4(s.center,s.angle,radius);
-    if(id==_N){Parameters p=_Parameters[id];s.velocity+=rotate(_Force.xy,s.angle)*p.im*dt();s.spin+=_Force.z*p.ii*dt();}_State[id]=s;
+    if(id==_BodyStart){Parameters p=_Parameters[id];s.velocity+=rotate(_Force.xy,s.angle)*p.im*dt();s.spin+=_Force.z*p.ii*dt();}_State[id]=s;
 }
 [numthreads(256,1,1)] void ClearBins(uint id:SV_DispatchThreadID){if(id<_BinCount){_Counts[id]=0;_Cursors[id]=0;}}
 [numthreads(64,1,1)] void CountBins(uint id:SV_DispatchThreadID)
@@ -209,7 +209,7 @@ void apply(uint id,float4 sum)
 groupshared float4 reaction[64];
 [numthreads(64,1,1)] void ApplyBodies(uint group:SV_GroupID,uint lane:SV_GroupThreadID)
 {
-    uint id=_N+group;reaction[lane]=0;if(id<_Endpoints&&active())reaction[lane]=gatherIncrement(id,adjOffset(id),_Degrees[id],lane,64);GroupMemoryBarrierWithGroupSync();
+    uint id=_BodyStart+group;reaction[lane]=0;if(id<_Endpoints&&active())reaction[lane]=gatherIncrement(id,adjOffset(id),_Degrees[id],lane,64);GroupMemoryBarrierWithGroupSync();
     for(uint stride=32;stride>0;stride/=2){if(lane<stride)reaction[lane]+=reaction[lane+stride];GroupMemoryBarrierWithGroupSync();}if(lane==0&&id<_Endpoints&&active())apply(id,reaction[0]);
 }
 [numthreads(64,1,1)] void Predict(uint id:SV_DispatchThreadID)
