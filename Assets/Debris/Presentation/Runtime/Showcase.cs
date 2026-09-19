@@ -57,12 +57,12 @@ namespace Debris.Presentation
         {
             try
             {
-                var imported=await source.SnapshotAsync();
+                var imported=CandidateStarterLayout.Add(await source.SnapshotAsync(),sourceShip,catalog);
                 var candidate=ParallelGameplaySession.Import(imported,sourceShip,catalog);
                 if(generation!=parallelGeneration||source!=session||sourceShip!=ship){candidate.Dispose();return;}
                 parallel=candidate;
                 view.BindCandidate(candidate);
-                saveStatus="Parallel candidate active: persistence, travel, fuel transfer and damage are gated for R2a.";
+                saveStatus="Parallel candidate active: 96 loose grains seeded. Drill, suction, persistence, travel, fuel transfer and damage are unavailable.";
                 Debug.Log("DEBRIS_PARALLEL_GAMEPLAY active");
             }
             catch(Exception e){saveStatus="Parallel candidate activation refused: "+e.Message;Debug.LogWarning(saveStatus);}
