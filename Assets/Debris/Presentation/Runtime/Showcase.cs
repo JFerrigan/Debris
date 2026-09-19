@@ -60,9 +60,10 @@ namespace Debris.Presentation
                 var imported=CandidateStarterLayout.Add(await source.SnapshotAsync(),sourceShip,catalog);
                 var candidate=ParallelGameplaySession.Import(imported,sourceShip,catalog);
                 if(generation!=parallelGeneration||source!=session||sourceShip!=ship){candidate.Dispose();return;}
+                candidate.AttachTerrainMirror(source);
                 parallel=candidate;
                 view.BindCandidate(candidate);
-                saveStatus="Parallel candidate active: 96 loose grains seeded. Drill, suction, persistence, travel, fuel transfer and damage are unavailable.";
+                saveStatus="Parallel candidate active: 96 loose grains seeded. LMB drills; suction, persistence, travel, fuel transfer and damage are unavailable.";
                 Debug.Log("DEBRIS_PARALLEL_GAMEPLAY active");
             }
             catch(Exception e){saveStatus="Parallel candidate activation refused: "+e.Message;Debug.LogWarning(saveStatus);}
@@ -110,6 +111,8 @@ namespace Debris.Presentation
                     if(completion.Fault!=Debris.Simulation.ParallelProof.SolverFault.None){saveStatus=parallel.Fault;Debug.LogError("DEBRIS_PARALLEL_GAMEPLAY "+saveStatus);paused=true;break;}
                     var body=ship.MassProperties(catalog);ship.Angle=completion.ShipAngle;ship.Position=completion.ShipCenter-ship.ToWorld(body.Center)+ship.Position;ship.Velocity=completion.ShipVelocity;ship.AngularVelocity=completion.ShipSpin;ship.Fuel.Consume(completion.FuelBurn);ship.CargoMass=completion.CargoMass;
                 }
+                if(parallel.TryAdvanceTerrainEdit(out var edit)&&edit.Status!=CandidateEditStatus.Busy)
+                    saveStatus="Drill: "+edit.Status+(edit.Status==CandidateEditStatus.Released?" / grains "+edit.ActiveGrains:" ");
                 if(parallel.Faulted){paused=true;saveStatus=parallel.Fault;}
             }
             if(!paused&&!benchmark&&!shipBenchmark&&!saveBusy&&(!parallelGameplay||parallel!=null))
@@ -128,7 +131,11 @@ namespace Debris.Presentation
                         if(cut)command=new SiteCommand(SiteCommandType.CutterStroke,Vector2.zero,Vector2.zero,6,120,1);
                         bool suction=!parallelGameplay&&input["Suction"].IsPressed()&&ship.Has(UnitKind.Suction);
                         var step=new MatterStepInput(command,suction?40:0,default,ship.DoorOpen,cut,suction,force);
-                        if(parallelGameplay){if(!parallel.Submit(parallel.NextSubmissionTick,step,provisional)){break;}}
+                        if(parallelGameplay)
+                        {
+                            if(!parallel.Submit(parallel.NextSubmissionTick,step,provisional)){break;}
+                            if(input["Cut"].IsPressed()&&ship.Has(UnitKind.Drill))parallel.RequestMountedDrill();
+                        }
                         else session.Step(step);
                     }
                     else session.Step(command);
@@ -448,7 +455,7 @@ namespace Debris.Presentation
             Panel(new Rect(28,28,4,72),new Color(.26f,.86f,.69f));
             GUI.Label(new Rect(48,22,650,48),"D E B R I S",title);
             GUI.Label(new Rect(50,76,700,26),parallelGameplay?"PARALLEL CANDIDATE   /   LOOSE-DEBRIS PLAYGROUND":"SALVAGE FLIGHT   /   EE INC. CONTRACTOR VESSEL",small);
-            GUI.Label(new Rect(50,101,850,22),parallelGameplay?"W/S thrust • A/D strafe • Q/E turn • scroll zoom • Space/Esc pause • R reset   /   Drill, suction, door, save and travel unavailable":"W/S thrust • A/D strafe • Q/E turn • LMB drill • RMB suction • G cargo door • scroll zoom • Space/Esc pause • R reset • T other site",small);
+            GUI.Label(new Rect(50,101,850,22),parallelGameplay?"W/S thrust • A/D strafe • Q/E turn • LMB drill • scroll zoom • Space/Esc pause • R reset   /   suction, door, save and travel unavailable":"W/S thrust • A/D strafe • Q/E turn • LMB drill • RMB suction • G cargo door • scroll zoom • Space/Esc pause • R reset • T other site",small);
             float x=Screen.width-262;
             Panel(new Rect(x-18,152,262,Screen.height-180),new Color(.025f,.045f,.065f,.94f));
             GUI.Label(new Rect(x,174,230,30),"SITE  /  "+currentSiteId.Substring(28),label);

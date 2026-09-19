@@ -21,9 +21,17 @@ namespace Debris.Simulation
         readonly MatterSnapshot source;
         readonly bool[] cargo;
         readonly CandidateTerrainState terrain;
+        readonly Boundary[] dynamicPrefix;
         int pendingHead,pendingCount;
         uint lastSubmittedTick;
         bool faulted,disposed;
+        bool drillRequested,drillValidating;
+        float drillPower=120,drillRadius=6;
+        uint drillRequestId;
+        BodyState acknowledgedShip;
+        CandidateTerrainEdit drillEdit;
+        CandidateTerrainTransaction transaction;
+        CandidateEditResult lastEdit;
         double unresolvedFuel;
         public bool Faulted=>faulted;
         public string Fault { get; private set; }
@@ -32,6 +40,8 @@ namespace Debris.Simulation
         public ParallelGrainSolver Solver=>solver;
         public CandidateTerrainState Terrain=>terrain;
         public uint TerrainRevision=>terrain.Revision;
+        public bool TopologyBusy=>drillRequested||drillValidating||(transaction?.Busy??false);
+        public CandidateEditResult LastEditResult=>lastEdit;
         public double ProvisionalFuel
         {
             get { double total=unresolvedFuel;for(int i=0;i<pendingCount;i++)total+=pending[(pendingHead+i)%MaximumPendingTicks].Fuel;return total; }
@@ -55,8 +65,8 @@ namespace Debris.Simulation
             {Tick=tick;Fault=fault;ShipCenter=ship.Center;ShipVelocity=ship.Velocity;ShipAngle=ship.Angle;ShipSpin=ship.AngularVelocity;CargoCount=count;CargoMass=mass;FuelBurn=fuelBurn;}
         }
 
-        ParallelGameplaySession(ParallelGrainSolver value, MatterSnapshot imported, MaterialCatalog materials, bool[] cargoFlags, CandidateTerrainState terrainState)
-        {solver=value;source=imported;catalog=materials;cargo=cargoFlags;terrain=terrainState;}
+        ParallelGameplaySession(ParallelGrainSolver value, MatterSnapshot imported, MaterialCatalog materials, bool[] cargoFlags, CandidateTerrainState terrainState, Boundary[] patches, BodyState shipState)
+        {solver=value;source=imported;catalog=materials;cargo=cargoFlags;terrain=terrainState;acknowledgedShip=shipState;int prefix=(int)solver.BodyDefinitions[solver.BodyCount-1].BoundaryStart;dynamicPrefix=new Boundary[prefix];Array.Copy(patches,dynamicPrefix,prefix);}
 
         public static ParallelGameplaySession Import(MatterSnapshot snapshot,ShipRuntime ship,MaterialCatalog catalog,int velocityIterations=4,int positionIterations=2)
         {
@@ -100,7 +110,7 @@ namespace Debris.Simulation
             if(patches.Count>4096)throw new InvalidOperationException("Candidate import exceeds the 4,096 collision-patch cache; world activation was refused.");
             if(bodies.Count!=snapshot.Fragments.Length+2)throw new InvalidOperationException("Candidate endpoint accounting is invalid.");
             var solver=new ParallelGrainSolver(grains,bodies.ToArray(),parameters.ToArray(),patches.ToArray(),velocityIterations,positionIterations,grainMasses:grainMasses,allocatedGrainCapacity:snapshot.Capacity,allocatedBoundaryCapacity:4096);
-            return new ParallelGameplaySession(solver,snapshot,catalog,flags,terrainState);
+            return new ParallelGameplaySession(solver,snapshot,catalog,flags,terrainState,patches.ToArray(),bodies[0]);
         }
         static Vector2 World(Vector2 local,Vector4 pose)
         {float c=Mathf.Cos(pose.z),s=Mathf.Sin(pose.z);return new Vector2(pose.x+local.x*c-local.y*s,pose.y+local.x*s+local.y*c);}
@@ -120,7 +130,7 @@ namespace Debris.Simulation
         }
         public bool Submit(uint tick,MatterStepInput input,double provisionalFuel=0)
         {
-            if(disposed||faulted||tick==0||tick<=lastSubmittedTick||pendingCount>=MaximumPendingTicks||provisionalFuel<0||double.IsNaN(provisionalFuel)||double.IsInfinity(provisionalFuel))return false;
+            if(disposed||faulted||TopologyBusy||tick==0||tick<=lastSubmittedTick||pendingCount>=MaximumPendingTicks||provisionalFuel<0||double.IsNaN(provisionalFuel)||double.IsInfinity(provisionalFuel))return false;
             solver.Step(new Vector2(input.LocalForce.x,input.LocalForce.y),input.LocalForce.z);
             pending[(pendingHead+pendingCount)%MaximumPendingTicks]=new Pending{Tick=tick,Fuel=provisionalFuel,Readback=solver.CompletionAsync(solver.BodyStart)};pendingCount++;lastSubmittedTick=tick;return true;
         }
@@ -139,7 +149,39 @@ namespace Debris.Simulation
                 faulted=true;Fault="Candidate solver fault: "+result.Fault;ClearPending();completion=new Completion(next.Tick,result.Fault,default,0,0);return true;
             }
             int count=0;float cargoMass=0;for(int i=0;i<cargo.Length;i++)if(cargo[i]){count++;cargoMass+=catalog.DefinitionAt((ushort)source.Cells[i].Material).Density;}
+            acknowledgedShip=result.State;
             completion=new Completion(next.Tick,SolverFault.None,result.State,count,cargoMass,next.Fuel);return true;
+        }
+        public void AttachTerrainMirror(MatterSession mirror)
+        {
+            if(disposed||faulted||transaction!=null)throw new InvalidOperationException("Candidate terrain mirror is unavailable.");
+            transaction=new CandidateTerrainTransaction(solver,mirror,terrain);
+        }
+        public bool RequestMountedDrill(float power=120,float radius=6)
+        {
+            if(disposed||faulted||transaction==null||TopologyBusy||!float.IsFinite(power)||!float.IsFinite(radius)||power<0||radius<0)return false;
+            drillRequested=true;drillPower=power;drillRadius=radius;drillRequestId++;return true;
+        }
+        Vector2 MountedDrillCenter()
+        {
+            var local=solver.BodyDefinitions[0].LocalCOM;var offset=new Vector2(58,0)-local;float c=Mathf.Cos(acknowledgedShip.Angle),s=Mathf.Sin(acknowledgedShip.Angle);
+            return acknowledgedShip.Center+new Vector2(offset.x*c-offset.y*s,offset.x*s+offset.y*c);
+        }
+        public bool TryAdvanceTerrainEdit(out CandidateEditResult result)
+        {
+            result=lastEdit;if(disposed||faulted||!drillRequested)return false;
+            if(pendingCount>0){lastEdit=new CandidateEditResult(CandidateEditStatus.Busy,drillRequestId,default,0,0,terrain.Revision,solver.GrainCount);result=lastEdit;return true;}
+            if(!drillValidating)
+            {
+                if(!terrain.TrySelectDrillCell(MountedDrillCenter(),drillRadius,out var cell)){drillRequested=false;lastEdit=new CandidateEditResult(CandidateEditStatus.NoTarget,drillRequestId,default,0,0,terrain.Revision,solver.GrainCount);result=lastEdit;return true;}
+                var status=terrain.TryPrepareCell(cell,drillPower,1f/60,catalog,out drillEdit);
+                if(status!=CandidateEditStatus.DamageApplied&&status!=CandidateEditStatus.Released){drillRequested=false;lastEdit=new CandidateEditResult(status,drillRequestId,cell,terrain.MaterialAt(cell),0,terrain.Revision,solver.GrainCount);result=lastEdit;return true;}
+                if(!CandidateBoundaryBuilder.TryPrepareTerrainReplacement(terrain,drillEdit,solver.BodyDefinitions,dynamicPrefix,solver.BoundaryCapacity,out var replacement)){drillRequested=false;lastEdit=new CandidateEditResult(CandidateEditStatus.BoundaryCapacity,drillRequestId,cell,drillEdit.OldMaterial,0,terrain.Revision,solver.GrainCount);result=lastEdit;return true;}
+                float density=catalog.DefinitionAt((ushort)drillEdit.OldMaterial).Density;status=transaction.Prepare(drillEdit,replacement,density);if(status!=drillEdit.Status){drillRequested=false;lastEdit=new CandidateEditResult(status,drillRequestId,cell,drillEdit.OldMaterial,0,terrain.Revision,solver.GrainCount);result=lastEdit;return true;}transaction.BeginPlacementValidation();drillValidating=true;return false;
+            }
+            if(!transaction.TryCompletePlacementValidation(out var validation))return false;
+            if(validation!=drillEdit.Status){transaction.Abort();drillRequested=drillValidating=false;lastEdit=new CandidateEditResult(validation,drillRequestId,drillEdit.Cell,drillEdit.OldMaterial,0,terrain.Revision,solver.GrainCount);result=lastEdit;return true;}
+            var published=transaction.TryPublish();lastEdit=new CandidateEditResult(published,drillRequestId,drillEdit.Cell,drillEdit.OldMaterial,published==CandidateEditStatus.Released?drillEdit.Identity:0,terrain.Revision,solver.GrainCount);drillRequested=drillValidating=false;drillEdit=null;result=lastEdit;return true;
         }
         public void Dispose()
         {
@@ -148,7 +190,7 @@ namespace Debris.Simulation
             // readbacks. Fence them before releasing their buffers so a reset
             // or destruction cannot invoke a callback against disposed memory.
             AsyncGPUReadback.WaitAllRequests();
-            ClearPending();solver.Dispose();
+            ClearPending();transaction?.Dispose();solver.Dispose();
         }
         void ClearPending(){Array.Clear(pending,0,pending.Length);pendingHead=0;pendingCount=0;}
     }
