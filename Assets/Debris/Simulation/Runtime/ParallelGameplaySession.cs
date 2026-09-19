@@ -20,6 +20,7 @@ namespace Debris.Simulation
         readonly MaterialCatalog catalog;
         readonly MatterSnapshot source;
         readonly bool[] cargo;
+        readonly CandidateTerrainState terrain;
         int pendingHead,pendingCount;
         uint lastSubmittedTick;
         bool faulted,disposed;
@@ -29,6 +30,8 @@ namespace Debris.Simulation
         public int PendingTicks=>pendingCount;
         public uint NextSubmissionTick=>lastSubmittedTick+1;
         public ParallelGrainSolver Solver=>solver;
+        public CandidateTerrainState Terrain=>terrain;
+        public uint TerrainRevision=>terrain.Revision;
         public double ProvisionalFuel
         {
             get { double total=unresolvedFuel;for(int i=0;i<pendingCount;i++)total+=pending[(pendingHead+i)%MaximumPendingTicks].Fuel;return total; }
@@ -52,8 +55,8 @@ namespace Debris.Simulation
             {Tick=tick;Fault=fault;ShipCenter=ship.Center;ShipVelocity=ship.Velocity;ShipAngle=ship.Angle;ShipSpin=ship.AngularVelocity;CargoCount=count;CargoMass=mass;FuelBurn=fuelBurn;}
         }
 
-        ParallelGameplaySession(ParallelGrainSolver value, MatterSnapshot imported, MaterialCatalog materials, bool[] cargoFlags)
-        {solver=value;source=imported;catalog=materials;cargo=cargoFlags;}
+        ParallelGameplaySession(ParallelGrainSolver value, MatterSnapshot imported, MaterialCatalog materials, bool[] cargoFlags, CandidateTerrainState terrainState)
+        {solver=value;source=imported;catalog=materials;cargo=cargoFlags;terrain=terrainState;}
 
         public static ParallelGameplaySession Import(MatterSnapshot snapshot,ShipRuntime ship,MaterialCatalog catalog,int velocityIterations=4,int positionIterations=2)
         {
@@ -88,22 +91,16 @@ namespace Debris.Simulation
             // Terrain is represented by an explicit anchored mask body.  Its
             // geometry must fit the solver cache; importing a partial world is
             // never acceptable.
-            var terrain=TerrainMask(snapshot);
+            var terrainState=new CandidateTerrainState(snapshot,snapshot.Capacity+bodies.Count);
+            var terrain=terrainState.BuildMask();
             // Patch coordinates are terrain-local; pose is its hull origin.
             // Keeping these spaces separate prevents translated terrain from
             // receiving its world offset twice in the rigid contact shader.
             AddBody(bodies,parameters,patches,snapshot.Capacity,terrain,new Vector4(snapshot.OriginX,snapshot.OriginY,0,1),Vector4.zero,new BodyMass{Mass=1,Inertia=1},0,uint.MaxValue,0,0,true);
             if(patches.Count>4096)throw new InvalidOperationException("Candidate import exceeds the 4,096 collision-patch cache; world activation was refused.");
             if(bodies.Count!=snapshot.Fragments.Length+2)throw new InvalidOperationException("Candidate endpoint accounting is invalid.");
-            var solver=new ParallelGrainSolver(grains,bodies.ToArray(),parameters.ToArray(),patches.ToArray(),velocityIterations,positionIterations,grainMasses:grainMasses,allocatedGrainCapacity:snapshot.Capacity);
-            return new ParallelGameplaySession(solver,snapshot,catalog,flags);
-        }
-        static uint[] TerrainMask(MatterSnapshot s)
-        {
-            var mask=new uint[s.Side*s.ChunkSize*s.Side*s.ChunkSize];int width=s.Side*s.ChunkSize;
-            for(int slice=0;slice<s.Fields.Length;slice++)for(int i=0;i<s.Fields[slice].Length;i++)
-            {int x=(slice%s.Side)*s.ChunkSize+i%s.ChunkSize,y=(slice/s.Side)*s.ChunkSize+i/s.ChunkSize;mask[y*width+x]=s.Fields[slice][i];}
-            return mask;
+            var solver=new ParallelGrainSolver(grains,bodies.ToArray(),parameters.ToArray(),patches.ToArray(),velocityIterations,positionIterations,grainMasses:grainMasses,allocatedGrainCapacity:snapshot.Capacity,allocatedBoundaryCapacity:4096);
+            return new ParallelGameplaySession(solver,snapshot,catalog,flags,terrainState);
         }
         static Vector2 World(Vector2 local,Vector4 pose)
         {float c=Mathf.Cos(pose.z),s=Mathf.Sin(pose.z);return new Vector2(pose.x+local.x*c-local.y*s,pose.y+local.x*s+local.y*c);}
@@ -112,39 +109,7 @@ namespace Debris.Simulation
             if(mask==null)throw new InvalidOperationException("Candidate import found a body without mask geometry.");
             int width=(int)Mathf.Sqrt(mask.Length);if(width*width!=mask.Length)throw new InvalidOperationException("Candidate mask is not square.");
             uint first=(uint)patches.Count;int body=grainCount+bodies.Count;
-            void Patch(Vector2 center,Vector2 half)=>patches.Add(new Boundary{Body=(uint)body,Feature=(uint)patches.Count,Center=center,HalfSize=half});
-            // Merge collinear exposed cell faces.  This keeps the exact mask
-            // outline (including concave holes and corners) without spending a
-            // collision slot per terrain cell.
-            for(int y=0;y<width;y++)for(int edge=0;edge<2;edge++)
-            {
-                int x=0;while(x<width)
-                {
-                    bool exposed=mask[y*width+x]!=0&&(edge==0?(y==0||mask[(y-1)*width+x]==0):(y==width-1||mask[(y+1)*width+x]==0));
-                    if(!exposed){x++;continue;}int start=x;while(x<width&&mask[y*width+x]!=0&&(edge==0?(y==0||mask[(y-1)*width+x]==0):(y==width-1||mask[(y+1)*width+x]==0)))x++;
-                    float length=x-start;Patch(new Vector2(originX+start+length*.5f,originY+y+(edge==0?0:1)),new Vector2(length*.5f,.001f));
-                }
-            }
-            for(int x=0;x<width;x++)for(int edge=0;edge<2;edge++)
-            {
-                int y=0;while(y<width)
-                {
-                    bool exposed=mask[y*width+x]!=0&&(edge==0?(x==0||mask[y*width+x-1]==0):(x==width-1||mask[y*width+x+1]==0));
-                    if(!exposed){y++;continue;}int start=y;while(y<width&&mask[y*width+x]!=0&&(edge==0?(x==0||mask[y*width+x-1]==0):(x==width-1||mask[y*width+x+1]==0)))y++;
-                    float length=y-start;Patch(new Vector2(originX+x+(edge==0?0:1),originY+start+length*.5f),new Vector2(.001f,length*.5f));
-                }
-            }
-            if(enclosePage)
-            {
-                // The broad phase has a fixed page.  These four anchored
-                // faces retain legacy matter at the world edge before a grain
-                // can cross out of that page on the next substep.
-                float minX=originX,minY=originY,maxX=originX+width,maxY=originY+width;
-                Patch(new Vector2(minX-.001f,(minY+maxY)*.5f),new Vector2(.001f,width*.5f+.001f));
-                Patch(new Vector2(maxX+.001f,(minY+maxY)*.5f),new Vector2(.001f,width*.5f+.001f));
-                Patch(new Vector2((minX+maxX)*.5f,minY-.001f),new Vector2(width*.5f+.001f,.001f));
-                Patch(new Vector2((minX+maxX)*.5f,maxY+.001f),new Vector2(width*.5f+.001f,.001f));
-            }
+            CandidateBoundaryBuilder.AppendMaskBoundaries(patches,mask,body,originX,originY,enclosePage);
             if(patches.Count==first)throw new InvalidOperationException("Candidate import found a body with no collision patches.");
             mass.Validate();var com=mass.Center;
             // The solver stores body centre at COM.  Existing GPU velocity is
