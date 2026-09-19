@@ -1,0 +1,31 @@
+#pragma kernel ClearPlacementStatus
+#pragma kernel ValidatePlacementGrains
+#pragma kernel PublishTerrainCell
+
+struct Grain { float2 center,velocity; float angle,spin; uint material,identity,flags,r0,r1,r2; };
+struct State { float2 center,velocity; float angle,spin; uint r0,r1; };
+StructuredBuffer<Grain> _Grains;
+StructuredBuffer<State> _Bodies;
+RWStructuredBuffer<uint> _Status;
+RWStructuredBuffer<uint> _Dirty;
+RWTexture2DArray<uint> _Field;
+RWTexture2DArray<float> _Damage;
+uint _GrainCount;
+float2 _Centre;
+float _Tolerance, _DamageValue;
+uint _Material, _Slice, _DirtySlice;
+int2 _Address;
+
+[numthreads(1,1,1)] void ClearPlacementStatus(uint id:SV_DispatchThreadID) { _Status[0]=0; }
+[numthreads(64,1,1)] void ValidatePlacementGrains(uint id:SV_DispatchThreadID)
+{
+    if(id>=_GrainCount)return;
+    // The candidate placement is a unit square.  This conservative circle
+    // rejection is only the broad phase; exact body containment remains
+    // fenced until the hull SAT kernel is installed.
+    if(length(_Grains[id].center-_Centre)<1.414214-_Tolerance) InterlockedOr(_Status[0],1);
+}
+[numthreads(1,1,1)] void PublishTerrainCell(uint id:SV_DispatchThreadID)
+{
+    int3 address=int3(_Address,_Slice);_Field[address]=_Material;_Damage[address]=_DamageValue;_Dirty[_DirtySlice]=1;
+}
