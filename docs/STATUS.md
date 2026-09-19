@@ -10,7 +10,7 @@ The current fast EditMode suite passed 121 with one explicit scale test skipped 
 
 Current deliverable: partial implementation of the [candidate drilling plan](CANDIDATE_DRILLING_PLAN.md). Continue with exact rotated grain/hull SAT, complete ordered GPU cache/grain publication, rejection/integration fixtures, and player telemetry before representing drilling as accepted.
 
-Candidate drilling is not accepted: the current placement query covers grains only and does not yet provide the required rotated grain/hull SAT or transaction-level GPU fixtures. Suction, doors, damage, fuel transfer, persistence, travel and streaming remain unavailable. Measured player flight/collision trajectories, packed-cargo/performance, R1 convergence and B.GATE remain open.
+Candidate drilling is not accepted: the placement query now uses oriented-square SAT for active grains and ship hull cells, but fragment SAT and transaction-level GPU fixtures remain absent. Suction, doors, damage, fuel transfer, persistence, travel and streaming remain unavailable. Measured player flight/collision trajectories, packed-cargo/performance, R1 convergence and B.GATE remain open.
 
 ## Preserved unfinished work
 
