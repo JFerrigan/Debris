@@ -3,6 +3,8 @@
 #pragma kernel ValidatePlacementBodies
 #pragma kernel PublishTerrainCell
 
+#include "ParallelContactGeometry.hlsl"
+
 struct Grain { float2 center,velocity; float angle,spin; uint material,identity,flags,r0,r1,r2; };
 struct State { float2 center,velocity; float angle,spin; uint r0,r1; };
 StructuredBuffer<Grain> _Grains;
@@ -24,10 +26,9 @@ int2 _Address;
 [numthreads(64,1,1)] void ValidatePlacementGrains(uint id:SV_DispatchThreadID)
 {
     if(id>=_GrainCount)return;
-    // The candidate placement is a unit square.  This conservative circle
-    // rejection is only the broad phase; exact body containment remains
-    // fenced until the hull SAT kernel is installed.
-    if(length(_Grains[id].center-_Centre)<1.414214-_Tolerance) InterlockedOr(_Status[0],1);
+    ParallelObb proposed;proposed.center=_Centre;proposed.halfSize=.5;proposed.angle=0;
+    ParallelObb existing;existing.center=_Grains[id].center;existing.halfSize=.5;existing.angle=_Grains[id].angle;
+    uint count;ParallelObbContact c0,c1;if(!ParallelObbContacts(proposed,existing,count,c0,c1)||c0.separation<-_Tolerance)InterlockedOr(_Status[0],1);
 }
 [numthreads(64,1,1)] void ValidatePlacementBodies(uint id:SV_DispatchThreadID)
 {
@@ -35,9 +36,9 @@ int2 _Address;
     State body=_Bodies[_BodyStart];int x=(int)(id%128)-64,y=(int)(id/128)-64;
     float s,c;sincos(body.angle,s,c);float2 local=float2(x+.5,y+.5)-_LocalCom;
     float2 centre=body.center+float2(local.x*c-local.y*s,local.x*s+local.y*c);
-    // Conservative broad rejection ensures a grain cannot be spawned inside
-    // a filled hull cell while the exact SAT manifold is under construction.
-    if(length(centre-_Centre)<1.414214-_Tolerance)InterlockedOr(_Status[0],2);
+    ParallelObb proposed;proposed.center=_Centre;proposed.halfSize=.5;proposed.angle=0;
+    ParallelObb solid;solid.center=centre;solid.halfSize=.5;solid.angle=body.angle;
+    uint count;ParallelObbContact c0,c1;if(!ParallelObbContacts(proposed,solid,count,c0,c1)||c0.separation<-_Tolerance)InterlockedOr(_Status[0],2);
 }
 [numthreads(1,1,1)] void PublishTerrainCell(uint id:SV_DispatchThreadID)
 {
