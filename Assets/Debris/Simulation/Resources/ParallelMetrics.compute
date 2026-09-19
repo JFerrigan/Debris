@@ -1,6 +1,7 @@
 #pragma kernel Contribute
 #pragma kernel Reduce
 #pragma kernel Finalize
+#pragma kernel ResetEpoch
 
 // These declarations intentionally mirror ProofRecords.cs. The metrics pass is
 // read-only with respect to the solver state and owns only its reduction buffers.
@@ -67,7 +68,7 @@ RWStructuredBuffer<Partial> _Partials;
 RWStructuredBuffer<Partial> _Groups;
 RWStructuredBuffer<Baseline> _Baseline;
 RWStructuredBuffer<Result> _Result;
-uint _GrainCount,_BodyCount,_TotalCount,_GroupCount;
+uint _GrainCount,_BodyCount,_BodyStart,_TotalCount,_GroupCount;
 
 bool finiteState(State s, Parameters p)
 {
@@ -86,7 +87,10 @@ Partial contribution(uint id)
 {
     Partial value=zeroPartial();
     if(id>=_TotalCount)return value;
-    State s=_State[id];Parameters p=_Parameters[id];
+    // Logical reduction ids pack active grains followed by bodies. Bodies
+    // themselves remain at their fixed reserved offset in solver buffers.
+    uint source=id<_GrainCount?id:_BodyStart+id-_GrainCount;
+    State s=_State[source];Parameters p=_Parameters[source];
     bool finite=finiteState(s,p);
     value.grainCount=id<_GrainCount?1:0;
     if(id<_GrainCount){uint identity=_Grains[id].identity;value.identitySum=identity;value.identityXor=identity;}
@@ -106,6 +110,13 @@ Partial contribution(uint id)
         value.momentum=0;value.angularMomentum=0;value.energy=0;value.nonfiniteCount=1;
     }
     return value;
+}
+
+[numthreads(1,1,1)] void ResetEpoch(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    _Baseline[0]=(Baseline)0;
+    _Result[0]=(Result)0;
 }
 
 [numthreads(256,1,1)] void Contribute(uint id:SV_DispatchThreadID)

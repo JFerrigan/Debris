@@ -88,8 +88,9 @@ namespace Debris.Simulation.ParallelProof
         static float BitsToFloat(uint bits) => BitConverter.Int32BitsToSingle(unchecked((int)bits));
     }
 
-    // GPU reductions for one fixed population. Construct once with the grain and
-    // body counts, call Record after a state update, and read only the compact result.
+    // GPU reductions for one topology epoch. The allocated grain region may be
+    // larger than the active population, but bodies retain their stable source
+    // indices at bodyStart rather than moving down after the active grains.
     public sealed class ProofMetrics : IDisposable
     {
         [StructLayout(LayoutKind.Sequential, Pack = 4, Size = 48)]
@@ -114,10 +115,11 @@ namespace Debris.Simulation.ParallelProof
         const int ResultStride = 80;
 
         readonly ComputeShader shader;
-        readonly int contributeKernel, reduceKernel, finalizeKernel;
+        readonly int contributeKernel, reduceKernel, finalizeKernel, resetEpochKernel;
         readonly GraphicsBuffer partials, groups, baseline, result;
         readonly bool ownsResult;
-        readonly int grainCount, bodyCount, totalCount, groupCount;
+        readonly int allocatedGrainCapacity, bodyCount, reductionCount, groupCount;
+        int grainCount, bodyStart, totalCount;
         bool disposed;
 
         public long AllocatedBytes { get; }
@@ -129,16 +131,29 @@ namespace Debris.Simulation.ParallelProof
         // An owner may provide a one-element, 80-byte structured buffer so the
         // result is included in its existing allocation/lifetime accounting.
         public ProofMetrics(int grainCount, int bodyCount, GraphicsBuffer resultBuffer)
+            : this(grainCount, bodyCount, grainCount, grainCount, resultBuffer) { }
+
+        // The source state may reserve grain slots so bodies stay at a stable
+        // offset while terrain releases append grains. Reduction allocation is
+        // based on that reserved region, while Record visits only active grains.
+        public ProofMetrics(int grainCount, int bodyCount, int allocatedGrainCapacity, int bodyStart)
+            : this(grainCount, bodyCount, allocatedGrainCapacity, bodyStart, null) { }
+
+        public ProofMetrics(int grainCount, int bodyCount, int allocatedGrainCapacity, int bodyStart, GraphicsBuffer resultBuffer)
         {
             if (grainCount < 0) throw new ArgumentOutOfRangeException(nameof(grainCount));
             if (bodyCount < 0) throw new ArgumentOutOfRangeException(nameof(bodyCount));
-            totalCount = grainCount + bodyCount;
-            if (totalCount < grainCount) throw new ArgumentException("Proof population is too large");
+            if (allocatedGrainCapacity < grainCount) throw new ArgumentOutOfRangeException(nameof(allocatedGrainCapacity));
+            if (bodyStart < grainCount) throw new ArgumentOutOfRangeException(nameof(bodyStart));
+            totalCount = CheckedPopulation(grainCount, bodyCount);
+            reductionCount = CheckedPopulation(allocatedGrainCapacity, bodyCount);
             if (resultBuffer != null && (resultBuffer.count != 1 || resultBuffer.stride != ResultStride))
                 throw new ArgumentException("The proof metrics result buffer must contain one 80-byte element", nameof(resultBuffer));
             this.grainCount = grainCount;
+            this.bodyStart = bodyStart;
+            this.allocatedGrainCapacity = allocatedGrainCapacity;
             this.bodyCount = bodyCount;
-            groupCount = Math.Max(1, (totalCount + Threads - 1) / Threads);
+            groupCount = Math.Max(1, (reductionCount + Threads - 1) / Threads);
 
             var asset = Resources.Load<ComputeShader>("ParallelMetrics");
             if (asset == null) throw new InvalidOperationException("ParallelMetrics.compute is unavailable");
@@ -146,6 +161,7 @@ namespace Debris.Simulation.ParallelProof
             contributeKernel = shader.FindKernel("Contribute");
             reduceKernel = shader.FindKernel("Reduce");
             finalizeKernel = shader.FindKernel("Finalize");
+            resetEpochKernel = shader.FindKernel("ResetEpoch");
             partials = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Math.Max(1, groupCount * Threads), PartialStride);
             groups = new GraphicsBuffer(GraphicsBuffer.Target.Structured, groupCount, PartialStride);
             baseline = new GraphicsBuffer(GraphicsBuffer.Target.Structured, 1, BaselineStride);
@@ -156,6 +172,41 @@ namespace Debris.Simulation.ParallelProof
             AllocatedBytes = (long)Math.Max(1, groupCount * Threads) * PartialStride +
                              (long)groupCount * PartialStride + BaselineStride +
                              (ownsResult ? ResultStride : 0);
+        }
+
+        static int CheckedPopulation(int grains, int bodies)
+        {
+            int population;
+            try { population = checked(grains + bodies); }
+            catch (OverflowException) { throw new ArgumentException("Proof population is too large"); }
+            return population;
+        }
+
+        // Call only at the topology fence, before recording the first sample
+        // after a population change. Conservation diagnostics are meaningful
+        // inside an epoch, not across material released from terrain.
+        public void SetPopulation(int activeGrainCount, int stableBodyStart)
+        {
+            if (disposed) throw new ObjectDisposedException(nameof(ProofMetrics));
+            if (activeGrainCount < 0 || activeGrainCount > allocatedGrainCapacity)
+                throw new ArgumentOutOfRangeException(nameof(activeGrainCount));
+            if (stableBodyStart < activeGrainCount)
+                throw new ArgumentOutOfRangeException(nameof(stableBodyStart));
+            grainCount = activeGrainCount;
+            bodyStart = stableBodyStart;
+            totalCount = CheckedPopulation(activeGrainCount, bodyCount);
+        }
+
+        // This is intentionally separate from Record: a caller records the
+        // reset in the accepted topology command sequence, then the next
+        // physics sample establishes the new baseline.
+        public void BeginTopologyEpoch(CommandBuffer target)
+        {
+            if (disposed) throw new ObjectDisposedException(nameof(ProofMetrics));
+            if (target == null) throw new ArgumentNullException(nameof(target));
+            target.SetComputeBufferParam(shader, resetEpochKernel, "_Baseline", baseline);
+            target.SetComputeBufferParam(shader, resetEpochKernel, "_Result", result);
+            target.DispatchCompute(shader, resetEpochKernel, 1, 1, 1);
         }
 
         public void Record(CommandBuffer commandBuffer, GraphicsBuffer state, GraphicsBuffer parameters, GraphicsBuffer grains)
@@ -189,6 +240,7 @@ namespace Debris.Simulation.ParallelProof
         {
             commandBuffer.SetComputeIntParam(shader, "_GrainCount", grainCount);
             commandBuffer.SetComputeIntParam(shader, "_BodyCount", bodyCount);
+            commandBuffer.SetComputeIntParam(shader, "_BodyStart", bodyStart);
             commandBuffer.SetComputeIntParam(shader, "_TotalCount", totalCount);
             commandBuffer.SetComputeIntParam(shader, "_GroupCount", groupCount);
         }

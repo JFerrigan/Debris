@@ -111,6 +111,128 @@ namespace Debris.Simulation.Tests
         }
 
         [UnityTest, Timeout(120000)]
+        public IEnumerator ReservedGrainRegionStillCountsShipMomentum()
+        {
+            RequireGpu();
+            var grains = new[] { new Grain { Center = Vector2.zero, Velocity = new Vector2(2, 0), Material = 1, Identity = 7 } };
+            // The three reserved grain slots are deliberately zeroed. The body
+            // is at its stable source index 4, not logical index 1.
+            var states = new[]
+            {
+                new BodyState { Center = Vector2.zero, Velocity = new Vector2(2, 0) }, default, default, default,
+                new BodyState { Center = Vector2.zero, Velocity = new Vector2(-1, 0) }
+            };
+            var parameters = new[]
+            {
+                new BodyParameters { InverseMass = 1, InverseInertia = 6, Mobility = 1 }, default, default, default,
+                new BodyParameters { InverseMass = .5f, InverseInertia = 3, Mobility = 1 }
+            };
+            using (var state = Buffer(states.Length, 32))
+            using (var parameter = Buffer(parameters.Length, 32))
+            using (var grain = Buffer(4, 48))
+            using (var commands = new CommandBuffer { name = "ParallelMetrics reserved-region test" })
+            using (var metrics = new ProofMetrics(1, 1, 4, 4))
+            {
+                state.SetData(states); parameter.SetData(parameters); grain.SetData(grains);
+                metrics.Record(commands, state, parameter, grain);
+                Graphics.ExecuteCommandBuffer(commands);
+                var task = metrics.ReadAsync();
+                while (!task.IsCompleted) yield return null;
+                Assert.That(task.IsFaulted, Is.False, task.Exception == null ? "" : task.Exception.ToString());
+                Assert.That(task.Result.LinearMomentum.x, Is.Zero.Within(.0001f));
+                Assert.That(task.Result.LinearMomentum.y, Is.Zero.Within(.0001f));
+                Assert.That(task.Result.GrainCount, Is.EqualTo(1));
+                Assert.That(task.Result.IdentitySum, Is.EqualTo(7));
+            }
+        }
+
+        [UnityTest, Timeout(120000)]
+        public IEnumerator AcceptedAppendUpdatesPopulationAndIdentityMetrics()
+        {
+            RequireGpu();
+            var grains = new[]
+            {
+                new Grain { Center = Vector2.zero, Velocity = Vector2.right, Material = 1, Identity = 7 },
+                new Grain { Center = Vector2.one, Velocity = Vector2.left, Material = 1, Identity = 9 },
+                default, default
+            };
+            var states = new[]
+            {
+                new BodyState { Center = Vector2.zero, Velocity = Vector2.right },
+                new BodyState { Center = Vector2.one, Velocity = Vector2.left }, default, default
+            };
+            var parameters = new[]
+            {
+                new BodyParameters { InverseMass = 1, InverseInertia = 6, Mobility = 1 },
+                new BodyParameters { InverseMass = 1, InverseInertia = 6, Mobility = 1 }, default, default
+            };
+            using (var state = Buffer(4, 32))
+            using (var parameter = Buffer(4, 32))
+            using (var grain = Buffer(4, 48))
+            using (var commands = new CommandBuffer { name = "ParallelMetrics topology test" })
+            using (var metrics = new ProofMetrics(1, 0, 4, 4))
+            {
+                state.SetData(states); parameter.SetData(parameters); grain.SetData(grains);
+                metrics.Record(commands, state, parameter, grain);
+                Graphics.ExecuteCommandBuffer(commands);
+                var first = metrics.ReadAsync();
+                while (!first.IsCompleted) yield return null;
+                Assert.That(first.IsFaulted, Is.False, first.Exception == null ? "" : first.Exception.ToString());
+
+                commands.Clear();
+                metrics.SetPopulation(2, 4);
+                metrics.BeginTopologyEpoch(commands);
+                metrics.Record(commands, state, parameter, grain);
+                Graphics.ExecuteCommandBuffer(commands);
+                var appended = metrics.ReadAsync();
+                while (!appended.IsCompleted) yield return null;
+                Assert.That(appended.IsFaulted, Is.False, appended.Exception == null ? "" : appended.Exception.ToString());
+                Assert.That(appended.Result.GrainCount, Is.EqualTo(2));
+                Assert.That(appended.Result.IdentitySum, Is.EqualTo(16));
+                Assert.That(appended.Result.IdentityXor, Is.EqualTo(14));
+                Assert.That(appended.Result.InitialGrainCount, Is.EqualTo(2));
+                Assert.That(appended.Result.InitialIdentitySum, Is.EqualTo(16));
+                Assert.That(appended.Result.SampleCount, Is.EqualTo(1));
+            }
+        }
+
+        [UnityTest, Timeout(120000)]
+        public IEnumerator TopologyEpochPreservesSubsequentConservationChecks()
+        {
+            RequireGpu();
+            var grains = new[] { new Grain { Center = Vector2.zero, Velocity = Vector2.right, Material = 1, Identity = 1 } };
+            var states = new[] { new BodyState { Center = Vector2.zero, Velocity = Vector2.right } };
+            var parameters = new[] { new BodyParameters { InverseMass = 1, InverseInertia = 6, Mobility = 1 } };
+            using (var state = Buffer(1, 32))
+            using (var parameter = Buffer(1, 32))
+            using (var grain = Buffer(1, 48))
+            using (var commands = new CommandBuffer { name = "ParallelMetrics epoch test" })
+            using (var metrics = new ProofMetrics(1, 0))
+            {
+                state.SetData(states); parameter.SetData(parameters); grain.SetData(grains);
+                metrics.Record(commands, state, parameter, grain);
+                Graphics.ExecuteCommandBuffer(commands);
+                var initial = metrics.ReadAsync(); while (!initial.IsCompleted) yield return null;
+
+                states[0].Velocity = new Vector2(2, 0); state.SetData(states); commands.Clear();
+                metrics.Record(commands, state, parameter, grain); Graphics.ExecuteCommandBuffer(commands);
+                var changed = metrics.ReadAsync(); while (!changed.IsCompleted) yield return null;
+                Assert.That(changed.Result.MaximumMomentumErrorMagnitude, Is.EqualTo(1).Within(.0001f));
+
+                commands.Clear(); metrics.BeginTopologyEpoch(commands);
+                metrics.Record(commands, state, parameter, grain); Graphics.ExecuteCommandBuffer(commands);
+                var reset = metrics.ReadAsync(); while (!reset.IsCompleted) yield return null;
+                Assert.That(reset.Result.SampleCount, Is.EqualTo(1));
+                Assert.That(reset.Result.MaximumMomentumErrorMagnitude, Is.Zero);
+
+                states[0].Velocity = new Vector2(3, 0); state.SetData(states); commands.Clear();
+                metrics.Record(commands, state, parameter, grain); Graphics.ExecuteCommandBuffer(commands);
+                var subsequent = metrics.ReadAsync(); while (!subsequent.IsCompleted) yield return null;
+                Assert.That(subsequent.Result.MaximumMomentumErrorMagnitude, Is.EqualTo(.5f).Within(.0001f));
+            }
+        }
+
+        [UnityTest, Timeout(120000)]
         public IEnumerator BaselineNormalizesMomentumAndEnergyGainIgnoresDissipation()
         {
             RequireGpu();

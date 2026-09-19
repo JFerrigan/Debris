@@ -111,7 +111,7 @@ namespace Debris.Simulation.ParallelProof
                 trace=new ProofTrace(active,endpoints,active*slots,positionIterations,velocityIterations,initialGrains,physical,patches,traceConfiguration,friction);
                 BufferBytes+=trace.AllocatedBytes;
             }
-            metrics=new ProofMetrics(active,bodies);BufferBytes+=metrics.AllocatedBytes;
+            metrics=new ProofMetrics(active,bodies,capacity,capacity);BufferBytes+=metrics.AllocatedBytes;
             metrics.Record(commands,committed,parameters,grains);Graphics.ExecuteCommandBuffer(commands);commands.Clear();
         }
         static bool Finite(float value)=>!float.IsNaN(value)&&!float.IsInfinity(value);
@@ -213,7 +213,13 @@ namespace Debris.Simulation.ParallelProof
             var body=new BodyState{Center=grain.Center,Velocity=grain.Velocity,Angle=grain.Angle,AngularVelocity=grain.AngularVelocity};
             var parametersValue=new BodyParameters{InverseMass=1/mass,InverseInertia=6/mass,Mobility=1};
             committed.SetData(new[]{body},0,active,1);state.SetData(new[]{body},0,active,1);parameters.SetData(new[]{parametersValue},0,active,1);
-            identities.Add(grain.Identity);active++;shader.SetInt("_N",active);return true;
+            identities.Add(grain.Identity);active++;shader.SetInt("_N",active);
+            // An accepted append starts a new conservation epoch. The command
+            // buffer is clear because topology callers fence all submitted
+            // ticks before mutation; do not retain an old physics sequence.
+            metrics.SetPopulation(active,capacity);
+            commands.Clear();metrics.BeginTopologyEpoch(commands);Graphics.ExecuteCommandBuffer(commands);commands.Clear();
+            return true;
         }
         // This cache operation is intentionally available only to the
         // session-owned topology fence, after all submitted ticks have
