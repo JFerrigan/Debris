@@ -1,16 +1,16 @@
 # Implementation status
 
-Current handoff: **B.3R opt-in GPU flight/collision implementation has focused automated coverage; interactive player acceptance remains unverified.** Candidate startup now deterministically seeds 32 isolated grains and four loose 4x4 piles (96 total) on a terrain/hull-clear side of the ship. Candidate masks use their local [-64,64) coordinates, terrain patches use their terrain-local origin, and 17 dynamics plus anchored terrain use 18 endpoints. Compact completion records drive ship motion and direct GPU-buffer rendering; full snapshots are inspection-only. Legacy remains the default; the original .001-cell target remains a TODO against the interim .002 gate.
+Current handoff: **B.3R candidate drilling has a partial opt-in implementation and focused CPU coverage; interactive acceptance remains unverified.** Candidate terrain owns cloned fields/damage, selects exposed cells deterministically, stages damage/release edits, reserves 4,096 collision-cache entries, and fences candidate submissions while a compact GPU grain-placement query and terrain publication run. Candidate startup still has 96 deterministic grains. Legacy remains the default; the original .001-cell target remains a TODO against the interim .002 gate.
 
 ## Latest validation
 
-Latest focused startup validation passed 5/5, including zero-grain growth and stable body endpoints; earlier coverage includes including completion-ring saturation, monotonic submission identity, rotated COM conversion, translated terrain origin and no steady-state full snapshot. The candidate starter-layout test passed 1/1 (2026-09-19 01:45 UTC): it verifies 96 deterministic, unique, rest-state catalog grains. The prior fast EditMode suite passed 115 with one explicit scale test skipped (116 total, 2026-09-18 05:30 UTC), and the prior Mac build succeeded. Two bounded Mac player runs with `-debrisParallelGameplay` activated the candidate without Metal, readback, or solver faults; the second included a bounded input sequence but supplied no motion telemetry. Windows/Linux are unverified.
+The current fast EditMode suite passed 121 with one explicit scale test skipped (122 total, 2026-09-19 06:00 UTC), including four candidate-terrain ownership/targeting/stale-edit tests. The current Mac build succeeded. The single bounded player launch supplied no candidate activation, drill, Metal or readback telemetry before termination, so it establishes no interactive acceptance. Windows/Linux are unverified.
 
 ## Remaining limitation and next work
 
-Current deliverable: function-level [candidate drilling plan](CANDIDATE_DRILLING_PLAN.md), prepared for review. Implementation is pending; this planning request does not resume feature expansion.
+Current deliverable: partial implementation of the [candidate drilling plan](CANDIDATE_DRILLING_PLAN.md). Continue with exact rotated grain/hull SAT, complete ordered GPU cache/grain publication, rejection/integration fixtures, and player telemetry before representing drilling as accepted.
 
-Candidate drilling, suction, doors, damage, fuel transfer, persistence, travel and streaming remain gated and report unavailable. The candidate now reserves all 8,192 grain slots and keeps ship/fragment endpoints after that stable region; next is an atomic terrain-to-grain transaction before enabling drilling. Measured player flight/collision trajectories, packed-cargo/performance, R1 convergence and B.GATE remain open. Existing GPU fixtures cover high speed, mass, corners, rejection atomicity, terrain revision and endpoint limits; compact acknowledgements, geometry conversion, queue saturation, deterministic starter debris and stable endpoint growth now have candidate-specific coverage.
+Candidate drilling is not accepted: the current placement query covers grains only and does not yet provide the required rotated grain/hull SAT or transaction-level GPU fixtures. Suction, doors, damage, fuel transfer, persistence, travel and streaming remain unavailable. Measured player flight/collision trajectories, packed-cargo/performance, R1 convergence and B.GATE remain open.
 
 ## Preserved unfinished work
 
