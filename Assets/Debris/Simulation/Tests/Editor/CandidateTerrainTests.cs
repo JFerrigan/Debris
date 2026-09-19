@@ -30,6 +30,17 @@ namespace Debris.Simulation.Tests
             Assert.That(terrain.TrySelectDrillCell(new Vector2(-5.5f,14.5f),3,out var cell),Is.True);
             Assert.That(cell,Is.EqualTo(new Vector2Int(-6,14)));
         }
+        [Test]
+        public void PreparingAndStaleEditsDoNotOverwriteLiveTerrain()
+        {
+            var terrain=new CandidateTerrainState(Snapshot(),0);var catalog=Resources.Load<MaterialCatalog>("Materials");
+            var cell=new Vector2Int(-7,13);var material=terrain.MaterialAt(cell);var damage=terrain.DamageAt(cell);var revision=terrain.Revision;
+            var status=terrain.TryPrepareCell(cell,120,1f/60,catalog,out var first);
+            Assert.That(status,Is.EqualTo(CandidateEditStatus.DamageApplied).Or.EqualTo(CandidateEditStatus.Released));
+            Assert.That(terrain.MaterialAt(cell),Is.EqualTo(material));Assert.That(terrain.DamageAt(cell),Is.EqualTo(damage));Assert.That(terrain.Revision,Is.EqualTo(revision));
+            terrain.Publish(first);terrain.TryPrepareCell(cell,120,1f/60,catalog,out _);
+            Assert.That(terrain.IsCurrent(first),Is.False);
+        }
         static MatterSnapshot Snapshot()
         {
             const int side=2,chunk=4;var fields=new uint[4][];var damage=new float[4][];
