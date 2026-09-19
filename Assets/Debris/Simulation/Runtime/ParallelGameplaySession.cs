@@ -42,6 +42,7 @@ namespace Debris.Simulation
         public uint TerrainRevision=>terrain.Revision;
         public bool TopologyBusy=>drillRequested||drillValidating||(transaction?.Busy??false);
         public CandidateEditResult LastEditResult=>lastEdit;
+        public bool DrawingAvailable=>!disposed&&!faulted;
         public double ProvisionalFuel
         {
             get { double total=unresolvedFuel;for(int i=0;i<pendingCount;i++)total+=pending[(pendingHead+i)%MaximumPendingTicks].Fuel;return total; }

@@ -41,8 +41,10 @@ namespace Debris.Presentation
             looseParams=new RenderParams(looseMaterial){worldBounds=bounds,shadowCastingMode=ShadowCastingMode.Off,receiveShadows=false};
         }
         ParallelGrainSolver candidate;
+        ParallelGameplaySession candidateSession;
         public void BindCandidate(ParallelGameplaySession value)
         {
+            candidateSession=value;
             candidate=value?.Solver;
             if(candidate==null)return;
             foreach(var material in new[]{candidateLoose,candidateShip,candidateFragment})
@@ -55,7 +57,7 @@ namespace Debris.Presentation
         }
         public void DrawCandidate()
         {
-            if(candidate==null){Draw();return;}
+            if(candidate==null||candidateSession==null||!candidateSession.DrawingAvailable){Draw();return;}
             Graphics.RenderMeshPrimitives(fixedParams,quad,0,session.Side*session.Side);
             Graphics.RenderMeshPrimitives(new RenderParams(candidateLoose){worldBounds=looseParams.worldBounds,shadowCastingMode=ShadowCastingMode.Off,receiveShadows=false},quad,0,candidate.GrainCount);
             Graphics.RenderMeshPrimitives(new RenderParams(candidateShip){worldBounds=shipParams.worldBounds,shadowCastingMode=ShadowCastingMode.Off,receiveShadows=false},quad,0,128*128);
