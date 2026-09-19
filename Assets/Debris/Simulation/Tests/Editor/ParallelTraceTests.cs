@@ -35,6 +35,18 @@ namespace Debris.Simulation.Tests
                 traceConfiguration: new ProofTraceConfiguration { SubstepCapacity = substeps, ContactCapacity = contacts }));
         }
 
+        [Test]
+        public void TracedSolverRejectsPopulationGrowth()
+        {
+            var initial = new[] { new ProofGrain { Center = Vector2.zero, Material = 1, Identity = 1 } };
+            using (var solver = new ParallelGrainSolver(initial, Array.Empty<BodyState>(), Array.Empty<BodyParameters>(), Array.Empty<Boundary>(),
+                4, 2, traceConfiguration: new ProofTraceConfiguration(), allocatedGrainCapacity: 2))
+            {
+                Assert.That(solver.TryAppend(new ProofGrain { Center = Vector2.right * 4, Material = 1, Identity = 2 }, 1), Is.False);
+                Assert.That(solver.GrainCount, Is.EqualTo(1));
+            }
+        }
+
         [UnityTest, Timeout(120000)]
         public IEnumerator CapacityTruncationIsSeparateFromPhysicsAndKeepsFullSummaries()
         {

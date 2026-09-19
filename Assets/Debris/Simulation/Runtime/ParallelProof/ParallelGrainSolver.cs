@@ -23,6 +23,7 @@ namespace Debris.Simulation.ParallelProof
         readonly int capacity,bodies,endpoints,slots,velocityIterations,positionIterations,boundaryCapacity;
         int active;
         int snapshotRequests;
+        bool disposed;
         public long BufferBytes { get; private set; }
         public GraphicsBuffer Grains => grains;
         public GraphicsBuffer Bodies => committed;
@@ -160,10 +161,27 @@ namespace Debris.Simulation.ParallelProof
         {
             trace?.Record(commands,state,contacts,degrees,increments,diagnostics,substep,stage,iteration);
         }
+        // These values are topology facts, not permanent shader state.  A
+        // candidate publication and a physics step can be recorded in adjacent
+        // command buffers, so every step records its own complete view before
+        // the first dispatch rather than inheriting mutable shader globals.
+        void RecordTopologyConstants(CommandBuffer target)
+        {
+            target.SetComputeIntParam(shader,"_N",active);
+            target.SetComputeIntParam(shader,"_BodyStart",capacity);
+            target.SetComputeIntParam(shader,"_Bodies",bodies);
+            target.SetComputeIntParam(shader,"_Endpoints",endpoints);
+            target.SetComputeIntParam(shader,"_BoundaryCount",BoundaryCount);
+            target.SetComputeIntParam(shader,"_BinSide",256);
+            target.SetComputeIntParam(shader,"_BinCount",65536);
+            target.SetComputeIntParam(shader,"_Slots",slots);
+            target.SetComputeFloatParam(shader,"_Dt",1f/60);
+        }
         public void Step(Vector2 localForce=default,float torque=0)
         {
+            if(disposed)throw new ObjectDisposedException(nameof(ParallelGrainSolver));
             if(!Finite(localForce)||!Finite(torque))throw new ArgumentException("Flight force and torque must be finite");
-            commands.Clear();trace?.BeginTick(commands);commands.BeginSample("B3R.ParallelPhysics");commands.SetComputeVectorParam(shader,"_Force",new Vector4(localForce.x,localForce.y,torque,0));
+            commands.Clear();RecordTopologyConstants(commands);trace?.BeginTick(commands);commands.BeginSample("B3R.ParallelPhysics");commands.SetComputeVectorParam(shader,"_Force",new Vector4(localForce.x,localForce.y,torque,0));
             Direct("Begin",endpoints);Direct("Speed",endpoints);Direct("SelectSubsteps",1,1);
             for(int s=0;s<16;s++)
             {
@@ -208,7 +226,7 @@ namespace Debris.Simulation.ParallelProof
         // all boundary references remain stable across admission.
         public bool TryAppend(LooseCell grain,float mass)
         {
-            if(active>=capacity||grain.Material==0||grain.Identity==0||identities.Contains(grain.Identity)||!Finite(grain.Center)||!Finite(grain.Velocity)||!Finite(grain.Angle)||!Finite(grain.AngularVelocity)||!Finite(mass)||mass<=0)return false;
+            if(ValidateAppend(grain,mass)!=Debris.Simulation.CandidateEditStatus.Released)return false;
             grains.SetData(new[]{grain},0,active,1);
             var body=new BodyState{Center=grain.Center,Velocity=grain.Velocity,Angle=grain.Angle,AngularVelocity=grain.AngularVelocity};
             var parametersValue=new BodyParameters{InverseMass=1/mass,InverseInertia=6/mass,Mobility=1};
@@ -221,12 +239,94 @@ namespace Debris.Simulation.ParallelProof
             commands.Clear();metrics.BeginTopologyEpoch(commands);Graphics.ExecuteCommandBuffer(commands);commands.Clear();
             return true;
         }
+        // Candidate terrain uses this pure admission check before it records
+        // any live-buffer writes.  Keep TryAppend as the proof/startup helper,
+        // but make both paths obey exactly the same identity/capacity rules.
+        internal Debris.Simulation.CandidateEditStatus ValidateAppend(LooseCell grain,float mass)
+        {
+            if(disposed||trace!=null)return Debris.Simulation.CandidateEditStatus.Unavailable;
+            if(active>=capacity)return Debris.Simulation.CandidateEditStatus.GrainCapacity;
+            if(grain.Material==0||grain.Identity==0||identities.Contains(grain.Identity)||!Finite(grain.Center)||!Finite(grain.Velocity)||!Finite(grain.Angle)||!Finite(grain.AngularVelocity)||!Finite(mass)||mass<=0)
+                return Debris.Simulation.CandidateEditStatus.Unavailable;
+            return Debris.Simulation.CandidateEditStatus.Released;
+        }
+
+        static bool SameDynamicDefinition(BodyParameters a,BodyParameters b)
+        {
+            return a.InverseMass==b.InverseMass&&a.InverseInertia==b.InverseInertia&&a.LocalCOM==b.LocalCOM&&
+                a.BoundaryStart==b.BoundaryStart&&a.BoundaryCount==b.BoundaryCount&&a.Mobility==b.Mobility&&a.ShapeRevision==b.ShapeRevision;
+        }
+
+        // Terrain-only cache replacement may change the final, anchored
+        // endpoint. Dynamic body mass, COM, mobility, ranges and revisions are
+        // deliberately immutable here: changing them is a different topology
+        // operation with different momentum obligations.
+        internal Debris.Simulation.CandidateEditStatus ValidateBoundaryReplacement(Debris.Simulation.CandidateBoundaryBuilder.CandidateBoundaryReplacement replacement)
+        {
+            if(disposed||trace!=null||replacement==null||replacement.Patches==null||replacement.Definitions==null)return Debris.Simulation.CandidateEditStatus.Unavailable;
+            if(replacement.Patches.Length>boundaryCapacity)return Debris.Simulation.CandidateEditStatus.BoundaryCapacity;
+            if(replacement.Definitions.Length!=bodies||bodies==0)return Debris.Simulation.CandidateEditStatus.Unavailable;
+            for(int i=0;i<bodies-1;i++)if(!SameDynamicDefinition(bodyDefinitions[i],replacement.Definitions[i]))return Debris.Simulation.CandidateEditStatus.Unavailable;
+            var owned=new bool[replacement.Patches.Length];
+            for(int i=0;i<bodies;i++)
+            {
+                var definition=replacement.Definitions[i];
+                if(!Finite(definition.InverseMass)||!Finite(definition.InverseInertia)||!Finite(definition.LocalCOM)||definition.Mobility>1)return Debris.Simulation.CandidateEditStatus.Unavailable;
+                if((ulong)definition.BoundaryStart+definition.BoundaryCount>(ulong)replacement.Patches.Length)return Debris.Simulation.CandidateEditStatus.Unavailable;
+                if(i==bodies-1&&(definition.Mobility!=0||definition.InverseMass!=0||definition.InverseInertia!=0))return Debris.Simulation.CandidateEditStatus.Unavailable;
+                for(uint f=definition.BoundaryStart;f<definition.BoundaryStart+definition.BoundaryCount;f++)
+                {
+                    var patch=replacement.Patches[f];
+                    if(owned[f]||patch.Body!=(uint)(capacity+i)||!Finite(patch.Center)||!Finite(patch.HalfSize)||patch.HalfSize.x<=0||patch.HalfSize.y<=0)return Debris.Simulation.CandidateEditStatus.Unavailable;
+                    owned[f]=true;
+                }
+            }
+            for(int i=0;i<owned.Length;i++)if(!owned[i])return Debris.Simulation.CandidateEditStatus.Unavailable;
+            return Debris.Simulation.CandidateEditStatus.Released;
+        }
+
+        // Record-only participants in the combined terrain command buffer.
+        // Host counts remain untouched until the owner has enqueued that buffer.
+        internal void RecordReplaceBoundaryCache(CommandBuffer target,Debris.Simulation.CandidateBoundaryBuilder.CandidateBoundaryReplacement replacement)
+        {
+            if(target==null)throw new ArgumentNullException(nameof(target));
+            if(ValidateBoundaryReplacement(replacement)!=Debris.Simulation.CandidateEditStatus.Released)throw new InvalidOperationException("Invalid terrain boundary replacement.");
+            if(replacement.Patches.Length>0)target.SetBufferData(boundaries,replacement.Patches);
+            target.SetBufferData(parameters,replacement.Definitions,0,capacity,bodies);
+        }
+        internal void RecordAppend(CommandBuffer target,LooseCell grain,float mass)
+        {
+            if(target==null)throw new ArgumentNullException(nameof(target));
+            if(ValidateAppend(grain,mass)!=Debris.Simulation.CandidateEditStatus.Released)throw new InvalidOperationException("Invalid terrain grain append.");
+            var body=new BodyState{Center=grain.Center,Velocity=grain.Velocity,Angle=grain.Angle,AngularVelocity=grain.AngularVelocity};
+            var physical=new BodyParameters{InverseMass=1/mass,InverseInertia=6/mass,Mobility=1};
+            target.SetBufferData(grains,new[]{grain},0,active,1);
+            target.SetBufferData(committed,new[]{body},0,active,1);
+            target.SetBufferData(state,new[]{body},0,active,1);
+            target.SetBufferData(parameters,new[]{physical},0,active,1);
+        }
+        internal void RecordTopologyEpoch(CommandBuffer target)
+        {
+            if(target==null)throw new ArgumentNullException(nameof(target));
+            if(disposed)throw new ObjectDisposedException(nameof(ParallelGrainSolver));
+            metrics.BeginTopologyEpoch(target);
+        }
+        // Called immediately after the one combined command buffer has been
+        // enqueued. It cannot allocate or invoke callbacks.
+        internal void PublishTerrainEdit(Debris.Simulation.CandidateBoundaryBuilder.CandidateBoundaryReplacement replacement,LooseCell appended,float mass,bool append)
+        {
+            if(ValidateBoundaryReplacement(replacement)!=Debris.Simulation.CandidateEditStatus.Released)throw new InvalidOperationException("Invalid published terrain replacement.");
+            if(append&&ValidateAppend(appended,mass)!=Debris.Simulation.CandidateEditStatus.Released)throw new InvalidOperationException("Invalid published terrain append.");
+            bodyDefinitions=(BodyParameters[])replacement.Definitions.Clone();BoundaryCount=replacement.Patches.Length;
+            if(append){identities.Add(appended.Identity);active++;}
+            metrics.SetPopulation(active,capacity);
+        }
         // This cache operation is intentionally available only to the
         // session-owned topology fence, after all submitted ticks have
         // acknowledged. It never reallocates the renderer-bound buffers.
         public bool TryReplaceBoundaryCache(Boundary[] replacement,BodyParameters[] definitions)
         {
-            if(replacement==null||definitions==null||definitions.Length!=bodies||replacement.Length>boundaryCapacity)return false;
+            if(disposed||trace!=null||replacement==null||definitions==null||definitions.Length!=bodies||replacement.Length>boundaryCapacity)return false;
             try { ValidateInput(Array.Empty<LooseCell>(),new BodyState[bodies],definitions,replacement,velocityIterations,positionIterations,.3f,slots,capacity); }
             catch(ArgumentException) { return false; }
             boundaries.SetData(replacement);parameters.SetData(definitions,0,capacity,bodies);bodyDefinitions=(BodyParameters[])definitions.Clone();BoundaryCount=replacement.Length;shader.SetInt("_BoundaryCount",BoundaryCount);return true;
@@ -244,7 +344,7 @@ namespace Debris.Simulation.ParallelProof
         {
             var source=new TaskCompletionSource<T[]>();AsyncGPUReadback.Request(b,r=>{if(r.hasError)source.SetException(new InvalidOperationException("Proof GPU readback failed"));else source.SetResult(r.GetData<T>().ToArray());});return source.Task;
         }
-        public void Dispose(){trace?.Dispose();metrics.Dispose();commands.Dispose();foreach(var b in buffers)b.Dispose();if(Application.isPlaying)UnityEngine.Object.Destroy(shader);else UnityEngine.Object.DestroyImmediate(shader);}
+        public void Dispose(){if(disposed)return;disposed=true;trace?.Dispose();metrics.Dispose();commands.Dispose();foreach(var b in buffers)b.Dispose();if(Application.isPlaying)UnityEngine.Object.Destroy(shader);else UnityEngine.Object.DestroyImmediate(shader);}
     }
 
     public sealed class ProofCompletion
