@@ -6,6 +6,8 @@ Latest user scope (2026-09-17): finish the interrupted diagnostic work and deliv
 
 Follow-up startup investigation (2026-09-18 UTC): the single permitted candidate player launch reproduced `Page`. Grain-only page validation and empty-population readback are corrected; 11 focused tests and 110 fast-suite tests passed (one explicit skip), and the Mac rebuild succeeded. No second player launch; post-fix player acceptance remains unverified under the user's limit. See [startup evidence](evidence/B3R-page-startup.md). This does not close R2a or authorize feature expansion.
 
+Current planning checkpoint (2026-09-19 UTC): the user requested detailed implementation direction from `029b84d`. The [candidate drilling plan](CANDIDATE_DRILLING_PLAN.md) specifies classes, functions, GPU publication, rejection rules and acceptance tests for the next bounded R2 batch. This is a planning deliverable only; it does not supersede the earlier stop on unrestricted feature expansion or mark drilling implemented.
+
 ## Locked design interpretations
 
 - Physical commodity cargo is simulated cells. Fuel-tank and capacity-limited misc-storage inventories are explicit menu exceptions.

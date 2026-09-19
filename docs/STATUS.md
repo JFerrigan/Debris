@@ -4,9 +4,11 @@ Current handoff: **B.3R opt-in GPU flight/collision implementation has focused a
 
 ## Latest validation
 
-Focused startup validation passed 4/4, including completion-ring saturation, monotonic submission identity, rotated COM conversion, translated terrain origin and no steady-state full snapshot. The candidate starter-layout test passed 1/1 (2026-09-19 01:45 UTC): it verifies 96 deterministic, unique, rest-state catalog grains. The prior fast EditMode suite passed 115 with one explicit scale test skipped (116 total, 2026-09-18 05:30 UTC), and the prior Mac build succeeded. Two bounded Mac player runs with `-debrisParallelGameplay` activated the candidate without Metal, readback, or solver faults; the second included a bounded input sequence but supplied no motion telemetry. Windows/Linux are unverified.
+Latest focused startup validation passed 5/5, including zero-grain growth and stable body endpoints; earlier coverage includes including completion-ring saturation, monotonic submission identity, rotated COM conversion, translated terrain origin and no steady-state full snapshot. The candidate starter-layout test passed 1/1 (2026-09-19 01:45 UTC): it verifies 96 deterministic, unique, rest-state catalog grains. The prior fast EditMode suite passed 115 with one explicit scale test skipped (116 total, 2026-09-18 05:30 UTC), and the prior Mac build succeeded. Two bounded Mac player runs with `-debrisParallelGameplay` activated the candidate without Metal, readback, or solver faults; the second included a bounded input sequence but supplied no motion telemetry. Windows/Linux are unverified.
 
 ## Remaining limitation and next work
+
+Current deliverable: function-level [candidate drilling plan](CANDIDATE_DRILLING_PLAN.md), prepared for review. Implementation is pending; this planning request does not resume feature expansion.
 
 Candidate drilling, suction, doors, damage, fuel transfer, persistence, travel and streaming remain gated and report unavailable. The candidate now reserves all 8,192 grain slots and keeps ship/fragment endpoints after that stable region; next is an atomic terrain-to-grain transaction before enabling drilling. Measured player flight/collision trajectories, packed-cargo/performance, R1 convergence and B.GATE remain open. Existing GPU fixtures cover high speed, mass, corners, rejection atomicity, terrain revision and endpoint limits; compact acknowledgements, geometry conversion, queue saturation, deterministic starter debris and stable endpoint growth now have candidate-specific coverage.
 
