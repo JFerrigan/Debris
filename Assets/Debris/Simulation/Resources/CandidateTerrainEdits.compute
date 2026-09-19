@@ -1,21 +1,26 @@
 #pragma kernel ClearPlacementStatus
 #pragma kernel ValidatePlacementGrains
 #pragma kernel ValidatePlacementBodies
+#pragma kernel ValidatePlacementFragments
 #pragma kernel PublishTerrainCell
 
 #include "ParallelContactGeometry.hlsl"
 
 struct Grain { float2 center,velocity; float angle,spin; uint material,identity,flags,r0,r1,r2; };
 struct State { float2 center,velocity; float angle,spin; uint r0,r1; };
+struct Parameters { float im,ii; float2 com; uint first,count,mobility,revision; };
 StructuredBuffer<Grain> _Grains;
 StructuredBuffer<State> _Bodies;
 StructuredBuffer<uint> _Hull;
+StructuredBuffer<uint> _FragmentHull;
+StructuredBuffer<Parameters> _Parameters;
 RWStructuredBuffer<uint> _Status;
 RWStructuredBuffer<uint> _Dirty;
 RWTexture2DArray<uint> _Field;
 RWTexture2DArray<float> _Damage;
 uint _GrainCount;
 uint _BodyStart;
+uint _BodyCount;
 float2 _LocalCom;
 float2 _Centre;
 float _Tolerance, _DamageValue;
@@ -39,6 +44,15 @@ int2 _Address;
     ParallelObb proposed;proposed.center=_Centre;proposed.halfSize=.5;proposed.angle=0;
     ParallelObb solid;solid.center=centre;solid.halfSize=.5;solid.angle=body.angle;
     uint count;ParallelObbContact c0,c1;if(!ParallelObbContacts(proposed,solid,count,c0,c1)||c0.separation<-_Tolerance)InterlockedOr(_Status[0],2);
+}
+[numthreads(64,1,1)] void ValidatePlacementFragments(uint id:SV_DispatchThreadID)
+{
+    uint fragment=id/16384,cell=id%16384;if(fragment+2>=_BodyCount||_FragmentHull[id]==0)return;
+    uint bodyIndex=_BodyStart+fragment+1;State body=_Bodies[bodyIndex];float2 com=_Parameters[bodyIndex].com;
+    int x=(int)(cell%128)-64,y=(int)(cell/128)-64;float s,c;sincos(body.angle,s,c);float2 local=float2(x+.5,y+.5)-com;
+    ParallelObb proposed;proposed.center=_Centre;proposed.halfSize=.5;proposed.angle=0;
+    ParallelObb solid;solid.center=body.center+float2(local.x*c-local.y*s,local.x*s+local.y*c);solid.halfSize=.5;solid.angle=body.angle;
+    uint count;ParallelObbContact c0,c1;if(!ParallelObbContacts(proposed,solid,count,c0,c1)||c0.separation<-_Tolerance)InterlockedOr(_Status[0],4);
 }
 [numthreads(1,1,1)] void PublishTerrainCell(uint id:SV_DispatchThreadID)
 {
