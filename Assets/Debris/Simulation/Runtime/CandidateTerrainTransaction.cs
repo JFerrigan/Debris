@@ -22,14 +22,14 @@ namespace Debris.Simulation
         float grainMass;
         bool awaiting,disposed;
         uint placementStatus;
-        int clear,validate,publish;
+        int clear,validate,validateBodies,publish;
         public bool Busy=>awaiting||edit!=null;
 
         internal CandidateTerrainTransaction(ParallelGrainSolver solver,MatterSession mirror,CandidateTerrainState terrain)
         {
             this.solver=solver??throw new ArgumentNullException(nameof(solver));this.mirror=mirror??throw new ArgumentNullException(nameof(mirror));this.terrain=terrain??throw new ArgumentNullException(nameof(terrain));
             shader=UnityEngine.Object.Instantiate(Resources.Load<ComputeShader>("CandidateTerrainEdits"));
-            clear=shader.FindKernel("ClearPlacementStatus");validate=shader.FindKernel("ValidatePlacementGrains");publish=shader.FindKernel("PublishTerrainCell");
+            clear=shader.FindKernel("ClearPlacementStatus");validate=shader.FindKernel("ValidatePlacementGrains");validateBodies=shader.FindKernel("ValidatePlacementBodies");publish=shader.FindKernel("PublishTerrainCell");
         }
         internal CandidateEditStatus Prepare(CandidateTerrainEdit value,CandidateBoundaryBuilder.CandidateBoundaryReplacement boundaries,float density)
         {
@@ -42,7 +42,7 @@ namespace Debris.Simulation
         {
             if(disposed||edit==null||awaiting)throw new InvalidOperationException("No prepared candidate edit.");
             commands.Clear();commands.SetComputeBufferParam(shader,clear,"_Status",status);commands.DispatchCompute(shader,clear,1,1,1);
-            if(edit.Release){commands.SetComputeBufferParam(shader,validate,"_Status",status);commands.SetComputeBufferParam(shader,validate,"_Grains",solver.Grains);commands.SetComputeIntParam(shader,"_GrainCount",solver.GrainCount);commands.SetComputeVectorParam(shader,"_Centre",grain.Center);commands.SetComputeFloatParam(shader,"_Tolerance",.0001f);commands.DispatchCompute(shader,validate,(solver.GrainCount+63)/64,1,1);}
+            if(edit.Release){commands.SetComputeBufferParam(shader,validate,"_Status",status);commands.SetComputeBufferParam(shader,validate,"_Grains",solver.Grains);commands.SetComputeIntParam(shader,"_GrainCount",solver.GrainCount);commands.SetComputeVectorParam(shader,"_Centre",grain.Center);commands.SetComputeFloatParam(shader,"_Tolerance",.0001f);commands.DispatchCompute(shader,validate,(solver.GrainCount+63)/64,1,1);commands.SetComputeBufferParam(shader,validateBodies,"_Status",status);commands.SetComputeBufferParam(shader,validateBodies,"_Bodies",solver.Bodies);commands.SetComputeBufferParam(shader,validateBodies,"_Hull",mirror.Hull);commands.SetComputeIntParam(shader,"_BodyStart",solver.BodyStart);commands.SetComputeVectorParam(shader,"_LocalCom",solver.BodyDefinitions[0].LocalCOM);commands.DispatchCompute(shader,validateBodies,256,1,1);}
             Graphics.ExecuteCommandBuffer(commands);awaiting=true;
             AsyncGPUReadback.Request(status,r=>{awaiting=false;placementStatus=r.hasError?uint.MaxValue:r.GetData<uint>()[0];});
         }
