@@ -37,6 +37,7 @@ namespace Debris.Simulation
     {
         readonly int side, chunkSize, width;
         readonly Vector2Int origin;
+        readonly int terrainEndpoint;
         readonly uint[][] fields;
         readonly float[][] damage;
         uint revision, nextIdentity;
@@ -46,13 +47,14 @@ namespace Debris.Simulation
         public Vector2Int Origin => origin;
         public uint Revision => revision;
         public uint NextIdentity => nextIdentity;
+        public int TerrainEndpoint => terrainEndpoint;
 
         public CandidateTerrainState(MatterSnapshot imported, int terrainEndpoint)
         {
             if(imported==null) throw new ArgumentNullException(nameof(imported));
             if(imported.Side<1||imported.ChunkSize<1||imported.Fields==null||imported.Damage==null||imported.Fields.Length!=imported.Side*imported.Side||imported.Damage.Length!=imported.Fields.Length)
                 throw new InvalidOperationException("Candidate terrain dimensions are invalid.");
-            side=imported.Side;chunkSize=imported.ChunkSize;width=checked(side*chunkSize);origin=new Vector2Int(imported.OriginX,imported.OriginY);
+            side=imported.Side;chunkSize=imported.ChunkSize;width=checked(side*chunkSize);origin=new Vector2Int(imported.OriginX,imported.OriginY);this.terrainEndpoint=terrainEndpoint;
             fields=new uint[imported.Fields.Length][];damage=new float[fields.Length][];
             uint maximum=0;
             if(imported.Cells!=null) foreach(var cell in imported.Cells) maximum=Math.Max(maximum,cell.Identity);
@@ -79,6 +81,18 @@ namespace Debris.Simulation
             var result=new uint[width*width];
             for(int s=0;s<fields.Length;s++) for(int i=0;i<fields[s].Length;i++) { int x=(s%side)*chunkSize+i%chunkSize,y=(s/side)*chunkSize+i/chunkSize;result[y*width+x]=fields[s][i]; }
             return result;
+        }
+        internal uint[] BuildMask(CandidateTerrainEdit edit)
+        {
+            if(edit!=null&&!IsCurrent(edit))throw new InvalidOperationException("Stale candidate terrain edit.");
+            var result=BuildMask();
+            if(edit!=null&&edit.Release){int x=edit.Cell.x-origin.x,y=edit.Cell.y-origin.y;result[y*width+x]=0;}
+            return result;
+        }
+        internal void CopyFieldSlice(int slice,uint[] destination)
+        {
+            if(slice<0||slice>=fields.Length||destination==null||destination.Length!=fields[slice].Length)throw new ArgumentOutOfRangeException(nameof(slice));
+            Array.Copy(fields[slice],destination,destination.Length);
         }
         public bool TrySelectDrillCell(Vector2 center,float radius,out Vector2Int selected)
         {

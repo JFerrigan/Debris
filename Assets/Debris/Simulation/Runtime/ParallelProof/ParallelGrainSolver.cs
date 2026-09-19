@@ -15,6 +15,7 @@ namespace Debris.Simulation.ParallelProof
         readonly List<GraphicsBuffer> buffers = new List<GraphicsBuffer>();
         readonly HashSet<uint> identities = new HashSet<uint>();
         readonly Dictionary<string,int> kernels = new Dictionary<string,int>();
+        BodyParameters[] bodyDefinitions;
         readonly GraphicsBuffer rigidContacts,rigidCount,rigidPairs;
         readonly GraphicsBuffer committed,state,grains,parameters,boundaries,diagnostics,args,starts;
         readonly GraphicsBuffer counts,cursors,offsets,sums,blockOffsets,indices;
@@ -33,6 +34,7 @@ namespace Debris.Simulation.ParallelProof
         public int BodyCount => bodies;
         public int BoundaryCapacity => boundaryCapacity;
         public int BoundaryCount { get; private set; }
+        public BodyParameters[] BodyDefinitions => (BodyParameters[])bodyDefinitions.Clone();
         public int SnapshotRequests => snapshotRequests;
         public Task<uint[]> DiagnosticsAsync()=>Read<uint>(diagnostics);
         public Task<ProofMetricsReadback> MetricsAsync()=>metrics.ReadAsync();
@@ -71,7 +73,7 @@ namespace Debris.Simulation.ParallelProof
                 float mass=grainMasses==null?1:grainMasses[i];
                 physical[i]=new BodyParameters{InverseMass=1/mass,InverseInertia=6/mass,Mobility=1};
             }
-            Array.Copy(initialBodies,0,initial,capacity,bodies);Array.Copy(bodyParameters,0,physical,capacity,bodies);Array.Copy(initialGrains,initialGrainBuffer,active);
+            Array.Copy(initialBodies,0,initial,capacity,bodies);Array.Copy(bodyParameters,0,physical,capacity,bodies);Array.Copy(initialGrains,initialGrainBuffer,active);bodyDefinitions=(BodyParameters[])bodyParameters.Clone();
             foreach(var patch in patches)if(patch.Body<capacity||patch.Body>=endpoints)throw new ArgumentException("Boundary body is an endpoint index");
             committed.SetData(initial);state.SetData(initial);grains.SetData(initialGrainBuffer);parameters.SetData(physical);if(patches.Length>0)boundaries.SetData(patches);diagnostics.SetData(new uint[16]);
             shader.SetInt("_RigidCapacity",rigidContactCapacity);shader.SetFloat("_RigidGatherMargin",.75f);shader.SetFloat("_RigidSolidTarget",.0001f);
@@ -212,6 +214,16 @@ namespace Debris.Simulation.ParallelProof
             var parametersValue=new BodyParameters{InverseMass=1/mass,InverseInertia=6/mass,Mobility=1};
             committed.SetData(new[]{body},0,active,1);state.SetData(new[]{body},0,active,1);parameters.SetData(new[]{parametersValue},0,active,1);
             identities.Add(grain.Identity);active++;shader.SetInt("_N",active);return true;
+        }
+        // This cache operation is intentionally available only to the
+        // session-owned topology fence, after all submitted ticks have
+        // acknowledged. It never reallocates the renderer-bound buffers.
+        public bool TryReplaceBoundaryCache(Boundary[] replacement,BodyParameters[] definitions)
+        {
+            if(replacement==null||definitions==null||definitions.Length!=bodies||replacement.Length>boundaryCapacity)return false;
+            try { ValidateInput(Array.Empty<LooseCell>(),new BodyState[bodies],definitions,replacement,velocityIterations,positionIterations,.3f,slots,capacity); }
+            catch(ArgumentException) { return false; }
+            boundaries.SetData(replacement);parameters.SetData(definitions,0,capacity,bodies);bodyDefinitions=(BodyParameters[])definitions.Clone();BoundaryCount=replacement.Length;shader.SetInt("_BoundaryCount",BoundaryCount);return true;
         }
         // Normal gameplay reads only this compact, ordered completion. Full
         // snapshots remain an explicit inspection/test operation.
