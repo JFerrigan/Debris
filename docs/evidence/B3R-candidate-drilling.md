@@ -7,7 +7,7 @@ Implemented commits: `cf44da6`, `e7ae23f`, `32f5abb`, `5b5138e`, `c626420`, `861
 Validation on 2026-09-19 UTC:
 
 - EditMode: 121 passed, 1 explicit scale skip (122 total).
-- Mac build: succeeded again after the SAT shader update.
+- Mac build: succeeded again after ship and fragment SAT shader updates.
 - One bounded `-debrisParallelGameplay` player launch: no candidate activation, drill, Metal, solver, or readback telemetry was emitted before termination. It cannot establish interactive acceptance.
 
-Known gaps: the current GPU placement query uses oriented-square SAT for active grains and ship hull cells, but does not yet cover fragments. Transaction-level rejection, repeated-cache, reset-race and no-population-snapshot fixtures are absent. The cache and grain publication path therefore has no acceptance claim.
+Known gaps: the current GPU placement query uses oriented-square SAT for active grains, ship hull cells and fragment masks. Transaction-level rejection, repeated-cache, reset-race and no-population-snapshot fixtures are absent. The cache and grain publication path therefore has no acceptance claim.
