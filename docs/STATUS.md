@@ -8,7 +8,7 @@ Focused startup validation passed 4/4, including completion-ring saturation, mon
 
 ## Remaining limitation and next work
 
-Candidate drilling, suction, doors, damage, fuel transfer, persistence, travel and streaming remain gated and report unavailable. Next: split candidate allocated capacity from active-grain count and add an atomic terrain-to-grain transaction before enabling drilling. Measured player flight/collision trajectories, packed-cargo/performance, R1 convergence and B.GATE remain open. Existing GPU fixtures cover high speed, mass, corners, rejection atomicity, terrain revision and endpoint limits; compact acknowledgements, geometry conversion, queue saturation and deterministic starter debris now have candidate-specific coverage.
+Candidate drilling, suction, doors, damage, fuel transfer, persistence, travel and streaming remain gated and report unavailable. The candidate now reserves all 8,192 grain slots and keeps ship/fragment endpoints after that stable region; next is an atomic terrain-to-grain transaction before enabling drilling. Measured player flight/collision trajectories, packed-cargo/performance, R1 convergence and B.GATE remain open. Existing GPU fixtures cover high speed, mass, corners, rejection atomicity, terrain revision and endpoint limits; compact acknowledgements, geometry conversion, queue saturation, deterministic starter debris and stable endpoint growth now have candidate-specific coverage.
 
 ## Preserved unfinished work
 
