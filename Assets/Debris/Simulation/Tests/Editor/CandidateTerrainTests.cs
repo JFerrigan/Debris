@@ -1,5 +1,7 @@
 using Debris.Materials;
+using Debris.Simulation.ParallelProof;
 using NUnit.Framework;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Debris.Simulation.Tests
@@ -40,6 +42,30 @@ namespace Debris.Simulation.Tests
             Assert.That(terrain.MaterialAt(cell),Is.EqualTo(material));Assert.That(terrain.DamageAt(cell),Is.EqualTo(damage));Assert.That(terrain.Revision,Is.EqualTo(revision));
             terrain.Publish(first);terrain.TryPrepareCell(cell,120,1f/60,catalog,out _);
             Assert.That(terrain.IsCurrent(first),Is.False);
+        }
+        [Test]
+        public void IncrementalReleasedCellCacheMatchesFullRebuildAtTranslatedConcaveSeam()
+        {
+            var source=Snapshot();source.Fields[0][1]=source.Fields[0][2]=source.Fields[0][5]=source.Fields[0][9]=1;source.Fields[1][0]=source.Fields[1][4]=1;
+            var terrain=new CandidateTerrainState(source,9);var catalog=Resources.Load<MaterialCatalog>("Materials");var cell=new Vector2Int(-6,13);
+            Assert.That(terrain.TryPrepareCell(cell,1000000,1,catalog,out var edit),Is.EqualTo(CandidateEditStatus.Released));
+            var incremental=new CandidateBoundaryBuilder.TerrainBoundaryCache(terrain).ApplyRelease(terrain,edit).Flatten();var expected=new List<Boundary>();CandidateBoundaryBuilder.AppendMaskBoundaries(expected,terrain.BuildMask(edit),9,terrain.Origin.x,terrain.Origin.y,true);
+            Assert.That(incremental.Length,Is.EqualTo(expected.Count));for(int i=0;i<expected.Count;i++){Assert.That(incremental[i].Body,Is.EqualTo(expected[i].Body));Assert.That(incremental[i].Center,Is.EqualTo(expected[i].Center));Assert.That(incremental[i].HalfSize,Is.EqualTo(expected[i].HalfSize));}
+        }
+        [Test]
+        public void SupportedPageRequiresTheCompleteProposedSquare()
+        {
+            Assert.That(CandidateTerrainState.IsSupportedGrainSquare(new Vector2(-511.5f,511.5f)),Is.True);
+            Assert.That(CandidateTerrainState.IsSupportedGrainSquare(new Vector2(-511.5001f,0)),Is.False);
+            Assert.That(CandidateTerrainState.IsSupportedGrainSquare(new Vector2(511.5001f,0)),Is.False);
+        }
+        [Test]
+        public void ReleasePreparesTheNextTerrainShapeRevision()
+        {
+            var terrain=new CandidateTerrainState(Snapshot(),9);var catalog=Resources.Load<MaterialCatalog>("Materials");Assert.That(terrain.TryPrepareCell(new Vector2Int(-7,13),1000000,1,catalog,out var edit),Is.EqualTo(CandidateEditStatus.Released));
+            var current=new[]{new BodyParameters{Mobility=0,ShapeRevision=terrain.Revision}};var cache=new CandidateBoundaryBuilder.TerrainBoundaryCache(terrain);
+            Assert.That(CandidateBoundaryBuilder.TryPrepareTerrainReplacement(terrain,edit,cache,current,System.Array.Empty<Boundary>(),4096,out var replacement,out _),Is.True);
+            Assert.That(replacement.Definitions[0].ShapeRevision,Is.EqualTo(terrain.Revision+1));
         }
         static MatterSnapshot Snapshot()
         {

@@ -22,6 +22,8 @@ namespace Debris.Simulation
         readonly bool[] cargo;
         readonly CandidateTerrainState terrain;
         readonly Boundary[] dynamicPrefix;
+        CandidateBoundaryBuilder.TerrainBoundaryCache terrainCache;
+        CandidateBoundaryBuilder.TerrainBoundaryCache preparedTerrainCache;
         int pendingHead,pendingCount;
         uint lastSubmittedTick;
         bool faulted,disposed;
@@ -67,7 +69,7 @@ namespace Debris.Simulation
         }
 
         ParallelGameplaySession(ParallelGrainSolver value, MatterSnapshot imported, MaterialCatalog materials, bool[] cargoFlags, CandidateTerrainState terrainState, Boundary[] patches, BodyState shipState)
-        {solver=value;source=imported;catalog=materials;cargo=cargoFlags;terrain=terrainState;acknowledgedShip=shipState;int prefix=(int)solver.BodyDefinitions[solver.BodyCount-1].BoundaryStart;dynamicPrefix=new Boundary[prefix];Array.Copy(patches,dynamicPrefix,prefix);}
+        {solver=value;source=imported;catalog=materials;cargo=cargoFlags;terrain=terrainState;terrainCache=new CandidateBoundaryBuilder.TerrainBoundaryCache(terrainState);acknowledgedShip=shipState;int prefix=(int)solver.BodyDefinitions[solver.BodyCount-1].BoundaryStart;dynamicPrefix=new Boundary[prefix];Array.Copy(patches,dynamicPrefix,prefix);}
 
         public static ParallelGameplaySession Import(MatterSnapshot snapshot,ShipRuntime ship,MaterialCatalog catalog,int velocityIterations=4,int positionIterations=2)
         {
@@ -107,7 +109,7 @@ namespace Debris.Simulation
             // Patch coordinates are terrain-local; pose is its hull origin.
             // Keeping these spaces separate prevents translated terrain from
             // receiving its world offset twice in the rigid contact shader.
-            AddBody(bodies,parameters,patches,snapshot.Capacity,terrain,new Vector4(snapshot.OriginX,snapshot.OriginY,0,1),Vector4.zero,new BodyMass{Mass=1,Inertia=1},0,uint.MaxValue,0,0,true);
+            AddBody(bodies,parameters,patches,snapshot.Capacity,terrain,new Vector4(snapshot.OriginX,snapshot.OriginY,0,1),Vector4.zero,new BodyMass{Mass=1,Inertia=1},0,terrainState.Revision,0,0,true);
             if(patches.Count>4096)throw new InvalidOperationException("Candidate import exceeds the 4,096 collision-patch cache; world activation was refused.");
             if(bodies.Count!=snapshot.Fragments.Length+2)throw new InvalidOperationException("Candidate endpoint accounting is invalid.");
             var solver=new ParallelGrainSolver(grains,bodies.ToArray(),parameters.ToArray(),patches.ToArray(),velocityIterations,positionIterations,grainMasses:grainMasses,allocatedGrainCapacity:snapshot.Capacity,allocatedBoundaryCapacity:4096);
@@ -177,13 +179,17 @@ namespace Debris.Simulation
                 if(!terrain.TrySelectDrillCell(MountedDrillCenter(),drillRadius,out var cell)){drillRequested=false;lastEdit=new CandidateEditResult(CandidateEditStatus.NoTarget,drillRequestId,default,0,0,terrain.Revision,solver.GrainCount);result=lastEdit;return true;}
                 var status=terrain.TryPrepareCell(cell,drillPower,1f/60,catalog,out drillEdit);
                 if(status!=CandidateEditStatus.DamageApplied&&status!=CandidateEditStatus.Released){drillRequested=false;lastEdit=new CandidateEditResult(status,drillRequestId,cell,terrain.MaterialAt(cell),0,terrain.Revision,solver.GrainCount);result=lastEdit;return true;}
-                if(!CandidateBoundaryBuilder.TryPrepareTerrainReplacement(terrain,drillEdit,solver.BodyDefinitions,dynamicPrefix,solver.BoundaryCapacity,out var replacement)){drillRequested=false;lastEdit=new CandidateEditResult(CandidateEditStatus.BoundaryCapacity,drillRequestId,cell,drillEdit.OldMaterial,0,terrain.Revision,solver.GrainCount);result=lastEdit;return true;}
-                float density=catalog.DefinitionAt((ushort)drillEdit.OldMaterial).Density;status=transaction.Prepare(drillEdit,replacement,density);if(status!=drillEdit.Status){drillRequested=false;lastEdit=new CandidateEditResult(status,drillRequestId,cell,drillEdit.OldMaterial,0,terrain.Revision,solver.GrainCount);result=lastEdit;return true;}transaction.BeginPlacementValidation();drillValidating=true;return false;
+                CandidateBoundaryBuilder.CandidateBoundaryReplacement replacement=null;CandidateBoundaryBuilder.TerrainBoundaryCache nextCache=null;
+                if(drillEdit.Release&&!CandidateBoundaryBuilder.TryPrepareTerrainReplacement(terrain,drillEdit,terrainCache,solver.BodyDefinitions,dynamicPrefix,solver.BoundaryCapacity,out replacement,out nextCache)){drillRequested=false;lastEdit=new CandidateEditResult(CandidateEditStatus.BoundaryCapacity,drillRequestId,cell,drillEdit.OldMaterial,0,terrain.Revision,solver.GrainCount);result=lastEdit;return true;}
+                float density=catalog.DefinitionAt((ushort)drillEdit.OldMaterial).Density;status=transaction.Prepare(drillEdit,replacement,density);if(status!=drillEdit.Status){drillRequested=false;lastEdit=new CandidateEditResult(status,drillRequestId,cell,drillEdit.OldMaterial,0,terrain.Revision,solver.GrainCount);result=lastEdit;return true;}
+                if(!drillEdit.Release){var damagePublished=transaction.TryPublish();lastEdit=new CandidateEditResult(damagePublished,drillRequestId,cell,drillEdit.OldMaterial,0,terrain.Revision,solver.GrainCount);drillRequested=false;drillEdit=null;result=lastEdit;return true;}
+                preparedTerrainCache=nextCache;try{transaction.BeginPlacementValidation();drillValidating=true;return false;}catch(Exception e){transaction.Abort();preparedTerrainCache=null;FaultTransaction("Candidate terrain placement submission failed: "+e.Message);drillRequested=false;drillEdit=null;lastEdit=new CandidateEditResult(CandidateEditStatus.Faulted,drillRequestId,cell,0,0,terrain.Revision,solver.GrainCount);result=lastEdit;return true;}
             }
             if(!transaction.TryCompletePlacementValidation(out var validation))return false;
-            if(validation!=drillEdit.Status){transaction.Abort();drillRequested=drillValidating=false;lastEdit=new CandidateEditResult(validation,drillRequestId,drillEdit.Cell,drillEdit.OldMaterial,0,terrain.Revision,solver.GrainCount);result=lastEdit;return true;}
-            var published=transaction.TryPublish();lastEdit=new CandidateEditResult(published,drillRequestId,drillEdit.Cell,drillEdit.OldMaterial,published==CandidateEditStatus.Released?drillEdit.Identity:0,terrain.Revision,solver.GrainCount);drillRequested=drillValidating=false;drillEdit=null;result=lastEdit;return true;
+            if(validation!=drillEdit.Status){transaction.Abort();preparedTerrainCache=null;if(validation==CandidateEditStatus.Faulted)FaultTransaction("Candidate terrain placement readback failed.");drillRequested=drillValidating=false;lastEdit=new CandidateEditResult(validation,drillRequestId,drillEdit.Cell,drillEdit.OldMaterial,0,terrain.Revision,solver.GrainCount);result=lastEdit;return true;}
+            var published=transaction.TryPublish();if(published==CandidateEditStatus.Released)terrainCache=preparedTerrainCache;preparedTerrainCache=null;if(published==CandidateEditStatus.Faulted)FaultTransaction("Candidate terrain publication failed.");lastEdit=new CandidateEditResult(published,drillRequestId,drillEdit.Cell,drillEdit.OldMaterial,published==CandidateEditStatus.Released?drillEdit.Identity:0,terrain.Revision,solver.GrainCount);drillRequested=drillValidating=false;drillEdit=null;result=lastEdit;return true;
         }
+        void FaultTransaction(string message){faulted=true;Fault=message;ClearPending();}
         public void Dispose()
         {
             if(disposed)return;disposed=true;

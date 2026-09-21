@@ -46,7 +46,7 @@ namespace Debris.Presentation
         }
         void ResetSession(int side,int capacity)
         {
-            parallelGeneration++;parallel?.Dispose();parallel=null;view?.Dispose();session?.Dispose();if(loadedBlueprint){Destroy(loadedBlueprint);loadedBlueprint=null;}
+            if(parallelGameplay&&parallel!=null)Debug.Log("DEBRIS_PARALLEL_GAMEPLAY reset");parallelGeneration++;parallel?.Dispose();parallel=null;view?.Dispose();session?.Dispose();if(loadedBlueprint){Destroy(loadedBlueprint);loadedBlueprint=null;}
             session=new MatterSession(catalog,Resources.Load<AsteroidProfile>("Asteroid"),side,128,capacity);
             ship=benchmark?null:new ShipRuntime(Resources.Load<ShipBlueprint>("StarterShip"));
             if(ship!=null){session.ConfigureShip(ship.CollisionMask(),ship.Position);session.ConfigureShipBody(ship.MassProperties(catalog));cameraView.orthographicSize=180;}
@@ -112,7 +112,7 @@ namespace Debris.Presentation
                     var body=ship.MassProperties(catalog);ship.Angle=completion.ShipAngle;ship.Position=completion.ShipCenter-ship.ToWorld(body.Center)+ship.Position;ship.Velocity=completion.ShipVelocity;ship.AngularVelocity=completion.ShipSpin;ship.Fuel.Consume(completion.FuelBurn);ship.CargoMass=completion.CargoMass;
                 }
                 if(parallel.TryAdvanceTerrainEdit(out var edit)&&edit.Status!=CandidateEditStatus.Busy)
-                    saveStatus="Drill: "+edit.Status+(edit.Status==CandidateEditStatus.Released?" / grains "+edit.ActiveGrains:" ");
+                {saveStatus="Drill: "+edit.Status+(edit.Status==CandidateEditStatus.Released?" / grains "+edit.ActiveGrains:" ");Debug.Log($"DEBRIS_DRILL status={edit.Status} request={edit.RequestId} tick={parallel.NextSubmissionTick-1} ship=({ship.Position.x:F2},{ship.Position.y:F2},{ship.Angle:F3}) grains={edit.ActiveGrains} terrainRevision={edit.Revision}");}
                 if(parallel.Faulted){paused=true;saveStatus=parallel.Fault;}
             }
             if(!paused&&!benchmark&&!shipBenchmark&&!saveBusy&&(!parallelGameplay||parallel!=null))

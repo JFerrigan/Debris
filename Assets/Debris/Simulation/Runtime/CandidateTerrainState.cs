@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
 using Debris.Materials;
 using UnityEngine;
+
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Debris.Simulation.Tests")]
 
 namespace Debris.Simulation
 {
@@ -57,7 +60,20 @@ namespace Debris.Simulation
             side=imported.Side;chunkSize=imported.ChunkSize;width=checked(side*chunkSize);origin=new Vector2Int(imported.OriginX,imported.OriginY);this.terrainEndpoint=terrainEndpoint;
             fields=new uint[imported.Fields.Length][];damage=new float[fields.Length][];
             uint maximum=0;
-            if(imported.Cells!=null) foreach(var cell in imported.Cells) maximum=Math.Max(maximum,cell.Identity);
+            // The terrain owns the sequence used by released grains.  Validate
+            // imported loose identities here, before an edit can reserve one.
+            // In particular, a duplicate must not be hidden by a later terrain
+            // release that happens to use a different material or page.
+            if(imported.Cells!=null)
+            {
+                var identities=new HashSet<uint>();
+                foreach(var cell in imported.Cells)
+                {
+                    if(cell.Identity==0||!identities.Add(cell.Identity))
+                        throw new InvalidOperationException("Candidate terrain loose identities are invalid.");
+                    maximum=Math.Max(maximum,cell.Identity);
+                }
+            }
             for(int s=0;s<fields.Length;s++)
             {
                 if(imported.Fields[s]==null||imported.Damage[s]==null||imported.Fields[s].Length!=chunkSize*chunkSize||imported.Damage[s].Length!=chunkSize*chunkSize) throw new InvalidOperationException("Candidate terrain chunk dimensions are invalid.");
@@ -96,8 +112,10 @@ namespace Debris.Simulation
         }
         public bool TrySelectDrillCell(Vector2 center,float radius,out Vector2Int selected)
         {
-            selected=default;if(!float.IsFinite(radius)||radius<0)return false;float best=float.PositiveInfinity;bool found=false;
-            for(int y=0;y<width;y++) for(int x=0;x<width;x++)
+            selected=default;if(!float.IsFinite(center.x)||!float.IsFinite(center.y)||!float.IsFinite(radius)||radius<0)return false;float best=float.PositiveInfinity;bool found=false;
+            int minX=Mathf.Max(0,Mathf.FloorToInt(center.x-radius-.5f)-origin.x),maxX=Mathf.Min(width-1,Mathf.CeilToInt(center.x+radius-.5f)-origin.x);
+            int minY=Mathf.Max(0,Mathf.FloorToInt(center.y-radius-.5f)-origin.y),maxY=Mathf.Min(width-1,Mathf.CeilToInt(center.y+radius-.5f)-origin.y);
+            for(int y=minY;y<=maxY;y++) for(int x=minX;x<=maxX;x++)
             {
                 var cell=new Vector2Int(origin.x+x,origin.y+y);uint material=MaterialAt(cell);if(material==0||!Exposed(x,y))continue;
                 float d=(new Vector2(cell.x+.5f,cell.y+.5f)-center).sqrMagnitude;if(d>radius*radius)continue;
@@ -105,6 +123,8 @@ namespace Debris.Simulation
             }
             return found;
         }
+        internal static bool IsSupportedGrainSquare(Vector2 center)
+        { return float.IsFinite(center.x)&&float.IsFinite(center.y)&&center.x-.5f>=-512&&center.x+.5f<=512&&center.y-.5f>=-512&&center.y+.5f<=512; }
         bool Exposed(int x,int y)
         { return x==0||y==0||x==width-1||y==width-1||BuildMaterial(x-1,y)==0||BuildMaterial(x+1,y)==0||BuildMaterial(x,y-1)==0||BuildMaterial(x,y+1)==0; }
         uint BuildMaterial(int x,int y){if(x<0||y<0||x>=width||y>=width)return 0;int s=(y/chunkSize)*side+x/chunkSize,i=(y%chunkSize)*chunkSize+x%chunkSize;return fields[s][i];}
@@ -114,7 +134,11 @@ namespace Debris.Simulation
             if(!float.IsFinite(power)||!float.IsFinite(dt)||power<0||dt<0||catalog==null)return CandidateEditStatus.Unavailable;
             var definition=catalog.DefinitionAt((ushort)fields[s][i]);if(definition==null||!float.IsFinite(definition.Durability)||definition.Durability<=0)return CandidateEditStatus.Unavailable;
             float next=damage[s][i]+power*dt;if(!float.IsFinite(next))return CandidateEditStatus.Unavailable;
-            bool release=next>=definition.Durability;if(release&&nextIdentity==uint.MaxValue)return CandidateEditStatus.IdentityExhausted;
+            bool release=next>=definition.Durability;
+            // A successful release changes both sequences.  Do not prepare an
+            // edit that Publish could only complete by wrapping either one.
+            if(release&&nextIdentity==uint.MaxValue)return CandidateEditStatus.IdentityExhausted;
+            if(release&&revision==uint.MaxValue)return CandidateEditStatus.RevisionExhausted;
             edit=new CandidateTerrainEdit{Cell=cell,Slice=s,Index=i,OldMaterial=fields[s][i],OldDamage=damage[s][i],NewDamage=release?0:next,ExpectedRevision=revision,Identity=nextIdentity,Release=release,Status=release?CandidateEditStatus.Released:CandidateEditStatus.DamageApplied};
             return edit.Status;
         }

@@ -57,7 +57,7 @@ namespace Debris.Presentation
         }
         public void DrawCandidate()
         {
-            if(candidate==null||candidateSession==null||!candidateSession.DrawingAvailable){Draw();return;}
+            if(candidate==null||candidateSession==null||!candidateSession.DrawingAvailable){if(candidateSession?.Faulted==true)Graphics.RenderMeshPrimitives(fixedParams,quad,0,session.Side*session.Side);else Draw();return;}
             Graphics.RenderMeshPrimitives(fixedParams,quad,0,session.Side*session.Side);
             Graphics.RenderMeshPrimitives(new RenderParams(candidateLoose){worldBounds=looseParams.worldBounds,shadowCastingMode=ShadowCastingMode.Off,receiveShadows=false},quad,0,candidate.GrainCount);
             Graphics.RenderMeshPrimitives(new RenderParams(candidateShip){worldBounds=shipParams.worldBounds,shadowCastingMode=ShadowCastingMode.Off,receiveShadows=false},quad,0,128*128);
