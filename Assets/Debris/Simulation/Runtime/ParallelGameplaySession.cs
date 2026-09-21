@@ -125,6 +125,7 @@ namespace Debris.Simulation
             if(patches.Count>4096)throw new InvalidOperationException("Candidate import exceeds the 4,096 collision-patch cache; world activation was refused.");
             if(bodies.Count!=snapshot.Fragments.Length+2)throw new InvalidOperationException("Candidate endpoint accounting is invalid.");
             var solver=new ParallelGrainSolver(grains,bodies.ToArray(),parameters.ToArray(),patches.ToArray(),velocityIterations,positionIterations,grainMasses:grainMasses,allocatedGrainCapacity:snapshot.Capacity,allocatedBoundaryCapacity:4096);
+            solver.ConfigureCargoCavity(ship.Blueprint.CargoCavity,Mathf.Min(StarterCargoCapacity,ship.Blueprint.CargoCavity.width*ship.Blueprint.CargoCavity.height));
             return new ParallelGameplaySession(solver,snapshot,catalog,flags,terrainState,patches.ToArray(),bodies[0],closedMask,DoorCells(ship),ship.DoorOpen);
         }
         static uint[] CandidateShipMask(ShipRuntime ship,bool open)
@@ -240,7 +241,9 @@ namespace Debris.Simulation
             {
                 faulted=true;Fault="Candidate solver fault: "+result.Fault;ClearPending();completion=new Completion(next.Tick,result.Fault,default,0,0);return true;
             }
-            int count=0;float cargoMass=0;for(int i=0;i<cargo.Length;i++)if(cargo[i]){count++;cargoMass+=catalog.DefinitionAt((ushort)source.Cells[i].Material).Density;}
+            int count=0;float cargoMass=0;
+            if(result.CargoFacts==null||result.CargoFacts.Length!=257){faulted=true;Fault="Candidate cargo fact readback was invalid.";ClearPending();return true;}
+            for(int material=1;material<=catalog.Count&&material<=255;material++){uint admitted=result.CargoFacts[material+1];if(admitted==0)continue;var definition=catalog.DefinitionAt((ushort)material);count+=checked((int)admitted);cargoMass+=admitted*definition.Density;}
             acknowledgedShip=result.State;
             completion=new Completion(next.Tick,SolverFault.None,result.State,count,cargoMass,next.Fuel);return true;
         }

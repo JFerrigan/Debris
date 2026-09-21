@@ -17,13 +17,16 @@ namespace Debris.Simulation.ParallelProof
         readonly Dictionary<string,int> kernels = new Dictionary<string,int>();
         BodyParameters[] bodyDefinitions;
         readonly GraphicsBuffer rigidContacts,rigidCount,rigidPairs;
-        readonly GraphicsBuffer committed,state,grains,parameters,boundaries,diagnostics,args,starts;
+        readonly GraphicsBuffer committed,state,grains,parameters,boundaries,diagnostics,cargoFacts,args,starts;
         readonly GraphicsBuffer counts,cursors,offsets,sums,blockOffsets,indices;
         readonly GraphicsBuffer rows,rowCounts,rowOffsets,rowSums,rowBlocks,contacts,degrees,adjOffsets,adjSums,adjBlocks,adjCursors,adjacency,increments;
         readonly int capacity,bodies,endpoints,slots,velocityIterations,positionIterations,boundaryCapacity;
         int active;
         int snapshotRequests;
         bool disposed;
+        bool cargoConfigured;
+        Vector2 cargoMin,cargoMax;
+        uint cargoCapacity;
         public long BufferBytes { get; private set; }
         public GraphicsBuffer Grains => grains;
         public GraphicsBuffer Bodies => committed;
@@ -58,7 +61,7 @@ namespace Debris.Simulation.ParallelProof
             // element because GraphicsBuffer does not accept a zero count, while
             // all dispatches continue to use the real endpoint/grain counts.
             committed=Buffer(Math.Max(1,endpoints),32);state=Buffer(Math.Max(1,endpoints),32);grains=Buffer(Math.Max(1,capacity),48);parameters=Buffer(Math.Max(1,endpoints),32);boundaries=Buffer(Math.Max(1,boundaryCapacity),32);
-            diagnostics=Buffer(16,4);starts=Buffer(endpoints,16);
+            diagnostics=Buffer(16,4);cargoFacts=Buffer(257,4);starts=Buffer(endpoints,16);
             // 17 dynamic bodies (ship plus 16 fragments) and one anchored
             // terrain endpoint share this bounded manifold table.
             rigidContacts=Buffer(rigidContactCapacity,72);rigidCount=Buffer(1,4);rigidPairs=Buffer(18*18,4);
@@ -102,6 +105,8 @@ namespace Debris.Simulation.ParallelProof
             Bind("PrepareValidation",("_D",diagnostics));
             Bind("Validate",("_D",diagnostics),("_State",state),("_Starts",starts),("_Boundaries",boundaries),("_Parameters",parameters),("_Contacts",contacts));
             Bind("Commit",("_D",diagnostics),("_State",state),("_CommitOutput",committed),("_Grains",grains));
+            Bind("ClearCargoFacts",("_CargoFacts",cargoFacts));
+            Bind("ClassifyCargo",("_D",diagnostics),("_Committed",committed),("_Grains",grains),("_Parameters",parameters),("_CargoFacts",cargoFacts));
             Bind("Acknowledge",("_D",diagnostics));
             Bind("RigidClearContacts",("_D",diagnostics),("_RigidPairCounts",rigidPairs),("_RigidContactCount",rigidCount));
             Bind("RigidGatherContacts",("_D",diagnostics),("_State",state),("_Parameters",parameters),("_Boundaries",boundaries),("_RigidContacts",rigidContacts),("_RigidPairCounts",rigidPairs),("_RigidContactCount",rigidCount));
@@ -177,6 +182,15 @@ namespace Debris.Simulation.ParallelProof
             target.SetComputeIntParam(shader,"_BinCount",65536);
             target.SetComputeIntParam(shader,"_Slots",slots);
             target.SetComputeFloatParam(shader,"_Dt",1f/60);
+            target.SetComputeIntParam(shader,"_CargoEnabled",cargoConfigured?1:0);target.SetComputeIntParam(shader,"_CargoBody",capacity);target.SetComputeIntParam(shader,"_CargoCapacity",unchecked((int)cargoCapacity));target.SetComputeVectorParam(shader,"_CargoMin",cargoMin);target.SetComputeVectorParam(shader,"_CargoMax",cargoMax);
+        }
+        // Cargo is a classification fact. Its physical grains remain in the
+        // ordinary world solver, while this fixed compact buffer publishes
+        // admitted counts by material with each normal completion.
+        public void ConfigureCargoCavity(RectInt cavity,int admissionCapacity)
+        {
+            if(disposed)throw new ObjectDisposedException(nameof(ParallelGrainSolver));if(cavity.width<1||cavity.height<1||admissionCapacity<0||admissionCapacity>capacity)throw new ArgumentOutOfRangeException();
+            cargoMin=cavity.min;cargoMax=cavity.max;cargoCapacity=(uint)admissionCapacity;cargoConfigured=true;
         }
         public void Step(Vector2 localForce=default,float torque=0)
         {
@@ -210,7 +224,7 @@ namespace Debris.Simulation.ParallelProof
                 commands.EndSample("B3R.Position");Indirect("PrepareValidation",s,7);Indirect("Validate",s,8);if(bodies>1)Indirect("RigidValidate",s,7);
                 Trace(s,ProofTraceStage.Validation);
             }
-            Direct("Commit",endpoints);Direct("Acknowledge",1,1);metrics.Record(commands,committed,parameters,grains);commands.EndSample("B3R.ParallelPhysics");Graphics.ExecuteCommandBuffer(commands);
+            Direct("Commit",endpoints);if(cargoConfigured){Direct("ClearCargoFacts",257);if(active>0)Direct("ClassifyCargo",active);}Direct("Acknowledge",1,1);metrics.Record(commands,committed,parameters,grains);commands.EndSample("B3R.ParallelPhysics");Graphics.ExecuteCommandBuffer(commands);
         }
         public async Task<ProofSnapshot> SnapshotAsync()
         {
@@ -339,9 +353,9 @@ namespace Debris.Simulation.ParallelProof
         public async Task<ProofCompletion> CompletionAsync(int endpoint)
         {
             if(endpoint<0||endpoint>=endpoints)throw new ArgumentOutOfRangeException(nameof(endpoint));
-            var s=Read<BodyState>(committed);var d=Read<uint>(diagnostics);
-            await Task.WhenAll(s,d);
-            return new ProofCompletion{State=s.Result[endpoint],Diagnostics=d.Result};
+            var s=Read<BodyState>(committed);var d=Read<uint>(diagnostics);var c=Read<uint>(cargoFacts);
+            await Task.WhenAll(s,d,c);
+            return new ProofCompletion{State=s.Result[endpoint],Diagnostics=d.Result,CargoFacts=c.Result};
         }
         static Task<T[]> Read<T>(GraphicsBuffer b) where T:struct
         {
@@ -354,6 +368,7 @@ namespace Debris.Simulation.ParallelProof
     {
         public BodyState State;
         public uint[] Diagnostics;
+        public uint[] CargoFacts;
         public SolverFault Fault => (SolverFault)Diagnostics[0];
         public uint CompletedTick => Diagnostics[1];
     }

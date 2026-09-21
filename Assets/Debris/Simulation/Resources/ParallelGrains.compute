@@ -20,6 +20,8 @@
 #pragma kernel PrepareValidation
 #pragma kernel Validate
 #pragma kernel Commit
+#pragma kernel ClearCargoFacts
+#pragma kernel ClassifyCargo
 #pragma kernel Acknowledge
 #pragma kernel RigidClearContacts
 #pragma kernel RigidGatherContacts
@@ -40,6 +42,7 @@ RWStructuredBuffer<Grain> _Grains;
 StructuredBuffer<Parameters> _Parameters;
 StructuredBuffer<Boundary> _Boundaries;
 RWStructuredBuffer<uint> _D;
+RWStructuredBuffer<uint> _CargoFacts;
 RWStructuredBuffer<uint> _Args;
 RWStructuredBuffer<float4> _Starts;
 RWStructuredBuffer<uint> _Counts;
@@ -59,7 +62,9 @@ StructuredBuffer<uint> _AdjOffsets,_AdjBlockOffsets;
 RWStructuredBuffer<uint> _AdjCursors,_Adjacency;
 RWStructuredBuffer<float4> _Increments;
 uint _N,_BodyStart,_Bodies,_Endpoints,_BoundaryCount,_BinSide,_BinCount,_Slots,_ScanCount,_SumCount,_Substep,_Position;
+uint _CargoBody,_CargoCapacity,_CargoEnabled;
 float _Dt,_Friction;
+float2 _CargoMin,_CargoMax;
 float4 _Force; // local ship force xy, torque z; proof fixture
 
 float cross2(float2 a,float2 b){return a.x*b.y-a.y*b.x;}
@@ -248,6 +253,17 @@ groupshared float4 reaction[64];
 {
     if(id>=_Endpoints||_D[0]!=0)return;State s=_State[id];_CommitOutput[id]=s;
     if(id<_N){Grain g=_Grains[id];g.center=s.center;g.velocity=s.velocity;g.angle=s.angle;g.spin=s.spin;if(length(s.velocity)+abs(s.spin)>.0001)g.flags&=~1u;_Grains[id]=g;}
+}
+[numthreads(64,1,1)] void ClearCargoFacts(uint id:SV_DispatchThreadID){if(id<257)_CargoFacts[id]=0;}
+[numthreads(64,1,1)] void ClassifyCargo(uint id:SV_DispatchThreadID)
+{
+    if(id>=_N||_D[0]!=0||_CargoEnabled==0)return;
+    Grain g=_Grains[id];State body=_Committed[_CargoBody];Parameters p=_Parameters[_CargoBody];float2 local=rotate(g.center-body.center,-body.angle)+p.com;float a=g.angle-body.angle;float s,c;sincos(a,s,c);float extent=.5*(abs(c)+abs(s));
+    bool inside=local.x-extent>=_CargoMin.x-.0001 && local.x+extent<=_CargoMax.x+.0001 && local.y-extent>=_CargoMin.y-.0001 && local.y+extent<=_CargoMax.y+.0001;
+    if(!inside){g.flags&=~4u;_Grains[id]=g;return;}
+    uint ordinal;InterlockedAdd(_CargoFacts[0],1,ordinal);
+    if(ordinal>=_CargoCapacity){g.flags&=~4u;_Grains[id]=g;return;}
+    InterlockedAdd(_CargoFacts[1+min(g.material,255u)],1);g.flags|=4u;_Grains[id]=g;
 }
 [numthreads(1,1,1)] void Acknowledge(uint id:SV_DispatchThreadID){if(_D[0]==0)_D[1]++;else _D[11]++;}
 
