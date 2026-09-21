@@ -20,7 +20,7 @@ namespace Debris.Presentation
         string SavePath=>Path.Combine(shipBenchmark?Application.temporaryCachePath:Application.persistentDataPath,shipBenchmark?"DebrisVerification":"Saves","salvage.debris");
         WorldManifest worldManifest;string worldRoot,currentSiteId="00000000000000000000000000000001";ulong currentSeed=42;
         MatterSession session;MatterView view;MaterialCatalog catalog;ParallelGameplaySession parallel;int parallelGeneration;
-        InputActionAsset input;Camera cameraView;bool paused,benchmark,shipBenchmark,contactBenchmark,islandBenchmark,parallelGameplay;
+        InputActionAsset input;Camera cameraView;bool paused,benchmark,shipBenchmark,contactBenchmark,islandBenchmark,parallelGameplay,candidateDoorRequest;
         float accumulator,statsTime;ushort inspected;Vector2 pointerWorld;
         readonly FrameTiming[] timings=new FrameTiming[1];
         readonly List<double> cpu=new List<double>(),gpu=new List<double>(),frames=new List<double>();
@@ -62,8 +62,9 @@ namespace Debris.Presentation
                 if(generation!=parallelGeneration||source!=session||sourceShip!=ship){candidate.Dispose();return;}
                 candidate.AttachTerrainMirror(source);
                 parallel=candidate;
+                candidateDoorRequest=sourceShip.DoorOpen;
                 view.BindCandidate(candidate);
-                saveStatus="Parallel candidate active: 96 loose grains seeded. LMB drills; suction, persistence, travel, fuel transfer and damage are unavailable.";
+                saveStatus="Parallel candidate active: 96 loose grains seeded. LMB drills; G controls the physical cargo door. Suction, persistence, travel, fuel transfer and damage are unavailable.";
                 Debug.Log("DEBRIS_PARALLEL_GAMEPLAY active");
             }
             catch(Exception e){saveStatus="Parallel candidate activation refused: "+e.Message;Debug.LogWarning(saveStatus);}
@@ -99,13 +100,14 @@ namespace Debris.Presentation
             var movement=input["Move"].ReadValue<Vector2>();if(ship==null)cameraView.transform.position+=(Vector3)(movement*(cameraView.orthographicSize*Time.unscaledDeltaTime));
             else
             {
-                if(!parallelGameplay&&!saveBusy&&input["CargoDoor"].WasPressedThisFrame()&&ship.Has(UnitKind.Door))ship.DoorOpen=!ship.DoorOpen;
+                if(!saveBusy&&input["CargoDoor"].WasPressedThisFrame()&&ship.Has(UnitKind.Door)){if(parallelGameplay)candidateDoorRequest=!candidateDoorRequest;else ship.DoorOpen=!ship.DoorOpen;}
                 var pose=parallelGameplay?new Vector4(ship.Position.x,ship.Position.y,ship.Angle,1):session.ShipStats[0];cameraView.transform.position=Vector3.Lerp(cameraView.transform.position,new Vector3(pose.x+50,pose.y,-10),1-Mathf.Exp(-4*Time.unscaledDeltaTime));
                 if(!parallelGameplay){ship.CargoMass=session.ShipStats[2].y;ship.Angle=session.ShipStats[0].z;ship.Position=new Vector2(pose.x,pose.y);ship.AngularVelocity=session.ShipStats[1].z;ship.Velocity=ContactPhysics.Surface(new Vector2(session.ShipStats[1].x,session.ShipStats[1].y),-ship.AngularVelocity,ship.ToWorld(ship.MassProperties(catalog).Center)-ship.Position);}
             }
             cameraView.orthographicSize=Mathf.Clamp(cameraView.orthographicSize-input["Zoom"].ReadValue<float>()*.025f,30,400);
             if(parallel!=null)
             {
+                ship.DoorOpen=parallel.DoorOpen;
                 while(parallel.TryAcknowledge(out var completion))
                 {
                     if(completion.Fault!=Debris.Simulation.ParallelProof.SolverFault.None){saveStatus=parallel.Fault;Debug.LogError("DEBRIS_PARALLEL_GAMEPLAY "+saveStatus);paused=true;break;}
@@ -130,7 +132,7 @@ namespace Debris.Presentation
                         bool cut=!parallelGameplay&&input["Cut"].IsPressed()&&ship.Has(UnitKind.Drill);
                         if(cut)command=new SiteCommand(SiteCommandType.CutterStroke,Vector2.zero,Vector2.zero,6,120,1);
                         bool suction=!parallelGameplay&&input["Suction"].IsPressed()&&ship.Has(UnitKind.Suction);
-                        var step=new MatterStepInput(command,suction?40:0,default,ship.DoorOpen,cut,suction,force);
+                        var step=new MatterStepInput(command,suction?40:0,default,parallelGameplay?candidateDoorRequest:ship.DoorOpen,cut,suction,force);
                         if(parallelGameplay)
                         {
                             if(!parallel.Submit(parallel.NextSubmissionTick,step,provisional)){break;}
@@ -455,7 +457,7 @@ namespace Debris.Presentation
             Panel(new Rect(28,28,4,72),new Color(.26f,.86f,.69f));
             GUI.Label(new Rect(48,22,650,48),"D E B R I S",title);
             GUI.Label(new Rect(50,76,700,26),parallelGameplay?"PARALLEL CANDIDATE   /   LOOSE-DEBRIS PLAYGROUND":"SALVAGE FLIGHT   /   EE INC. CONTRACTOR VESSEL",small);
-            GUI.Label(new Rect(50,101,850,22),parallelGameplay?"W/S thrust • A/D strafe • Q/E turn • LMB drill • scroll zoom • Space/Esc pause • R reset   /   suction, door, save and travel unavailable":"W/S thrust • A/D strafe • Q/E turn • LMB drill • RMB suction • G cargo door • scroll zoom • Space/Esc pause • R reset • T other site",small);
+            GUI.Label(new Rect(50,101,850,22),parallelGameplay?"W/S thrust • A/D strafe • Q/E turn • LMB drill • G cargo door • scroll zoom • Space/Esc pause • R reset   /   suction, save and travel unavailable":"W/S thrust • A/D strafe • Q/E turn • LMB drill • RMB suction • G cargo door • scroll zoom • Space/Esc pause • R reset • T other site",small);
             float x=Screen.width-262;
             Panel(new Rect(x-18,152,262,Screen.height-180),new Color(.025f,.045f,.065f,.94f));
             GUI.Label(new Rect(x,174,230,30),"SITE  /  "+currentSiteId.Substring(28),label);

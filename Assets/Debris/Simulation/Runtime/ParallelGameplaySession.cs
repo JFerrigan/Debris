@@ -21,12 +21,17 @@ namespace Debris.Simulation
         readonly MatterSnapshot source;
         readonly bool[] cargo;
         readonly CandidateTerrainState terrain;
-        readonly Boundary[] dynamicPrefix;
+        Boundary[] dynamicPrefix;
+        readonly Boundary[] nonShipDynamic;
+        readonly uint[] closedShipMask;
+        readonly RectInt[] doorCells;
         CandidateBoundaryBuilder.TerrainBoundaryCache terrainCache;
         CandidateBoundaryBuilder.TerrainBoundaryCache preparedTerrainCache;
         int pendingHead,pendingCount;
         uint lastSubmittedTick;
         bool faulted,disposed;
+        bool doorOpen,doorRequestKnown,requestedDoorOpen,doorObstructed;
+        Task<ProofSnapshot> doorSnapshot;
         bool drillRequested,drillValidating;
         float drillPower=120,drillRadius=6;
         uint drillRequestId;
@@ -42,9 +47,11 @@ namespace Debris.Simulation
         public ParallelGrainSolver Solver=>solver;
         public CandidateTerrainState Terrain=>terrain;
         public uint TerrainRevision=>terrain.Revision;
-        public bool TopologyBusy=>drillRequested||drillValidating||(transaction?.Busy??false);
+        public bool TopologyBusy=>drillRequested||drillValidating||(transaction?.Busy??false)||doorSnapshot!=null;
         public CandidateEditResult LastEditResult=>lastEdit;
         public bool DrawingAvailable=>!disposed&&!faulted;
+        public bool DoorOpen=>doorOpen;
+        public bool DoorObstructed=>doorObstructed;
         public double ProvisionalFuel
         {
             get { double total=unresolvedFuel;for(int i=0;i<pendingCount;i++)total+=pending[(pendingHead+i)%MaximumPendingTicks].Fuel;return total; }
@@ -68,8 +75,12 @@ namespace Debris.Simulation
             {Tick=tick;Fault=fault;ShipCenter=ship.Center;ShipVelocity=ship.Velocity;ShipAngle=ship.Angle;ShipSpin=ship.AngularVelocity;CargoCount=count;CargoMass=mass;FuelBurn=fuelBurn;}
         }
 
-        ParallelGameplaySession(ParallelGrainSolver value, MatterSnapshot imported, MaterialCatalog materials, bool[] cargoFlags, CandidateTerrainState terrainState, Boundary[] patches, BodyState shipState)
-        {solver=value;source=imported;catalog=materials;cargo=cargoFlags;terrain=terrainState;terrainCache=new CandidateBoundaryBuilder.TerrainBoundaryCache(terrainState);acknowledgedShip=shipState;int prefix=(int)solver.BodyDefinitions[solver.BodyCount-1].BoundaryStart;dynamicPrefix=new Boundary[prefix];Array.Copy(patches,dynamicPrefix,prefix);}
+        ParallelGameplaySession(ParallelGrainSolver value, MatterSnapshot imported, MaterialCatalog materials, bool[] cargoFlags, CandidateTerrainState terrainState, Boundary[] patches, BodyState shipState, uint[] closedMask, RectInt[] doors, bool initialDoorOpen)
+        {
+            solver=value;source=imported;catalog=materials;cargo=cargoFlags;terrain=terrainState;terrainCache=new CandidateBoundaryBuilder.TerrainBoundaryCache(terrainState);acknowledgedShip=shipState;closedShipMask=closedMask;doorCells=doors;doorOpen=initialDoorOpen;
+            int prefix=(int)solver.BodyDefinitions[solver.BodyCount-1].BoundaryStart;dynamicPrefix=new Boundary[prefix];Array.Copy(patches,dynamicPrefix,prefix);
+            int shipCount=(int)solver.BodyDefinitions[0].BoundaryCount;nonShipDynamic=new Boundary[prefix-shipCount];Array.Copy(patches,shipCount,nonShipDynamic,0,nonShipDynamic.Length);
+        }
 
         public static ParallelGameplaySession Import(MatterSnapshot snapshot,ShipRuntime ship,MaterialCatalog catalog,int velocityIterations=4,int positionIterations=2)
         {
@@ -98,7 +109,8 @@ namespace Debris.Simulation
                 grains[i]=new Debris.Simulation.ParallelProof.LooseCell{Center=center,Velocity=cell.Velocity,Angle=flags[i]?pose.z:0,AngularVelocity=flags[i]?snapshot.ShipPose[1].z:0,Material=cell.Material,Identity=cell.Identity,Flags=cell.Flags};
             }
             var bodies=new List<BodyState>();var parameters=new List<BodyParameters>();var patches=new List<Boundary>();
-            AddBody(bodies,parameters,patches,snapshot.Capacity,ship.CollisionMask(),pose,snapshot.ShipPose[1],ship.MassProperties(catalog),1,0,-64,-64);
+            var closedMask=CandidateShipMask(ship,false);var initialMask=CandidateShipMask(ship,ship.DoorOpen);
+            AddBody(bodies,parameters,patches,snapshot.Capacity,initialMask,pose,snapshot.ShipPose[1],ship.MassProperties(catalog),1,0,-64,-64);
             foreach(var fragment in snapshot.Fragments)
                 AddBody(bodies,parameters,patches,snapshot.Capacity,fragment.Hull,fragment.Pose,fragment.Motion,fragment.Mass,1,(uint)bodies.Count,-64,-64);
             // Terrain is represented by an explicit anchored mask body.  Its
@@ -113,7 +125,21 @@ namespace Debris.Simulation
             if(patches.Count>4096)throw new InvalidOperationException("Candidate import exceeds the 4,096 collision-patch cache; world activation was refused.");
             if(bodies.Count!=snapshot.Fragments.Length+2)throw new InvalidOperationException("Candidate endpoint accounting is invalid.");
             var solver=new ParallelGrainSolver(grains,bodies.ToArray(),parameters.ToArray(),patches.ToArray(),velocityIterations,positionIterations,grainMasses:grainMasses,allocatedGrainCapacity:snapshot.Capacity,allocatedBoundaryCapacity:4096);
-            return new ParallelGameplaySession(solver,snapshot,catalog,flags,terrainState,patches.ToArray(),bodies[0]);
+            return new ParallelGameplaySession(solver,snapshot,catalog,flags,terrainState,patches.ToArray(),bodies[0],closedMask,DoorCells(ship),ship.DoorOpen);
+        }
+        static uint[] CandidateShipMask(ShipRuntime ship,bool open)
+        {
+            var mask=ship.CollisionMask();if(!open)return mask;
+            foreach(var unit in ship.Units)if(unit.Supported&&!unit.Destroyed&&unit.Placement.Definition.Kind==UnitKind.Door)
+            {
+                var box=new RectInt(unit.Placement.Position,unit.Placement.Definition.Size);
+                for(int y=box.yMin;y<box.yMax;y++)for(int x=box.xMin;x<box.xMax;x++)mask[(y+64)*128+x+64]=0;
+            }
+            return mask;
+        }
+        static RectInt[] DoorCells(ShipRuntime ship)
+        {
+            var cells=new List<RectInt>();foreach(var unit in ship.Units)if(unit.Supported&&!unit.Destroyed&&unit.Placement.Definition.Kind==UnitKind.Door)cells.Add(new RectInt(unit.Placement.Position,unit.Placement.Definition.Size));return cells.ToArray();
         }
         static Vector2 World(Vector2 local,Vector4 pose)
         {float c=Mathf.Cos(pose.z),s=Mathf.Sin(pose.z);return new Vector2(pose.x+local.x*c-local.y*s,pose.y+local.x*s+local.y*c);}
@@ -133,9 +159,73 @@ namespace Debris.Simulation
         }
         public bool Submit(uint tick,MatterStepInput input,double provisionalFuel=0)
         {
-            if(disposed||faulted||TopologyBusy||tick==0||tick<=lastSubmittedTick||pendingCount>=MaximumPendingTicks||provisionalFuel<0||double.IsNaN(provisionalFuel)||double.IsInfinity(provisionalFuel))return false;
+            if(disposed||faulted||drillRequested||drillValidating||(transaction?.Busy??false)||tick==0||tick<=lastSubmittedTick||pendingCount>=MaximumPendingTicks||provisionalFuel<0||double.IsNaN(provisionalFuel)||double.IsInfinity(provisionalFuel))return false;
+            if(!TryApplyDoorRequest(input.DoorRequestedOpen))return false;
             solver.Step(new Vector2(input.LocalForce.x,input.LocalForce.y),input.LocalForce.z);
             pending[(pendingHead+pendingCount)%MaximumPendingTicks]=new Pending{Tick=tick,Fuel=provisionalFuel,Readback=solver.CompletionAsync(solver.BodyStart)};pendingCount++;lastSubmittedTick=tick;return true;
+        }
+        bool TryApplyDoorRequest(bool requestedOpen)
+        {
+            if(!doorRequestKnown||requestedDoorOpen!=requestedOpen)
+            {
+                doorRequestKnown=true;requestedDoorOpen=requestedOpen;doorObstructed=false;
+                if(requestedOpen==doorOpen)return true;
+                if(pendingCount>0)return false;
+                if(requestedOpen)return ReplaceShipDoorTopology(true);
+                try{doorSnapshot=solver.SnapshotAsync();return false;}
+                catch(Exception e){FaultTransaction("Candidate door inspection submission failed: "+e.Message);return false;}
+            }
+            if(doorSnapshot==null)return true;
+            if(!doorSnapshot.IsCompleted)return false;
+            try
+            {
+                var snapshot=doorSnapshot.Result;doorSnapshot=null;
+                if(snapshot.Fault!=SolverFault.None){FaultTransaction("Candidate door inspection solver fault: "+snapshot.Fault);return false;}
+                if(AnyDoorObstruction(snapshot)){doorObstructed=true;return true;}
+                return ReplaceShipDoorTopology(false);
+            }
+            catch(Exception e){doorSnapshot=null;FaultTransaction("Candidate door inspection readback failed: "+e.Message);return false;}
+        }
+        bool ReplaceShipDoorTopology(bool open)
+        {
+            if(pendingCount!=0)return false;
+            var patches=new List<Boundary>();CandidateBoundaryBuilder.AppendMaskBoundaries(patches,CandidateShipMask(closedShipMask,open),solver.BodyStart,-64,-64,false);int shipCount=patches.Count;
+            patches.AddRange(nonShipDynamic);var terrainPatches=terrainCache.Flatten();patches.AddRange(terrainPatches);
+            if(patches.Count>solver.BoundaryCapacity){FaultTransaction("Candidate door boundary cache exceeded its reserved capacity.");return false;}
+            for(int i=0;i<patches.Count;i++){var patch=patches[i];patch.Feature=(uint)i;patches[i]=patch;}
+            var definitions=solver.BodyDefinitions;int oldShipCount=(int)definitions[0].BoundaryCount,delta=shipCount-oldShipCount;
+            try
+            {
+                definitions[0].BoundaryStart=0;definitions[0].BoundaryCount=(uint)shipCount;definitions[0].ShapeRevision=checked(definitions[0].ShapeRevision+1);
+                for(int i=1;i<definitions.Length-1;i++)definitions[i].BoundaryStart=checked((uint)((int)definitions[i].BoundaryStart+delta));
+                int terrainDefinition=definitions.Length-1;definitions[terrainDefinition].BoundaryStart=(uint)(shipCount+nonShipDynamic.Length);definitions[terrainDefinition].BoundaryCount=(uint)terrainPatches.Length;
+            }
+            catch(OverflowException){FaultTransaction("Candidate door shape revision overflowed.");return false;}
+            if(!solver.TryReplaceBoundaryCache(patches.ToArray(),definitions)){FaultTransaction("Candidate door boundary publication failed.");return false;}
+            dynamicPrefix=new Boundary[shipCount+nonShipDynamic.Length];Array.Copy(patches.ToArray(),dynamicPrefix,dynamicPrefix.Length);
+            doorOpen=open;return true;
+        }
+        static uint[] CandidateShipMask(uint[] closedMask,bool open)
+        {
+            var mask=(uint[])closedMask.Clone();if(!open)return mask;
+            for(int i=0;i<mask.Length;i++)if(mask[i]==uint.MaxValue)mask[i]=0;return mask;
+        }
+        bool AnyDoorObstruction(ProofSnapshot snapshot)
+        {
+            if(doorCells.Length==0)return false;var body=snapshot.Endpoints[solver.BodyStart];var com=solver.BodyDefinitions[0].LocalCOM;
+            foreach(var grain in snapshot.Grains)
+            {
+                var local=ToLocal(grain.Center,body)+com;float angle=grain.Angle-body.Angle;
+                foreach(var door in doorCells)if(Overlaps(local,angle,door))return true;
+            }
+            return false;
+        }
+        static Vector2 ToLocal(Vector2 point,BodyState body)
+        {var delta=point-body.Center;float c=Mathf.Cos(body.Angle),s=Mathf.Sin(body.Angle);return new Vector2(delta.x*c+delta.y*s,-delta.x*s+delta.y*c);}
+        static bool Overlaps(Vector2 center,float angle,RectInt box)
+        {
+            var boxCenter=(Vector2)box.position+(Vector2)box.size*.5f;var boxHalf=(Vector2)box.size*.5f;var x=new Vector2(Mathf.Cos(angle),Mathf.Sin(angle));var y=new Vector2(-x.y,x.x);var axes=new[]{Vector2.right,Vector2.up,x,y};
+            foreach(var axis in axes){float grain=.5f*(Mathf.Abs(Vector2.Dot(axis,x))+Mathf.Abs(Vector2.Dot(axis,y)));float rect=boxHalf.x*Mathf.Abs(axis.x)+boxHalf.y*Mathf.Abs(axis.y);if(Mathf.Abs(Vector2.Dot(center-boxCenter,axis))>grain+rect)return false;}return true;
         }
         public bool TryAcknowledge(out Completion completion)
         {

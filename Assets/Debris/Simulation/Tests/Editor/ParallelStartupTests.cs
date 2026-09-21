@@ -100,6 +100,39 @@ namespace Debris.Simulation.Tests
                 }
             }
         }
+        [UnityTest,Timeout(120000)] public IEnumerator EffectiveDoorOpensWithoutSnapshotAndClosesAfterFence()
+        {
+            var catalog=Resources.Load<MaterialCatalog>("Materials");var ship=new ShipRuntime(Resources.Load<ShipBlueprint>("StarterShip"));
+            using(var source=new MatterSession(catalog,Resources.Load<AsteroidProfile>("Asteroid"),4,128,8192))
+            {
+                source.ConfigureShip(ship.CollisionMask(),ship.Position);source.ConfigureShipBody(ship.MassProperties(catalog));var read=source.SnapshotAsync();while(!read.IsCompleted)yield return null;
+                using(var candidate=ParallelGameplaySession.Import(read.Result,ship,catalog))
+                {
+                    uint initial=candidate.Solver.BodyDefinitions[0].ShapeRevision;
+                    Assert.That(candidate.Submit(1,new MatterStepInput(null,0,default,true,false,false,Vector3.zero)),Is.True);Assert.That(candidate.DoorOpen,Is.True);Assert.That(candidate.Solver.SnapshotRequests,Is.Zero);Assert.That(candidate.Solver.BodyDefinitions[0].ShapeRevision,Is.EqualTo(initial+1));
+                    ParallelGameplaySession.Completion completion;while(!candidate.TryAcknowledge(out completion))yield return null;
+                    Assert.That(candidate.Submit(2,new MatterStepInput(null,0,default,false,false,false,Vector3.zero)),Is.False);
+                    while(!candidate.Submit(2,new MatterStepInput(null,0,default,false,false,false,Vector3.zero)))yield return null;
+                    Assert.That(candidate.DoorOpen,Is.False);Assert.That(candidate.DoorObstructed,Is.False);Assert.That(candidate.Solver.SnapshotRequests,Is.EqualTo(1));Assert.That(candidate.Solver.BodyDefinitions[0].ShapeRevision,Is.EqualTo(initial+2));
+                }
+            }
+        }
+        [UnityTest,Timeout(120000)] public IEnumerator ObstructedEffectiveDoorStaysOpen()
+        {
+            var catalog=Resources.Load<MaterialCatalog>("Materials");var ship=new ShipRuntime(Resources.Load<ShipBlueprint>("StarterShip")){DoorOpen=true};
+            using(var source=new MatterSession(catalog,Resources.Load<AsteroidProfile>("Asteroid"),4,128,8192))
+            {
+                source.ConfigureShip(ship.CollisionMask(),ship.Position);source.ConfigureShipBody(ship.MassProperties(catalog));var read=source.SnapshotAsync();while(!read.IsCompleted)yield return null;
+                using(var candidate=ParallelGameplaySession.Import(read.Result,ship,catalog))
+                {
+                    var grain=new Debris.Simulation.ParallelProof.LooseCell{Center=ship.ToWorld(new Vector2(-27.5f,.5f)),Material=1,Identity=99991};
+                    Assert.That(candidate.Solver.TryAppend(grain,catalog.DefinitionAt(1).Density),Is.True);
+                    uint initial=candidate.Solver.BodyDefinitions[0].ShapeRevision;var close=new MatterStepInput(null,0,default,false,false,false,Vector3.zero);
+                    Assert.That(candidate.Submit(1,close),Is.False);while(!candidate.Submit(1,close))yield return null;
+                    Assert.That(candidate.DoorOpen,Is.True);Assert.That(candidate.DoorObstructed,Is.True);Assert.That(candidate.Solver.SnapshotRequests,Is.EqualTo(1));Assert.That(candidate.Solver.BodyDefinitions[0].ShapeRevision,Is.EqualTo(initial));Assert.That(candidate.Faulted,Is.False,candidate.Fault);
+                }
+            }
+        }
         sealed class Vector2Comparer : System.Collections.Generic.IEqualityComparer<Vector2>
         {
             readonly float tolerance;public Vector2Comparer(float value){tolerance=value;}public bool Equals(Vector2 a,Vector2 b)=>Vector2.Distance(a,b)<=tolerance;public int GetHashCode(Vector2 value)=>0;
