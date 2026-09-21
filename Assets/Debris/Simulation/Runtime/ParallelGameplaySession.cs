@@ -70,9 +70,10 @@ namespace Debris.Simulation
             public readonly Vector2 ShipCenter,ShipVelocity;
             public readonly float ShipAngle,ShipSpin,CargoMass;
             public readonly int CargoCount;
+            public readonly uint CargoRejected;
             public readonly double FuelBurn;
-            public Completion(uint tick,SolverFault fault,BodyState ship,int count,float mass,double fuelBurn=0)
-            {Tick=tick;Fault=fault;ShipCenter=ship.Center;ShipVelocity=ship.Velocity;ShipAngle=ship.Angle;ShipSpin=ship.AngularVelocity;CargoCount=count;CargoMass=mass;FuelBurn=fuelBurn;}
+            public Completion(uint tick,SolverFault fault,BodyState ship,int count,float mass,double fuelBurn=0,uint cargoRejected=0)
+            {Tick=tick;Fault=fault;ShipCenter=ship.Center;ShipVelocity=ship.Velocity;ShipAngle=ship.Angle;ShipSpin=ship.AngularVelocity;CargoCount=count;CargoMass=mass;FuelBurn=fuelBurn;CargoRejected=cargoRejected;}
         }
 
         ParallelGameplaySession(ParallelGrainSolver value, MatterSnapshot imported, MaterialCatalog materials, bool[] cargoFlags, CandidateTerrainState terrainState, Boundary[] patches, BodyState shipState, uint[] closedMask, RectInt[] doors, bool initialDoorOpen)
@@ -246,7 +247,7 @@ namespace Debris.Simulation
             if(result.CargoFacts==null||result.CargoFacts.Length!=257){faulted=true;Fault="Candidate cargo fact readback was invalid.";ClearPending();return true;}
             for(int material=1;material<=catalog.Count&&material<=255;material++){uint admitted=result.CargoFacts[material+1];if(admitted==0)continue;var definition=catalog.DefinitionAt((ushort)material);count+=checked((int)admitted);cargoMass+=admitted*definition.Density;}
             acknowledgedShip=result.State;
-            completion=new Completion(next.Tick,SolverFault.None,result.State,count,cargoMass,next.Fuel);return true;
+            completion=new Completion(next.Tick,SolverFault.None,result.State,count,cargoMass,next.Fuel,result.CargoRejected);return true;
         }
         public void AttachTerrainMirror(MatterSession mirror)
         {

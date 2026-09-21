@@ -378,6 +378,7 @@ namespace Debris.Simulation.ParallelProof
         public BodyState State;
         public uint[] Diagnostics;
         public uint[] CargoFacts;
+        public uint CargoRejected => CargoFacts!=null&&CargoFacts.Length>1?CargoFacts[1]:0;
         public SolverFault Fault => (SolverFault)Diagnostics[0];
         public uint CompletedTick => Diagnostics[1];
     }

@@ -267,7 +267,7 @@ groupshared float4 reaction[64];
     bool inside=local.x-extent>=_CargoMin.x-.0001 && local.x+extent<=_CargoMax.x+.0001 && local.y-extent>=_CargoMin.y-.0001 && local.y+extent<=_CargoMax.y+.0001;
     if(!inside){g.flags&=~4u;_Grains[id]=g;return;}
     uint ordinal;InterlockedAdd(_CargoFacts[0],1,ordinal);
-    if(ordinal>=_CargoCapacity){g.flags&=~4u;_Grains[id]=g;return;}
+    if(ordinal>=_CargoCapacity){InterlockedAdd(_CargoFacts[1],1);g.flags&=~4u;_Grains[id]=g;return;}
     InterlockedAdd(_CargoFacts[1+min(g.material,255u)],1);g.flags|=4u;_Grains[id]=g;
 }
 [numthreads(1,1,1)] void Acknowledge(uint id:SV_DispatchThreadID){if(_D[0]==0)_D[1]++;else _D[11]++;}
