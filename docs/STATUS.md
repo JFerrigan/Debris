@@ -1,16 +1,16 @@
 # Implementation status
 
-Current handoff: **limited B.3R candidate drilling, effective door collision, and GPU cavity cargo classification are accepted under `-debrisParallelGameplay`; legacy remains the default.** Candidate terrain owns cloned fields/damage, selects exposed cells deterministically, maintains local boundary-run caches, publishes terrain/cache/grain changes as one GPU submission, and fences topology against compact flight completion. The cargo door changes its ship collision boundaries only after that fence; opening has no snapshot, while closing takes one command-time grain snapshot and stays open if an oriented grain obstructs a door cell. Cavity classification sets grain cargo flags only for whole oriented squares and returns compact per-material facts for count/mass. Candidate startup has 96 deterministic grains. The original .001-cell target remains a TODO against the interim .002 gate.
+Current handoff: **limited B.3R candidate drilling, effective door collision, GPU cavity cargo classification, and mounted suction are accepted under `-debrisParallelGameplay`; legacy remains the default.** Candidate terrain owns cloned fields/damage, selects exposed cells deterministically, maintains local boundary-run caches, publishes terrain/cache/grain changes as one GPU submission, and fences topology against compact flight completion. The cargo door changes its ship collision boundaries only after that fence; opening has no snapshot, while closing takes one command-time grain snapshot and stays open if an oriented grain obstructs a door cell. Cavity classification sets grain cargo flags only for whole oriented squares and returns compact per-material facts for count/mass. Suction evaluates the current GPU ship pose and attracts only exterior grains in the suction mouth strip, never through intact hull cells. Candidate startup has 96 deterministic grains. The original .001-cell target remains a TODO against the interim .002 gate.
 
 ## Latest validation
 
-The startup fixture covers door fence/open/clear close/obstructed closure and GPU cargo classification for an interior and boundary-straddling grain without normal full snapshots. The fast EditMode suite passed 135 with one explicit scale test skipped (136 total, 2026-09-21 UTC). Drilling retains its accepted focused terrain/transaction/rigid evidence, Mac build and player telemetry. Windows/Linux and candidate door/cargo player acceptance are unverified.
+The startup fixture covers door fence/open/clear close/obstructed closure, GPU cargo classification, and exterior-vs-intact-hull suction. The fast EditMode suite passed 136 with one explicit scale test skipped (137 total, 2026-09-21 UTC); the Mac build succeeded. An opt-in player process launched, but did not emit Unity telemetry to the redirected stream, so player suction input remains unverified. Windows/Linux are unverified.
 
 ## Remaining limitation and next work
 
-Next deliverable: bounded candidate suction work. Keep the candidate path opt-in; do not advance to damage/fuel transfer, persistence/travel restoration or default cutover until their separate acceptance batches.
+Next deliverable: candidate capacity admission, damage and fuel transfer work. Keep the candidate path opt-in; do not advance to persistence/travel restoration or default cutover until their separate acceptance batches.
 
-Candidate acceptance is limited to terrain damage/release and its physical grain/cache/render publication, effective door collision, and cavity classification. Suction, damage, fuel transfer, persistence, travel and streaming remain unavailable. Packed-cargo performance, R1 convergence and B.GATE remain open.
+Candidate acceptance is limited to terrain damage/release and its physical grain/cache/render publication, effective door collision, cavity classification, and mounted suction. Damage, fuel transfer, persistence, travel and streaming remain unavailable. Packed-cargo performance, R1 convergence and B.GATE remain open.
 
 ## Preserved unfinished work
 
