@@ -2,6 +2,7 @@ using Debris.Materials;
 using Debris.Simulation.ParallelProof;
 using NUnit.Framework;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 
 namespace Debris.Simulation.Tests
@@ -66,6 +67,15 @@ namespace Debris.Simulation.Tests
             var current=new[]{new BodyParameters{Mobility=0,ShapeRevision=terrain.Revision}};var cache=new CandidateBoundaryBuilder.TerrainBoundaryCache(terrain);
             Assert.That(CandidateBoundaryBuilder.TryPrepareTerrainReplacement(terrain,edit,cache,current,System.Array.Empty<Boundary>(),4096,out var replacement,out _),Is.True);
             Assert.That(replacement.Definitions[0].ShapeRevision,Is.EqualTo(terrain.Revision+1));
+        }
+        [Test]
+        public void DuplicateImportedIdentityAndExhaustedSequencesRejectBeforePublication()
+        {
+            var duplicate=Snapshot();duplicate.Cells=new[]{new LooseCell{Identity=3},new LooseCell{Identity=3}};Assert.Throws<System.InvalidOperationException>(()=>new CandidateTerrainState(duplicate,0));
+            var catalog=Resources.Load<MaterialCatalog>("Materials");var exhausted=Snapshot();exhausted.NextIdentity=uint.MaxValue;var terrain=new CandidateTerrainState(exhausted,0);
+            Assert.That(terrain.TryPrepareCell(new Vector2Int(-7,13),1000000,1,catalog,out _),Is.EqualTo(CandidateEditStatus.IdentityExhausted));
+            exhausted.NextIdentity=4;terrain=new CandidateTerrainState(exhausted,0);typeof(CandidateTerrainState).GetField("revision",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(terrain,uint.MaxValue);
+            Assert.That(terrain.TryPrepareCell(new Vector2Int(-7,13),1000000,1,catalog,out _),Is.EqualTo(CandidateEditStatus.RevisionExhausted));
         }
         static MatterSnapshot Snapshot()
         {

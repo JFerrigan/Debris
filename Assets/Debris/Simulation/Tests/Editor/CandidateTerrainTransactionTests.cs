@@ -41,9 +41,24 @@ namespace Debris.Simulation.Tests
                 }
             }
         }
+        [UnityTest,Timeout(120000)] public IEnumerator PlacementRejectionKeepsTerrainAndTopologyUnchanged()
+        {
+            var catalog=Resources.Load<MaterialCatalog>("Materials");var ship=new ShipRuntime(Resources.Load<ShipBlueprint>("StarterShip"));
+            using(var mirror=new MatterSession(catalog,Resources.Load<AsteroidProfile>("Asteroid"),4,128,8192))
+            {
+                mirror.ConfigureShip(ship.CollisionMask(),ship.Position);mirror.ConfigureShipBody(ship.MassProperties(catalog));var snapshot=mirror.SnapshotAsync();while(!snapshot.IsCompleted)yield return null;SetDrillTarget(snapshot.Result);mirror.Restore(snapshot.Result);snapshot=mirror.SnapshotAsync();while(!snapshot.IsCompleted)yield return null;
+                var candidateSnapshot=snapshot.Result;var target=DrillTarget(candidateSnapshot);candidateSnapshot.Cells=new[]{new LooseCell{Position=target,Material=1,Identity=99,Flags=1}};candidateSnapshot.Counters=new uint[]{1,2,0,0};candidateSnapshot.NextIdentity=100;
+                using(var candidate=ParallelGameplaySession.Import(candidateSnapshot,ship,catalog))
+                {
+                    candidate.AttachTerrainMirror(mirror);Assert.That(candidate.RequestMountedDrill(1000000,6),Is.True);CandidateEditResult result=default;while(!candidate.TryAdvanceTerrainEdit(out result))yield return null;
+                    Assert.That(result.Status,Is.EqualTo(CandidateEditStatus.PlacementBlocked));Assert.That(candidate.Terrain.MaterialAt(target),Is.EqualTo(1));Assert.That(candidate.TerrainRevision,Is.EqualTo(1));Assert.That(candidate.Solver.GrainCount,Is.EqualTo(1));Assert.That(candidate.Faulted,Is.False);
+                }
+            }
+        }
         static void SetDrillTarget(MatterSnapshot state)
         {
-            foreach(var field in state.Fields)System.Array.Clear(field,0,field.Length);foreach(var damage in state.Damage)System.Array.Clear(damage,0,damage.Length);System.Array.Clear(state.Dirty,0,state.Dirty.Length);state.Counters=new uint[]{0,1,0,0};int x=Mathf.FloorToInt(state.ShipPose[0].x+63)-state.OriginX,y=Mathf.FloorToInt(state.ShipPose[0].y)-state.OriginY,slice=(y/state.ChunkSize)*state.Side+x/state.ChunkSize,index=(y%state.ChunkSize)*state.ChunkSize+x%state.ChunkSize;state.Fields[slice][index]=1;
+            foreach(var field in state.Fields)System.Array.Clear(field,0,field.Length);foreach(var damage in state.Damage)System.Array.Clear(damage,0,damage.Length);System.Array.Clear(state.Dirty,0,state.Dirty.Length);state.Counters=new uint[]{0,1,0,0};var target=DrillTarget(state);int x=target.x-state.OriginX,y=target.y-state.OriginY,slice=(y/state.ChunkSize)*state.Side+x/state.ChunkSize,index=(y%state.ChunkSize)*state.ChunkSize+x%state.ChunkSize;state.Fields[slice][index]=1;
         }
+        static Vector2Int DrillTarget(MatterSnapshot state)=>new Vector2Int(Mathf.FloorToInt(state.ShipPose[0].x+63),Mathf.FloorToInt(state.ShipPose[0].y));
     }
 }
