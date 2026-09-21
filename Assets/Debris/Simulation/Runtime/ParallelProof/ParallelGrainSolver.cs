@@ -78,7 +78,7 @@ namespace Debris.Simulation.ParallelProof
             Array.Copy(initialBodies,0,initial,capacity,bodies);Array.Copy(bodyParameters,0,physical,capacity,bodies);Array.Copy(initialGrains,initialGrainBuffer,active);bodyDefinitions=(BodyParameters[])bodyParameters.Clone();
             foreach(var patch in patches)if(patch.Body<capacity||patch.Body>=endpoints)throw new ArgumentException("Boundary body is an endpoint index");
             committed.SetData(initial);state.SetData(initial);grains.SetData(initialGrainBuffer);parameters.SetData(physical);if(patches.Length>0)boundaries.SetData(patches);diagnostics.SetData(new uint[16]);
-            shader.SetInt("_RigidCapacity",rigidContactCapacity);shader.SetFloat("_RigidGatherMargin",.75f);shader.SetFloat("_RigidSolidTarget",.0001f);
+            shader.SetInt("_RigidCapacity",rigidContactCapacity);shader.SetFloat("_RigidGatherMargin",.25f);shader.SetFloat("_RigidSolidTarget",.0001f);
             BoundaryCount=patches.Length;
             shader.SetInt("_N",active);shader.SetInt("_BodyStart",capacity);shader.SetInt("_Bodies",bodies);shader.SetInt("_Endpoints",endpoints);shader.SetInt("_BoundaryCount",BoundaryCount);
             shader.SetInt("_BinSide",256);shader.SetInt("_BinCount",65536);shader.SetInt("_Slots",slots);shader.SetFloat("_Dt",1f/60);shader.SetFloat("_Friction",friction);
