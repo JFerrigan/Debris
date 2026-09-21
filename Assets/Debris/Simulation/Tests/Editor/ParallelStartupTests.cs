@@ -110,6 +110,7 @@ namespace Debris.Simulation.Tests
                 {
                     uint initial=candidate.Solver.BodyDefinitions[0].ShapeRevision;
                     Assert.That(candidate.Submit(1,new MatterStepInput(null,0,default,true,false,false,Vector3.zero)),Is.True);Assert.That(candidate.DoorOpen,Is.True);Assert.That(candidate.Solver.SnapshotRequests,Is.Zero);Assert.That(candidate.Solver.BodyDefinitions[0].ShapeRevision,Is.EqualTo(initial+1));
+                    Assert.That(candidate.Submit(2,new MatterStepInput(null,0,default,false,false,false,Vector3.zero)),Is.False,"door transition must wait for the submitted tick");
                     ParallelGameplaySession.Completion completion;while(!candidate.TryAcknowledge(out completion))yield return null;
                     Assert.That(candidate.Submit(2,new MatterStepInput(null,0,default,false,false,false,Vector3.zero)),Is.False);
                     while(!candidate.Submit(2,new MatterStepInput(null,0,default,false,false,false,Vector3.zero)))yield return null;

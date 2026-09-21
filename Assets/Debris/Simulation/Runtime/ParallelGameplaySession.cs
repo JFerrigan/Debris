@@ -30,7 +30,7 @@ namespace Debris.Simulation
         int pendingHead,pendingCount;
         uint lastSubmittedTick;
         bool faulted,disposed;
-        bool doorOpen,doorRequestKnown,requestedDoorOpen,doorObstructed;
+        bool doorOpen,doorRequestKnown,requestedDoorOpen,doorObstructed,doorTransitionPending;
         Task<ProofSnapshot> doorSnapshot;
         bool drillRequested,drillValidating;
         float drillPower=120,drillRadius=6;
@@ -168,21 +168,20 @@ namespace Debris.Simulation
         {
             if(!doorRequestKnown||requestedDoorOpen!=requestedOpen)
             {
-                doorRequestKnown=true;requestedDoorOpen=requestedOpen;doorObstructed=false;
-                if(requestedOpen==doorOpen)return true;
-                if(pendingCount>0)return false;
-                if(requestedOpen)return ReplaceShipDoorTopology(true);
-                try{doorSnapshot=solver.SnapshotAsync();return false;}
-                catch(Exception e){FaultTransaction("Candidate door inspection submission failed: "+e.Message);return false;}
+                doorRequestKnown=true;requestedDoorOpen=requestedOpen;doorObstructed=false;doorTransitionPending=requestedOpen!=doorOpen;
             }
+            if(doorTransitionPending&&pendingCount>0)return false;
+            if(doorTransitionPending&&requestedDoorOpen){doorTransitionPending=!ReplaceShipDoorTopology(true);return !doorTransitionPending;}
+            if(doorTransitionPending&&doorSnapshot==null)try{doorSnapshot=solver.SnapshotAsync();return false;}
+            catch(Exception e){FaultTransaction("Candidate door inspection submission failed: "+e.Message);return false;}
             if(doorSnapshot==null)return true;
             if(!doorSnapshot.IsCompleted)return false;
             try
             {
                 var snapshot=doorSnapshot.Result;doorSnapshot=null;
                 if(snapshot.Fault!=SolverFault.None){FaultTransaction("Candidate door inspection solver fault: "+snapshot.Fault);return false;}
-                if(AnyDoorObstruction(snapshot)){doorObstructed=true;return true;}
-                return ReplaceShipDoorTopology(false);
+                if(AnyDoorObstruction(snapshot)){doorObstructed=true;doorTransitionPending=false;return true;}
+                doorTransitionPending=!ReplaceShipDoorTopology(false);return !doorTransitionPending;
             }
             catch(Exception e){doorSnapshot=null;FaultTransaction("Candidate door inspection readback failed: "+e.Message);return false;}
         }
