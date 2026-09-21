@@ -8,7 +8,7 @@ The startup fixture covers door fence/open/clear close/obstructed closure, GPU c
 
 ## Remaining limitation and next work
 
-Next deliverable: candidate damage and fuel transfer work. Keep the candidate path opt-in; do not advance to persistence/travel restoration or default cutover until their separate acceptance batches.
+Next deliverable: the fenced [candidate damage/fuel reconfiguration transaction](CANDIDATE_DAMAGE_FUEL_PLAN.md). Keep the candidate path opt-in; do not advance to persistence/travel restoration or default cutover until their separate acceptance batches.
 
 Candidate acceptance is limited to terrain damage/release and its physical grain/cache/render publication, effective door collision, cavity classification, and mounted suction. Damage, fuel transfer, persistence, travel and streaming remain unavailable. Packed-cargo performance, R1 convergence and B.GATE remain open.
 
