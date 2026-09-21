@@ -11,16 +11,18 @@ namespace Debris.Simulation
         // release can only change its own row/column and their neighbours.
         internal sealed class TerrainBoundaryCache
         {
-            readonly int width,endpoint,originX,originY;
+            readonly int width,endpoint,originX,originY,cellOriginX,cellOriginY;
             readonly uint[] mask;
             readonly List<Boundary>[] horizontal,vertical;
             internal TerrainBoundaryCache(CandidateTerrainState terrain)
             {
-                if(terrain==null)throw new ArgumentNullException(nameof(terrain));width=terrain.Width;endpoint=terrain.TerrainEndpoint;originX=terrain.Origin.x;originY=terrain.Origin.y;mask=terrain.BuildMask();
+                // The anchored body pose supplies the terrain world origin.
+                // Cache patches remain terrain-local, as they did at import.
+                if(terrain==null)throw new ArgumentNullException(nameof(terrain));width=terrain.Width;endpoint=terrain.TerrainEndpoint;originX=0;originY=0;cellOriginX=terrain.Origin.x;cellOriginY=terrain.Origin.y;mask=terrain.BuildMask();
                 horizontal=new List<Boundary>[width*2];vertical=new List<Boundary>[width*2];for(int y=0;y<width;y++){RebuildHorizontal(y,0);RebuildHorizontal(y,1);}for(int x=0;x<width;x++){RebuildVertical(x,0);RebuildVertical(x,1);}
             }
             TerrainBoundaryCache(TerrainBoundaryCache source)
-            {width=source.width;endpoint=source.endpoint;originX=source.originX;originY=source.originY;mask=(uint[])source.mask.Clone();horizontal=(List<Boundary>[])source.horizontal.Clone();vertical=(List<Boundary>[])source.vertical.Clone();}
+            {width=source.width;endpoint=source.endpoint;originX=source.originX;originY=source.originY;cellOriginX=source.cellOriginX;cellOriginY=source.cellOriginY;mask=(uint[])source.mask.Clone();horizontal=(List<Boundary>[])source.horizontal.Clone();vertical=(List<Boundary>[])source.vertical.Clone();}
             bool Solid(int x,int y)=>x>=0&&y>=0&&x<width&&y<width&&mask[y*width+x]!=0;
             void RebuildHorizontal(int y,int edge)
             {
@@ -32,7 +34,7 @@ namespace Debris.Simulation
             }
             internal TerrainBoundaryCache ApplyRelease(CandidateTerrainState terrain,CandidateTerrainEdit edit)
             {
-                if(terrain==null||edit==null||!edit.Release||!terrain.IsCurrent(edit))throw new InvalidOperationException("Candidate terrain cache received a stale release.");var copy=new TerrainBoundaryCache(this);int x=edit.Cell.x-originX,y=edit.Cell.y-originY;if(x<0||y<0||x>=width||y>=width||copy.mask[y*width+x]==0)throw new InvalidOperationException("Candidate terrain cache address is invalid.");copy.mask[y*width+x]=0;
+                if(terrain==null||edit==null||!edit.Release||!terrain.IsCurrent(edit))throw new InvalidOperationException("Candidate terrain cache received a stale release.");var copy=new TerrainBoundaryCache(this);int x=edit.Cell.x-cellOriginX,y=edit.Cell.y-cellOriginY;if(x<0||y<0||x>=width||y>=width||copy.mask[y*width+x]==0)throw new InvalidOperationException("Candidate terrain cache address is invalid.");copy.mask[y*width+x]=0;
                 for(int row=y-1;row<=y+1;row++){copy.RebuildHorizontal(row,0);copy.RebuildHorizontal(row,1);}for(int column=x-1;column<=x+1;column++){copy.RebuildVertical(column,0);copy.RebuildVertical(column,1);}return copy;
             }
             internal Boundary[] Flatten()

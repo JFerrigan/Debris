@@ -50,7 +50,7 @@ namespace Debris.Simulation.Tests
             var source=Snapshot();source.Fields[0][1]=source.Fields[0][2]=source.Fields[0][5]=source.Fields[0][9]=1;source.Fields[1][0]=source.Fields[1][4]=1;
             var terrain=new CandidateTerrainState(source,9);var catalog=Resources.Load<MaterialCatalog>("Materials");var cell=new Vector2Int(-6,13);
             Assert.That(terrain.TryPrepareCell(cell,1000000,1,catalog,out var edit),Is.EqualTo(CandidateEditStatus.Released));
-            var incremental=new CandidateBoundaryBuilder.TerrainBoundaryCache(terrain).ApplyRelease(terrain,edit).Flatten();var expected=new List<Boundary>();CandidateBoundaryBuilder.AppendMaskBoundaries(expected,terrain.BuildMask(edit),9,terrain.Origin.x,terrain.Origin.y,true);
+            var incremental=new CandidateBoundaryBuilder.TerrainBoundaryCache(terrain).ApplyRelease(terrain,edit).Flatten();var expected=new List<Boundary>();CandidateBoundaryBuilder.AppendMaskBoundaries(expected,terrain.BuildMask(edit),9,0,0,true);
             Assert.That(incremental.Length,Is.EqualTo(expected.Count));for(int i=0;i<expected.Count;i++){Assert.That(incremental[i].Body,Is.EqualTo(expected[i].Body));Assert.That(incremental[i].Center,Is.EqualTo(expected[i].Center));Assert.That(incremental[i].HalfSize,Is.EqualTo(expected[i].HalfSize));}
         }
         [Test]
