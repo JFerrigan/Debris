@@ -13,7 +13,7 @@ namespace Debris.Simulation.ParallelProof
         readonly ProofTrace trace;
         readonly CommandBuffer commands = new CommandBuffer { name="B3R parallel grain proof" };
         readonly List<GraphicsBuffer> buffers = new List<GraphicsBuffer>();
-        readonly HashSet<uint> identities = new HashSet<uint>();
+        readonly HashSet<uint> identities;
         readonly Dictionary<string,int> kernels = new Dictionary<string,int>();
         BodyParameters[] bodyDefinitions;
         readonly GraphicsBuffer rigidContacts,rigidCount,rigidPairs;
@@ -44,6 +44,7 @@ namespace Debris.Simulation.ParallelProof
             int velocityIterations=8,int positionIterations=4,float friction=.3f,int candidateSlots=64,int rigidContactCapacity=4096,ProofTraceConfiguration traceConfiguration=null,float[] grainMasses=null,int allocatedGrainCapacity=0,int allocatedBoundaryCapacity=0)
         {
             capacity=allocatedGrainCapacity==0?initialGrains.Length:allocatedGrainCapacity;
+            identities=new HashSet<uint>(capacity);
             if(capacity<initialGrains.Length||capacity>8192)throw new ArgumentOutOfRangeException(nameof(allocatedGrainCapacity));
             ValidateInput(initialGrains,initialBodies,bodyParameters,patches,velocityIterations,positionIterations,friction,candidateSlots,capacity);
             if(grainMasses!=null&&(grainMasses.Length!=initialGrains.Length||Array.Exists(grainMasses,m=>!Finite(m)||m<=0)))throw new ArgumentException("Grain masses must be finite, positive, and match the grain population.");
