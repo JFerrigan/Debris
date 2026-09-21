@@ -1,6 +1,6 @@
 # Contact physics — B.3R parallel redesign
 
-Status: opt-in packed proof is accepted for interim integration with a temporary .002-cell solid-penetration gate. The original .001-cell target is a documented TODO requiring intentional review; it is not silently forgotten or considered fixed. See [canonical results](evidence/B3R-parallel-pieces.md). Earlier checkpoints below are historical scoped evidence. B.GATE remains open for the broader gameplay and performance checks. Baseline is `f3aa5c9`; the unfinished gatherer is preserved in [baseline evidence](evidence/B3R-redesign-baseline/unfinished-contacts.patch).
+Status: opt-in packed proof is accepted for interim integration with a temporary .002-cell solid-penetration gate. Limited opt-in terrain drilling is also accepted: one cell releases one grain while terrain/cache/render publication is ordered and player telemetry remains fault-free. The original .001-cell target is a documented TODO requiring intentional review; it is not silently forgotten or considered fixed. See [canonical results](evidence/B3R-parallel-pieces.md) and [candidate drilling evidence](evidence/B3R-candidate-drilling.md). Earlier checkpoints below are historical scoped evidence. B.GATE remains open for the broader gameplay and performance checks. Baseline is `f3aa5c9`; the unfinished gatherer is preserved in [baseline evidence](evidence/B3R-redesign-baseline/unfinished-contacts.patch).
 
 ## Locked architecture
 

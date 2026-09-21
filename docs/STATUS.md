@@ -1,16 +1,16 @@
 # Implementation status
 
-Current handoff: **B.3R candidate drilling has a partial opt-in implementation and focused CPU coverage; interactive acceptance remains unverified.** Candidate terrain owns cloned fields/damage, selects exposed cells deterministically, stages damage/release edits, reserves 4,096 collision-cache entries, and fences candidate submissions while a compact GPU grain-placement query and terrain publication run. Candidate startup still has 96 deterministic grains. Legacy remains the default; the original .001-cell target remains a TODO against the interim .002 gate.
+Current handoff: **limited B.3R candidate drilling is accepted under `-debrisParallelGameplay`; legacy remains the default.** Candidate terrain owns cloned fields/damage, selects exposed cells deterministically, maintains local boundary-run caches, publishes terrain/cache/grain changes as one GPU submission, and fences topology against compact flight completion. Candidate startup has 96 deterministic grains. The original .001-cell target remains a TODO against the interim .002 gate.
 
 ## Latest validation
 
-The current fast EditMode suite passed 121 with one explicit scale test skipped (122 total, 2026-09-19 06:00 UTC), including four candidate-terrain ownership/targeting/stale-edit tests. The current Mac build succeeded. The single bounded player launch supplied no candidate activation, drill, Metal or readback telemetry before termination, so it establishes no interactive acceptance. Windows/Linux are unverified.
+Focused terrain, transaction and rigid fixtures passed 8/8, 3/3 and 7/7. The fast EditMode suite passed 132 with one explicit scale test skipped (133 total, 2026-09-21 UTC). The Mac build succeeded. Final player telemetry recorded activation with 96 grains, flight/turn, two releases to 98 grains and terrain revision 3, no-target feedback and reset/reactivation with no Metal, solver or readback fault. [Evidence](evidence/B3R-candidate-drilling.md). Windows/Linux are unverified.
 
 ## Remaining limitation and next work
 
-Current deliverable: partial implementation of the [candidate drilling plan](CANDIDATE_DRILLING_PLAN.md). Continue with exact rotated grain/hull SAT, complete ordered GPU cache/grain publication, rejection/integration fixtures, and player telemetry before representing drilling as accepted.
+Next deliverable: bounded candidate cargo classification, suction and effective-door collision work. Keep the candidate path opt-in; do not advance to damage/fuel transfer, persistence/travel restoration or default cutover until their separate acceptance batches.
 
-Candidate drilling is not accepted: the placement query now uses oriented-square SAT for active grains and ship hull cells, but fragment SAT and transaction-level GPU fixtures remain absent. Suction, doors, damage, fuel transfer, persistence, travel and streaming remain unavailable. Measured player flight/collision trajectories, packed-cargo/performance, R1 convergence and B.GATE remain open.
+Candidate drilling acceptance is limited to terrain damage/release and its physical grain/cache/render publication. Suction, doors, damage, fuel transfer, persistence, travel and streaming remain unavailable. Packed-cargo performance, R1 convergence and B.GATE remain open.
 
 ## Preserved unfinished work
 

@@ -6,7 +6,7 @@ Latest user scope (2026-09-17): finish the interrupted diagnostic work and deliv
 
 Follow-up startup investigation (2026-09-18 UTC): the single permitted candidate player launch reproduced `Page`. Grain-only page validation and empty-population readback are corrected; 11 focused tests and 110 fast-suite tests passed (one explicit skip), and the Mac rebuild succeeded. No second player launch; post-fix player acceptance remains unverified under the user's limit. See [startup evidence](evidence/B3R-page-startup.md). This does not close R2a or authorize feature expansion.
 
-Current B.3R.R2 checkpoint (2026-09-19 UTC): the [candidate drilling plan](CANDIDATE_DRILLING_PLAN.md) is partially implemented under `-debrisParallelGameplay`: terrain ownership, projected boundary cache, compact grain placement query, terrain publication and session fencing exist. This is not an acceptance checkpoint: hull SAT, atomic cache/grain publication evidence, named GPU fixtures and interactive player telemetry remain required.
+Current B.3R.R2 checkpoint (2026-09-21 UTC): limited [candidate drilling](CANDIDATE_DRILLING_PLAN.md) is accepted under `-debrisParallelGameplay`: terrain ownership, local boundary-run cache, compact oriented-square placement checks, one ordered terrain/cache/grain publication, topology fencing and player telemetry passed. Legacy remains the default. Suction/cavity classification, effective doors, capacity classification, damage/fuel transfers, persistence and travel remain separate R2-R3 work.
 
 ## Locked design interpretations
 
@@ -46,7 +46,7 @@ Current B.3R.R2 checkpoint (2026-09-19 UTC): the [candidate drilling plan](CANDI
 - [x] B.3R.3 Dense piles, cargo mass counted once, fragment torque, anchored bodies and dynamic chips.
 - [x] B.3R.R0 Preserve unfinished contacts and freeze parallel redesign contract.
 - [ ] B.3R.R1 Parallel square-grain proof. Interim integration proceeds with a .002-cell solid-penetration gate. **TODO:** intentionally revisit the original .001-cell target; packed convergence is a known limitation, not a completed fix. Full R1 correctness/performance coverage remains incomplete. [Evidence](evidence/B3R-parallel-pieces.md).
-- [ ] B.3R.R2 Candidate mining/cargo/door/fuel/damage and exceptional limits. R2a bridge is opt-in under `-debrisParallelGameplay`; startup import, mass-aware grain endpoints, committed-state mirroring and acknowledged flight fuel are implemented. Cutter, suction/cavity classification, effective doors, capacity admission and candidate presentation still require acceptance evidence.
+- [ ] B.3R.R2 Candidate mining/cargo/door/fuel/damage and exceptional limits. Limited opt-in cutter acceptance passed: one terrain cell releases one mass-matched grain with atomic terrain/cache/render publication and reset. Suction/cavity classification, effective doors, capacity admission, damage and fuel transfer remain.
 - [ ] B.3R.R3 Schema-5/schema-3 migration, travel, restoration and default cutover.
 - [ ] B.3R.R4 Delete old architecture and verify final B.GATE. See [CONTACT_PHYSICS](CONTACT_PHYSICS.md).
 
