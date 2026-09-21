@@ -64,7 +64,7 @@ namespace Debris.Presentation
                 parallel=candidate;
                 candidateDoorRequest=sourceShip.DoorOpen;
                 view.BindCandidate(candidate);
-                saveStatus="Parallel candidate active: 96 loose grains seeded. LMB drills; G controls the physical cargo door. Suction, persistence, travel, fuel transfer and damage are unavailable.";
+                saveStatus="Parallel candidate active: 96 loose grains seeded. LMB drills; RMB uses suction; G controls the physical cargo door. Persistence, travel, fuel transfer and damage are unavailable.";
                 Debug.Log("DEBRIS_PARALLEL_GAMEPLAY active");
             }
             catch(Exception e){saveStatus="Parallel candidate activation refused: "+e.Message;Debug.LogWarning(saveStatus);}
@@ -131,7 +131,7 @@ namespace Debris.Presentation
                         session.ConfigureShipBody(ship.MassProperties(catalog));
                         bool cut=!parallelGameplay&&input["Cut"].IsPressed()&&ship.Has(UnitKind.Drill);
                         if(cut)command=new SiteCommand(SiteCommandType.CutterStroke,Vector2.zero,Vector2.zero,6,120,1);
-                        bool suction=!parallelGameplay&&input["Suction"].IsPressed()&&ship.Has(UnitKind.Suction);
+                        bool suction=input["Suction"].IsPressed()&&ship.Has(UnitKind.Suction);
                         var step=new MatterStepInput(command,suction?40:0,default,parallelGameplay?candidateDoorRequest:ship.DoorOpen,cut,suction,force);
                         if(parallelGameplay)
                         {
@@ -457,7 +457,7 @@ namespace Debris.Presentation
             Panel(new Rect(28,28,4,72),new Color(.26f,.86f,.69f));
             GUI.Label(new Rect(48,22,650,48),"D E B R I S",title);
             GUI.Label(new Rect(50,76,700,26),parallelGameplay?"PARALLEL CANDIDATE   /   LOOSE-DEBRIS PLAYGROUND":"SALVAGE FLIGHT   /   EE INC. CONTRACTOR VESSEL",small);
-            GUI.Label(new Rect(50,101,850,22),parallelGameplay?"W/S thrust • A/D strafe • Q/E turn • LMB drill • G cargo door • scroll zoom • Space/Esc pause • R reset   /   suction, save and travel unavailable":"W/S thrust • A/D strafe • Q/E turn • LMB drill • RMB suction • G cargo door • scroll zoom • Space/Esc pause • R reset • T other site",small);
+            GUI.Label(new Rect(50,101,850,22),parallelGameplay?"W/S thrust • A/D strafe • Q/E turn • LMB drill • RMB suction • G cargo door • scroll zoom • Space/Esc pause • R reset   /   save and travel unavailable":"W/S thrust • A/D strafe • Q/E turn • LMB drill • RMB suction • G cargo door • scroll zoom • Space/Esc pause • R reset • T other site",small);
             float x=Screen.width-262;
             Panel(new Rect(x-18,152,262,Screen.height-180),new Color(.025f,.045f,.065f,.94f));
             GUI.Label(new Rect(x,174,230,30),"SITE  /  "+currentSiteId.Substring(28),label);

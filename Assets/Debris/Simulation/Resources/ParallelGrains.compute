@@ -63,8 +63,11 @@ RWStructuredBuffer<uint> _AdjCursors,_Adjacency;
 RWStructuredBuffer<float4> _Increments;
 uint _N,_BodyStart,_Bodies,_Endpoints,_BoundaryCount,_BinSide,_BinCount,_Slots,_ScanCount,_SumCount,_Substep,_Position;
 uint _CargoBody,_CargoCapacity,_CargoEnabled;
+uint _SuctionEnabled;
 float _Dt,_Friction;
 float2 _CargoMin,_CargoMax;
+float2 _SuctionMouth;
+float _SuctionHalfHeight,_SuctionRange,_SuctionForce;
 float4 _Force; // local ship force xy, torque z; proof fixture
 
 float cross2(float2 a,float2 b){return a.x*b.y-a.y*b.x;}
@@ -125,7 +128,9 @@ void geometry(uint a,uint b,uint feature,out float2 n,out float sep,out float2 r
     if(id>=_Endpoints||!active())return;State s=_State[id];float radius=.707107;
     if(id>=_BodyStart){Parameters p=_Parameters[id];radius=0;for(uint f=p.first;f<p.first+p.count;f++){Boundary b=_Boundaries[f];radius=max(radius,length(b.center-p.com)+length(b.halfSize));}}
     _Starts[id]=float4(s.center,s.angle,radius);
-    if(id==_BodyStart){Parameters p=_Parameters[id];s.velocity+=rotate(_Force.xy,s.angle)*p.im*dt();s.spin+=_Force.z*p.ii*dt();}_State[id]=s;
+    if(id==_BodyStart){Parameters p=_Parameters[id];s.velocity+=rotate(_Force.xy,s.angle)*p.im*dt();s.spin+=_Force.z*p.ii*dt();}
+    if(id<_N&&_SuctionEnabled!=0&&_SuctionForce>0){State ship=_State[_BodyStart];Parameters shipParameters=_Parameters[_BodyStart];float2 local=rotate(s.center-ship.center,-ship.angle)+shipParameters.com;float2 toMouth=_SuctionMouth-local;float distanceToMouth=length(toMouth);if(local.x<=_SuctionMouth.x-.5&&abs(local.y-_SuctionMouth.y)<=_SuctionHalfHeight&&distanceToMouth>.0001&&distanceToMouth<=_SuctionRange)s.velocity+=rotate(normalize(toMouth)*_SuctionForce*_Parameters[id].im,ship.angle)*dt();}
+    _State[id]=s;
 }
 [numthreads(256,1,1)] void ClearBins(uint id:SV_DispatchThreadID){if(id<_BinCount){_Counts[id]=0;_Cursors[id]=0;}}
 [numthreads(64,1,1)] void CountBins(uint id:SV_DispatchThreadID)

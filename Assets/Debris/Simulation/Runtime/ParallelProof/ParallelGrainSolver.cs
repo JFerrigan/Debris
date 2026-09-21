@@ -27,6 +27,9 @@ namespace Debris.Simulation.ParallelProof
         bool cargoConfigured;
         Vector2 cargoMin,cargoMax;
         uint cargoCapacity;
+        bool suctionConfigured;
+        Vector2 suctionMouth;
+        float suctionHalfHeight,suctionRange;
         public long BufferBytes { get; private set; }
         public GraphicsBuffer Grains => grains;
         public GraphicsBuffer Bodies => committed;
@@ -183,6 +186,7 @@ namespace Debris.Simulation.ParallelProof
             target.SetComputeIntParam(shader,"_Slots",slots);
             target.SetComputeFloatParam(shader,"_Dt",1f/60);
             target.SetComputeIntParam(shader,"_CargoEnabled",cargoConfigured?1:0);target.SetComputeIntParam(shader,"_CargoBody",capacity);target.SetComputeIntParam(shader,"_CargoCapacity",unchecked((int)cargoCapacity));target.SetComputeVectorParam(shader,"_CargoMin",cargoMin);target.SetComputeVectorParam(shader,"_CargoMax",cargoMax);
+            target.SetComputeIntParam(shader,"_SuctionEnabled",suctionConfigured?1:0);target.SetComputeVectorParam(shader,"_SuctionMouth",suctionMouth);target.SetComputeFloatParam(shader,"_SuctionHalfHeight",suctionHalfHeight);target.SetComputeFloatParam(shader,"_SuctionRange",suctionRange);
         }
         // Cargo is a classification fact. Its physical grains remain in the
         // ordinary world solver, while this fixed compact buffer publishes
@@ -192,11 +196,16 @@ namespace Debris.Simulation.ParallelProof
             if(disposed)throw new ObjectDisposedException(nameof(ParallelGrainSolver));if(cavity.width<1||cavity.height<1||admissionCapacity<0||admissionCapacity>capacity)throw new ArgumentOutOfRangeException();
             cargoMin=cavity.min;cargoMax=cavity.max;cargoCapacity=(uint)admissionCapacity;cargoConfigured=true;
         }
-        public void Step(Vector2 localForce=default,float torque=0)
+        public void ConfigureSuction(Vector2 localMouth,float halfHeight,float range)
+        {
+            if(disposed)throw new ObjectDisposedException(nameof(ParallelGrainSolver));if(!Finite(localMouth)||!Finite(halfHeight)||!Finite(range)||halfHeight<=0||range<=0)throw new ArgumentOutOfRangeException();
+            suctionMouth=localMouth;suctionHalfHeight=halfHeight;suctionRange=range;suctionConfigured=true;
+        }
+        public void Step(Vector2 localForce=default,float torque=0,float suctionForce=0,bool mountedSuction=false)
         {
             if(disposed)throw new ObjectDisposedException(nameof(ParallelGrainSolver));
-            if(!Finite(localForce)||!Finite(torque))throw new ArgumentException("Flight force and torque must be finite");
-            commands.Clear();RecordTopologyConstants(commands);trace?.BeginTick(commands);commands.BeginSample("B3R.ParallelPhysics");commands.SetComputeVectorParam(shader,"_Force",new Vector4(localForce.x,localForce.y,torque,0));
+            if(!Finite(localForce)||!Finite(torque)||!Finite(suctionForce)||suctionForce<0)throw new ArgumentException("Flight force and torque must be finite");
+            commands.Clear();RecordTopologyConstants(commands);trace?.BeginTick(commands);commands.BeginSample("B3R.ParallelPhysics");commands.SetComputeVectorParam(shader,"_Force",new Vector4(localForce.x,localForce.y,torque,0));commands.SetComputeFloatParam(shader,"_SuctionForce",mountedSuction?suctionForce:0);
             Direct("Begin",endpoints);Direct("Speed",endpoints);Direct("SelectSubsteps",1,1);
             for(int s=0;s<16;s++)
             {

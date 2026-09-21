@@ -150,6 +150,21 @@ namespace Debris.Simulation.Tests
                 }
             }
         }
+        [UnityTest,Timeout(120000)] public IEnumerator CandidateSuctionUsesCurrentShipPoseOutsideItsIntactMouth()
+        {
+            var catalog=Resources.Load<MaterialCatalog>("Materials");var ship=new ShipRuntime(Resources.Load<ShipBlueprint>("StarterShip"));
+            using(var source=new MatterSession(catalog,Resources.Load<AsteroidProfile>("Asteroid"),4,128,8192))
+            {
+                source.ConfigureShip(ship.CollisionMask(),ship.Position);source.ConfigureShipBody(ship.MassProperties(catalog));var read=source.SnapshotAsync();while(!read.IsCompleted)yield return null;
+                using(var candidate=ParallelGameplaySession.Import(read.Result,ship,catalog))
+                {
+                    Assert.That(candidate.Solver.TryAppend(new Debris.Simulation.ParallelProof.LooseCell{Center=ship.ToWorld(new Vector2(-48,21)),Material=1,Identity=821},catalog.DefinitionAt(1).Density),Is.True);
+                    Assert.That(candidate.Solver.TryAppend(new Debris.Simulation.ParallelProof.LooseCell{Center=ship.ToWorld(new Vector2(-20,21)),Material=1,Identity=822},catalog.DefinitionAt(1).Density),Is.True);
+                    Assert.That(candidate.Submit(1,new MatterStepInput(null,40,default,false,false,true,Vector3.zero)),Is.True);ParallelGameplaySession.Completion completion;while(!candidate.TryAcknowledge(out completion))yield return null;
+                    var snapshot=candidate.Solver.SnapshotAsync();while(!snapshot.IsCompleted)yield return null;Assert.That(snapshot.Result.Grains[0].Velocity.x,Is.GreaterThan(.5f));Assert.That(snapshot.Result.Grains[1].Velocity.magnitude,Is.LessThan(.001f),"suction must not pull through the intact hull");Assert.That(candidate.Faulted,Is.False,candidate.Fault);
+                }
+            }
+        }
         sealed class Vector2Comparer : System.Collections.Generic.IEqualityComparer<Vector2>
         {
             readonly float tolerance;public Vector2Comparer(float value){tolerance=value;}public bool Equals(Vector2 a,Vector2 b)=>Vector2.Distance(a,b)<=tolerance;public int GetHashCode(Vector2 value)=>0;

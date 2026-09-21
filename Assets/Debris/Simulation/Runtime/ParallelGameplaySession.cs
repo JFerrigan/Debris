@@ -126,6 +126,7 @@ namespace Debris.Simulation
             if(bodies.Count!=snapshot.Fragments.Length+2)throw new InvalidOperationException("Candidate endpoint accounting is invalid.");
             var solver=new ParallelGrainSolver(grains,bodies.ToArray(),parameters.ToArray(),patches.ToArray(),velocityIterations,positionIterations,grainMasses:grainMasses,allocatedGrainCapacity:snapshot.Capacity,allocatedBoundaryCapacity:4096);
             solver.ConfigureCargoCavity(ship.Blueprint.CargoCavity,Mathf.Min(StarterCargoCapacity,ship.Blueprint.CargoCavity.width*ship.Blueprint.CargoCavity.height));
+            foreach(var unit in ship.Units)if(unit.Supported&&!unit.Destroyed&&unit.Placement.Definition.Kind==UnitKind.Suction){var box=new RectInt(unit.Placement.Position,unit.Placement.Definition.Size);solver.ConfigureSuction(new Vector2(box.xMin,box.center.y),box.height*.5f,48);break;}
             return new ParallelGameplaySession(solver,snapshot,catalog,flags,terrainState,patches.ToArray(),bodies[0],closedMask,DoorCells(ship),ship.DoorOpen);
         }
         static uint[] CandidateShipMask(ShipRuntime ship,bool open)
@@ -162,7 +163,7 @@ namespace Debris.Simulation
         {
             if(disposed||faulted||drillRequested||drillValidating||(transaction?.Busy??false)||tick==0||tick<=lastSubmittedTick||pendingCount>=MaximumPendingTicks||provisionalFuel<0||double.IsNaN(provisionalFuel)||double.IsInfinity(provisionalFuel))return false;
             if(!TryApplyDoorRequest(input.DoorRequestedOpen))return false;
-            solver.Step(new Vector2(input.LocalForce.x,input.LocalForce.y),input.LocalForce.z);
+            solver.Step(new Vector2(input.LocalForce.x,input.LocalForce.y),input.LocalForce.z,input.SuctionForce,input.MountedSuction);
             pending[(pendingHead+pendingCount)%MaximumPendingTicks]=new Pending{Tick=tick,Fuel=provisionalFuel,Readback=solver.CompletionAsync(solver.BodyStart)};pendingCount++;lastSubmittedTick=tick;return true;
         }
         bool TryApplyDoorRequest(bool requestedOpen)
