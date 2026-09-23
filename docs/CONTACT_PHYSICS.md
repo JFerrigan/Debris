@@ -2,6 +2,8 @@
 
 Status: opt-in packed proof is accepted for interim integration with a temporary .002-cell solid-penetration gate. Limited opt-in terrain drilling is also accepted: one cell releases one grain while terrain/cache/render publication is ordered and player telemetry remains fault-free. The original .001-cell target is a documented TODO requiring intentional review; it is not silently forgotten or considered fixed. See [canonical results](evidence/B3R-parallel-pieces.md) and [candidate drilling evidence](evidence/B3R-candidate-drilling.md). Earlier checkpoints below are historical scoped evidence. B.GATE remains open for the broader gameplay and performance checks. Baseline is `f3aa5c9`; the unfinished gatherer is preserved in [baseline evidence](evidence/B3R-redesign-baseline/unfinished-contacts.patch).
 
+Current next assignment: [physics/performance viability checkpoint](PHYSICS_VIABILITY_PLAN.md), before further damage/fuel work. No new measurement is claimed by that plan. Code inspection at handoff finds grain/solid rejection at .002 and rigid/solid rejection still at .001; keep both visible in results and do not relax the stricter implementation merely to match the interim prose. Historical early-rejection maxima are not evidence of long-run stability at .002.
+
 ## Locked architecture
 
 GPU parallel, mass-split Jacobi square-grain contacts couple to a small GPU sequential rigid-body solver. `MatterSession` owns resources and one ordered graphics-queue command buffer. No CPU contacts, float atomic reactions, graph coloring, contact islands, general physics interface, automatic anchoring or serial grain movement retries.
@@ -50,7 +52,7 @@ After default cutover delete IntegratePhysical/64 retries, serial SolveShipCells
 
 0. Freeze this contract and preserve changes; documentation checks only.
 1. Opt-in runnable GPU proof using production-intended kernels; normal gameplay stays unchanged. Test two grains, 10000:1, 100/1000 dense piles, 2500 tightly packed grains in a 50×50 cavity (shared initial rigid motion and initially resting cargo under thrust/torque), free spinning cargo, off-centre fragment, anchored glancing wall, existing 201 layout, 8192 combined and 10000 exploratory. Sweep only 4/2, 8/4 and 12/6. The interim integration gate uses .002 solid penetration; the original .001 target is tracked as TODO(B.3R). Continue integration only with the remaining correctness, rollback, persistence, and performance checks visible; do not treat the relaxed gate as proof that the tighter target is solved.
-2. Complete masks/boundaries, mining/suction/cargo/door/rendering, fuel/damage/topology acknowledgement and exceptional limits on candidate path.
+2. Complete masks/boundaries, mining/suction/cargo/door/rendering, fuel/damage/topology acknowledgement and exceptional limits on candidate path. Limited integration has already proceeded; the current viability checkpoint interrupts further damage/fuel work and ends with an explicit continuation decision.
 3. Migrate persistence/travel, port fixtures, then switch default.
 4. Remove legacy paths; stable fast suite and one matching final Mac build/player batch; close gate only with every acceptance case verified.
 

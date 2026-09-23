@@ -1,0 +1,28 @@
+# Prompt for Terra in a new context
+
+Copy the text below into a new Terra implementation conversation in `/Users/jakeferrigan/Documents/Debris`.
+
+---
+
+Implement the B.3R physics and performance viability checkpoint in `docs/PHYSICS_VIABILITY_PLAN.md`. This is an implementation and measurement task, not another planning-only response.
+
+The priority has changed: establish whether the current parallel GPU solver can meet the physical and throughput contract before doing more candidate damage/fuel integration. Keep legacy gameplay the default and the candidate opt-in. Finish this bounded checkpoint and report its decision; do not automatically continue into damage/fuel, persistence, travel, default cutover or later features.
+
+Start with `git status --short`, `docs/STATUS.md`, and the current block of `docs/EXECUTION_PLAN.md`. Read `PROJECT_PLAN.md` once, then the full `docs/PHYSICS_VIABILITY_PLAN.md` and `docs/CONTACT_PHYSICS.md`. Read the short `docs/evidence/B3R-parallel-pieces.md` and `docs/evidence/B3R-packed-diagnosis.md` summaries. Inspect relevant source as directed by the plan; do not reload the entire design library or historical test XML.
+
+Your required outcome is a reproducible baseline, a focused diagnosis/correction if supported by evidence, and a final architecture-continuation recommendation. The plan supplies the workload, numerical limits, timing protocol, scope, commands, validation budget, stop conditions and required evidence. Follow it in order:
+
+1. Preserve the dirty workspace and identify the exact source being measured. Existing candidate impact-capture edits and unrelated legacy, content, persistence and package/settings changes belong to the user. Do not revert, overwrite or silently include them in your commits. Use canonical `ParallelGrains.compute`; the untracked `ParallelGameplayGrains.compute` is an unused duplicate.
+2. Implement the missing opt-in viability mode, retaining existing proof behavior. Run a deterministic 8,192-active-grain workload with a packed bay, dense pile, 16 participating dynamic fragments and the specified terrain/rendering. Measure all three existing profiles from identical initial states. Establish this baseline before changing solver mathematics.
+3. Use 120 warmup frames and 600 measured frames, fixed dt 1/60, one tick per rendered frame, 1280 by 800, Metal, v-sync off and no frame cap. Require valid frame-matched GPU timing. The budgets are physics GPU p95 <=8 ms, total GPU p95 <=12 ms, frame p95 <=20 ms, CPU submission p95 <=2 ms, explicit buffers <=128 MiB and zero steady-state submission allocations. No per-tick full-state readback or detailed trace in the timed window.
+4. Investigate .001 packed solid penetration separately from interim .002 behavior. Preserve canonical packed inputs and use the plan's long-run diagnostics. Current grain/solid rejection is .002 but rigid/solid rejection remains .001; record the discrepancy and do not silently relax either. Reuse identical-pre-failure-state replay and the existing reference/trace tools. Implement a narrowly justified correction within the locked solver architecture if one is supported by evidence.
+5. Verify affected analytical contacts, mass/momentum/energy behavior, high-speed contact, actual rollback under a deliberately triggered fault, and relevant candidate door/cargo regressions. Test result validity so missing GPU samples or rejected ticks cannot yield PASS. Run the required final suite/build/player checkpoint only after the implementation is stable.
+6. Publish `docs/evidence/B3R-physics-viability.md`, update STATUS/EXECUTION_PLAN/PERFORMANCE and the feature-batch ledger, and commit/push coherent changes under the existing authorization. Include failed attempts and all expensive rerun reasons. Report actual usage only if provided; otherwise use `unavailable`.
+
+Do not treat an early fault followed by cheap no-op frames as a performance result. If a profile rejects during warmup or sampling, record the first failing tick, last committed tick, diagnostic prefix and incomplete verdict, then test the remaining profiles. Missing timing means unmeasured. Passing the relaxed tolerance does not establish the original target or close R1/B.GATE. Do not manufacture a pass by loosening thresholds, changing density, hiding overlap, reducing active count, freezing bodies, disabling faults or using CPU contact fallback.
+
+You may fix demonstrated implementation/measurement defects and hot-path allocations. Keep the existing profiles, substep rule, geometry/mass contracts and rollback semantics. If success requires a materially different solver or changes outside those limits, finish the evidence and recommend the specific next design decision instead of beginning another rewrite. More passes or buffers are a tradeoff to quantify, not automatic proof that GPU simulation is wrong.
+
+Use one agent, preserve the selected model/effort, and work without routine permission questions. This assignment includes the baseline build/player measurement and a final build/player measurement if a relevant correction changes runtime code. Historical one-player limits apply to their old investigations. Every extra expensive run still requires a recorded observed reason. Do not launch Unity for documentation-only changes, rerun the 100,000-site fixture, or implement the exploratory 10,000-grain case.
+
+Do not stop at a harness or a proposed plan. Complete the measurement/diagnosis handoff, even if the honest result is failure or unavailable GPU timing. The final response must state what changed, the measured results by profile, whether the architecture earned further confidence, validation, commit, remaining limitations and the exact recommended next task.

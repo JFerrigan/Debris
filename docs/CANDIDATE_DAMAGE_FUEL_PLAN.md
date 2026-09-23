@@ -1,6 +1,8 @@
 # Candidate damage and fuel transactions
 
-Status: planned from the accepted candidate drilling, door, cargo and suction code. This is not an acceptance record.
+Status: planned from the accepted candidate drilling, door, cargo and suction code. **Deferred behind the [physics/performance viability checkpoint](PHYSICS_VIABILITY_PLAN.md).** This is not an acceptance record. Resume only after that checkpoint's decision identifies damage/fuel as the appropriate next feature; its implementation assignment stops at a handoff.
+
+Existing uncommitted strongest-impulse/feature capture is preliminary. The contact contract requires effective energy, body/feature/local-point context and acknowledgement semantics as well as impulse; do not treat the current capture as completed damage acceptance.
 
 ## Observed boundary
 

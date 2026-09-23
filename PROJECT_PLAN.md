@@ -36,6 +36,8 @@ Authoritative detail: [Game Design](GAME_DESIGN.md), [Architecture](ARCHITECTURE
 
 **Gate:** the player can cut an asteroid, collect physical cargo, spill it, leave, load, and return to the same altered site with matching authoritative state. A single free material cell is pushed aside with negligible ship slowdown, piles resist according to coupled mass, and anchored bodies remain fixed. This is the first internal playable.
 
+Current bounded assignment: [B.3R physics/performance viability](docs/PHYSICS_VIABILITY_PLAN.md), before additional candidate damage/fuel integration. Measure the representative 8,192-grain workload and investigate packed convergence, then hand off the evidence-based continuation decision. [New-context Terra prompt](docs/TERRA_PHYSICS_CHECKPOINT_PROMPT.md).
+
 ### Phase C — contractor loop and home hub
 
 **Milestones M7–M8.** Add strategic navigation, Frontier Count, contacts, home landing/hub, company sales/storage/debt, starter loan pressure, and release/build plumbing for macOS, Windows, and Linux.

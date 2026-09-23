@@ -1,6 +1,8 @@
 # Implementation status
 
-Current handoff: **limited B.3R candidate drilling, effective door collision, GPU cavity cargo classification/capacity admission, and mounted suction are accepted under `-debrisParallelGameplay`; legacy remains the default.** Candidate terrain owns cloned fields/damage, selects exposed cells deterministically, maintains local boundary-run caches, publishes terrain/cache/grain changes as one GPU submission, and fences topology against compact flight completion. The cargo door changes its ship collision boundaries only after that fence; opening has no snapshot, while closing takes one command-time grain snapshot and stays open if an oriented grain obstructs a door cell. Cavity classification sets grain cargo flags only for whole oriented squares and returns compact per-material facts plus rejected admissions. Suction evaluates the current GPU ship pose and attracts only exterior grains in the suction mouth strip, never through intact hull cells. Candidate startup has 96 deterministic grains. The original .001-cell target remains a TODO against the interim .002 gate.
+Current handoff: **the next implementation task is the [physics/performance viability checkpoint](PHYSICS_VIABILITY_PLAN.md), before more damage/fuel integration.** The [new-context Terra prompt](TERRA_PHYSICS_CHECKPOINT_PROMPT.md) specifies the bounded assignment. Planning is complete; the new benchmark and solver investigation have not run.
+
+Limited candidate flight, drilling, effective door collision, GPU cavity classification/capacity admission and mounted suction exist under `-debrisParallelGameplay`; legacy remains the default. Candidate startup has 96 grains. Terrain/door topology changes are fenced, obstructed closure stays open, and classification accepts only whole oriented squares.
 
 ## Latest validation
 
@@ -8,14 +10,16 @@ The startup fixture covers door fence/open/clear close/obstructed closure, GPU c
 
 ## Remaining limitation and next work
 
-Next deliverable: the fenced [candidate damage/fuel reconfiguration transaction](CANDIDATE_DAMAGE_FUEL_PLAN.md). Keep the candidate path opt-in; do not advance to persistence/travel restoration or default cutover until their separate acceptance batches.
+Next deliverable: measure the representative 8,192-active-grain workload, investigate packed .001 convergence and bounded interim behavior, apply an evidence-supported correction if feasible, and publish a decision. The existing proof runner does not implement that throughput workload. Historical strict packed cases reject; their early-failure maxima do not establish long-run .002 bounds. Current grain/solid rejection is .002, but rigid/solid rejection remains .001.
 
-Candidate acceptance is limited to terrain damage/release and its physical grain/cache/render publication, effective door collision, cavity classification, and mounted suction. Damage, fuel transfer, persistence, travel and streaming remain unavailable. Packed-cargo performance, R1 convergence and B.GATE remain open.
+The [candidate damage/fuel transaction](CANDIDATE_DAMAGE_FUEL_PLAN.md) is deferred pending this checkpoint. Damage, fuel transfer, persistence, travel and streaming remain unavailable on the candidate. R1 and B.GATE remain open; a limited checkpoint pass alone does not close them.
 
 ## Preserved unfinished work
 
 Matter.compute, ShipMatter.hlsl, MatterSession.cs and ContactIsland.hlsl retain the unfinished contact gatherer; [baseline patch](evidence/B3R-redesign-baseline/unfinished-contacts.patch). Presentation, ship/content, rigid-terrain exclusion, persistence, package/settings changes and DebrisV1.app remain unfinished workspace work. ParallelGameplayGrains.compute is an unused pre-existing duplicate; the solver now loads canonical ParallelGrains.compute. The built application includes existing workspace changes. Do not rerun the 100,000-site fixture for this handoff.
 
+ParallelGrains.compute, ParallelGrainSolver.cs and ParallelGameplaySession.cs also contain uncommitted strongest-impulse/feature capture. Preserve it and identify its inclusion in measured builds; it is not a completed energy-based damage event pipeline.
+
 ## Commands
 
-Unity 6000.3.11f1: `bash tools/unity.sh test`, `build`, `open`. Candidate gameplay: `Builds/Debris.app/Contents/MacOS/Debris -debrisParallelGameplay`. Documentation changes need no rebuild. Respect the one-player-run limit for this investigation.
+Unity 6000.3.11f1: `bash tools/unity.sh test`, `build`, `open`. Candidate gameplay: `Builds/Debris.app/Contents/MacOS/Debris -debrisParallelGameplay`. The viability flag and run protocol are specified in the plan and still need implementation. Historical one-player limits applied to prior investigations; the new Terra assignment defines its baseline/final measurement budget. Documentation changes need no rebuild.
