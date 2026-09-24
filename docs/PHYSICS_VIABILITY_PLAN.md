@@ -1,6 +1,6 @@
 # B.3R physics and performance viability checkpoint
 
-Status: planned, not executed. Prepared for a new Terra implementation context on 2026-09-23 UTC. This checkpoint precedes further candidate damage/fuel implementation. It does not claim a new physics pass, benchmark result, or architecture decision.
+Status: executed with a failed physical acceptance result on 2026-09-24 UTC; see [checkpoint evidence](evidence/B3R-physics-viability.md). This document preserves the original measurement contract. Candidate damage/fuel remains paused pending a revised packed-convergence decision.
 
 ## 1. Deliverable and boundary
 
