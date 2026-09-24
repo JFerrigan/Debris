@@ -35,7 +35,6 @@ namespace Debris.Presentation
         readonly List<GraphicsBuffer> terrainChunks = new List<GraphicsBuffer>(16);
         long terrainBytes;
         readonly List<string> lines = new List<string>();
-        readonly FrameTiming[] frameTiming = new FrameTiming[1];
         string output;
         int exitCode = 3;
         bool infrastructureFailed;
@@ -145,9 +144,11 @@ namespace Debris.Presentation
             Bind(fixture.Grains.Length, fixture.Boundaries.Length);
             result.Buffers = solver.BufferBytes + terrainBytes;
             var pending = new Queue<(int tick, Task<uint[]> task)>();
-            var physics = new double[600]; var total = new double[600];
+            var physics = new double[600];
             var frame = new double[600]; var submission = new double[600];
-            int physicsCount = 0, totalCount = 0, frameCount = 0, submissionCount = 0;
+            var submittedFrame = new int[600];
+            int physicsCount = 0, frameCount = 0, submissionCount = 0;
+            bool physicsFrameMismatch = false;
             int previousFrame = -1;
             using (var gpu = new ProofGpuTimingCollector("B3R.ParallelPhysics"))
             {
@@ -170,10 +171,8 @@ namespace Debris.Presentation
                         submission[submissionCount++] = elapsed;
                         frame[frameCount++] = Time.unscaledDeltaTime * 1000;
                         result.SubmissionAllocationMaximum = Math.Max(result.SubmissionAllocationMaximum, bytes);
+                        submittedFrame[i] = Time.frameCount;
                         gpu.MarkSubmittedFrame();
-                        FrameTimingManager.CaptureFrameTimings();
-                        if (FrameTimingManager.GetLatestTimings(1, frameTiming) > 0 && frameTiming[0].gpuFrameTime > 0)
-                            total[totalCount++] = frameTiming[0].gpuFrameTime;
                     }
                     while (pending.Count > 0 && pending.Peek().task.IsCompleted)
                     {
@@ -186,8 +185,13 @@ namespace Debris.Presentation
                             result.FirstStrictCrossing = item.tick;
                         if (facts[0] != 0 && result.FirstFaultTick == 0) result.FirstFaultTick = item.tick;
                     }
-                    if (gpu.TryRead(out var sample) && sample.Valid && sample.DelayedFrame >= 0 && physicsCount < 600)
-                        physics[physicsCount++] = sample.GpuElapsedNanoseconds / 1000000.0;
+                    if (gpu.TryRead(out var sample))
+                    {
+                        if (sample.Valid && sample.GpuSampleBlockCount == 1 && physicsCount < submissionCount
+                            && sample.DelayedFrame == submittedFrame[physicsCount])
+                            physics[physicsCount++] = sample.GpuElapsedNanoseconds / 1000000.0;
+                        else physicsFrameMismatch = true;
+                    }
                     yield return null;
                 }
                 while (pending.Count > 0)
@@ -202,27 +206,36 @@ namespace Debris.Presentation
                 }
                 for (int i = 0; i < 4; i++)
                 {
-                    if (gpu.TryRead(out var sample) && sample.Valid && physicsCount < 600)
-                        physics[physicsCount++] = sample.GpuElapsedNanoseconds / 1000000.0;
+                    if (gpu.TryRead(out var sample))
+                    {
+                        if (sample.Valid && sample.GpuSampleBlockCount == 1 && physicsCount < submissionCount
+                            && sample.DelayedFrame == submittedFrame[physicsCount])
+                            physics[physicsCount++] = sample.GpuElapsedNanoseconds / 1000000.0;
+                        else physicsFrameMismatch = true;
+                    }
                     yield return null;
                 }
                 result.ValidPhysics = physicsCount;
                 result.InvalidPhysics = gpu.InvalidSampleCount + gpu.PendingDelayedSamples;
+                result.TimingMatched = !physicsFrameMismatch && gpu.CanPass && physicsCount == 600
+                    && submissionCount == 600 && result.FrameGaps == 0;
             }
             var snapshot = solver.SnapshotAsync();
             while (!snapshot.IsCompleted) yield return null;
             if (snapshot.IsFaulted) throw snapshot.Exception;
             result.GrainMaximum = snapshot.Result.GrainPenetration;
             result.SolidMaximum = snapshot.Result.SolidPenetration;
-            result.ValidTotal = totalCount;
+            // FrameTimingManager does not identify the submitted source frame here.
+            // Until that attribution is verified, total GPU time is unmeasured.
+            result.ValidTotal = 0;
             result.Complete = result.FirstFaultTick == 0 && result.Committed == 720 && result.FrameGaps == 0;
             result.Strict = result.Complete && result.SolidMaximum <= .001f;
             result.Interim = result.Complete && result.SolidMaximum <= .002f;
             result.PhysicsP95 = Percentile(physics, physicsCount);
-            result.TotalP95 = Percentile(total, totalCount);
+            result.TotalP95 = double.NaN;
             result.FrameP95 = Percentile(frame, frameCount);
             result.SubmissionP95 = Percentile(submission, submissionCount);
-            Record($"CASE profile={velocity}/{velocity / 2} name=combined-8192 attempted={result.Attempted} committed={result.Committed} fault={(SolverFault)(result.Facts?[0] ?? 0)} firstFault={result.FirstFaultTick} firstStrictCrossing={result.FirstStrictCrossing} maxGrain={result.GrainMaximum:R} maxSolid={result.SolidMaximum:R} buffers={result.Buffers} physicsValid={physicsCount}/600 physicsInvalid={result.InvalidPhysics} physicsP95={result.PhysicsP95:F3} totalGpuObservations={totalCount}/600 totalGpuP95={result.TotalP95:F3} frameObservations={frameCount}/600 frameP95={result.FrameP95:F3} submissionObservations={submissionCount}/600 submissionP95={result.SubmissionP95:F3} submissionAllocMax={result.SubmissionAllocationMaximum} frameGaps={result.FrameGaps} timingFrameMatch=unverified terrainChunks=16 filledTerrainCells=42 result={(result.Complete ? "COMPLETE" : "INCOMPLETE_CORRECTNESS")}");
+            Record($"CASE profile={velocity}/{velocity / 2} name=combined-8192 attempted={result.Attempted} committed={result.Committed} fault={(SolverFault)(result.Facts?[0] ?? 0)} firstFault={result.FirstFaultTick} firstStrictCrossing={result.FirstStrictCrossing} maxGrain={result.GrainMaximum:R} maxSolid={result.SolidMaximum:R} buffers={result.Buffers} physicsValid={physicsCount}/600 physicsInvalid={result.InvalidPhysics} physicsP95={result.PhysicsP95:F3} totalGpuObservations=0/600 totalGpuP95=unmeasured frameObservations={frameCount}/600 frameP95={result.FrameP95:F3} submissionObservations={submissionCount}/600 submissionP95={result.SubmissionP95:F3} submissionAllocMax={result.SubmissionAllocationMaximum} frameGaps={result.FrameGaps} physicsFrameMatch={result.TimingMatched} totalGpuFrameMatch=unverified terrainChunks=16 filledTerrainCells=42 result={(result.Complete ? "COMPLETE" : "INCOMPLETE_CORRECTNESS")}");
             Flush();
             solver.Dispose(); solver = null; drawnGrains = drawnBoundaries = 0;
             yield return null;
