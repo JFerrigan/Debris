@@ -36,7 +36,7 @@ Authoritative detail: [Game Design](GAME_DESIGN.md), [Architecture](ARCHITECTURE
 
 **Gate:** the player can cut an asteroid, collect physical cargo, spill it, leave, load, and return to the same altered site with matching authoritative state. A single free material cell is pushed aside with negligible ship slowdown, piles resist according to coupled mass, and anchored bodies remain fixed. This is the first internal playable.
 
-Current B.3R result: the [8,192-grain physics/performance viability checkpoint](docs/evidence/B3R-physics-viability.md) failed packed physical acceptance before timing could be measured. A 1.8 scalar over-relaxation prototype also failed and was rejected. Test stronger packed-position coupling against identical saved failures and the same fixture before additional candidate damage/fuel integration. The original [checkpoint contract](docs/PHYSICS_VIABILITY_PLAN.md) remains the reference.
+Current B.3R result: the [8,192-grain physics/performance viability checkpoint](docs/evidence/B3R-physics-viability.md) failed packed physical acceptance before timing could be measured. Scalar 1.8 over-relaxation and fourfold/eightfold full-graph sweep prototypes also failed and were rejected. Test a different coupled position solve against archived failures and the same fixture before additional candidate damage/fuel integration. The original [checkpoint contract](docs/PHYSICS_VIABILITY_PLAN.md) remains the reference.
 
 ### Phase C — contractor loop and home hub
 

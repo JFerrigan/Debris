@@ -1,0 +1,6 @@
+B3R_COUPLED_SAVED family=shared profile=4/2 archive=/private/tmp/b3r-current-diagnostic-tests/packed-shared-4-2.b3rt.gz fault=None committed=1 grain=0.005813837 solid=0.00189828873
+B3R_COUPLED_SAVED family=shared profile=8/4 archive=/private/tmp/b3r-diagnostic-tests/packed-shared-8-4.b3rt.gz fault=None committed=1 grain=0.00611209869 solid=0.00198817253
+B3R_COUPLED_SAVED family=shared profile=12/6 archive=/private/tmp/b3r-diagnostic-tests/packed-shared-12-6.b3rt.gz fault=SolidPenetration committed=0 grain=0.006303072 solid=0.00203931332
+B3R_COUPLED_SAVED family=resting profile=4/2 archive=/private/tmp/b3r-diagnostic-tests/packed-resting-4-2.b3rt.gz fault=None committed=1 grain=0.00436776876 solid=0.00129133463
+B3R_COUPLED_SAVED family=resting profile=8/4 archive=/private/tmp/b3r-diagnostic-tests/packed-resting-8-4.b3rt.gz fault=None committed=1 grain=0.00512838364 solid=0.00154161453
+B3R_COUPLED_SAVED family=resting profile=12/6 archive=/private/tmp/b3r-diagnostic-tests/packed-resting-12-6.b3rt.gz fault=None committed=1 grain=0.0061275363 solid=0.001963377

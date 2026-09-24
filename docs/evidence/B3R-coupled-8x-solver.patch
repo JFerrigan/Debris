@@ -1,0 +1,27 @@
+--- a/Assets/Debris/Simulation/Runtime/ParallelProof/ParallelGrainSolver.cs
++++ b/Assets/Debris/Simulation/Runtime/ParallelProof/ParallelGrainSolver.cs
+@@ -56,9 +56,13 @@
+             if(grainMasses!=null&&(grainMasses.Length!=initialGrains.Length||Array.Exists(grainMasses,m=>!Finite(m)||m<=0)))throw new ArgumentException("Grain masses must be finite, positive, and match the grain population.");
+             boundaryCapacity=allocatedBoundaryCapacity==0?patches.Length:allocatedBoundaryCapacity;
+             if(rigidContactCapacity<1||rigidContactCapacity>4096||patches.Length>4096||boundaryCapacity<patches.Length||boundaryCapacity>4096)throw new ArgumentOutOfRangeException();
+-            traceConfiguration?.Validate(initialGrains.Length,initialGrains.Length+initialBodies.Length,patches.Length,initialGrains.Length*candidateSlots,velocityIterations,positionIterations);
++            // Prototype: repeat the full coupled contact graph relaxation eight
++            // times per locked position tier.  Each sweep re-evaluates every
++            // contact from the positions produced by the preceding sweep.
++            int coupledPositionSweeps=checked(positionIterations*8);
++            traceConfiguration?.Validate(initialGrains.Length,initialGrains.Length+initialBodies.Length,patches.Length,initialGrains.Length*candidateSlots,velocityIterations,coupledPositionSweeps);
+             active=initialGrains.Length;bodies=initialBodies.Length;endpoints=capacity+bodies;slots=candidateSlots;
+-            this.velocityIterations=velocityIterations;this.positionIterations=positionIterations;
++            this.velocityIterations=velocityIterations;this.positionIterations=coupledPositionSweeps;
+             shader=UnityEngine.Object.Instantiate(Resources.Load<ComputeShader>("ParallelGrains"));
+             // A world may contain no loose grains.  Allocate a harmless backing
+             // element because GraphicsBuffer does not accept a zero count, while
+@@ -121,7 +125,7 @@
+             foreach(string kernel in new[]{"RigidSolvePosition","RigidValidate"})Bind(kernel,("_D",diagnostics),("_State",state),("_Parameters",parameters),("_Boundaries",boundaries),("_RigidContacts",rigidContacts),("_RigidContactCount",rigidCount));
+             if(traceConfiguration!=null)
+             {
+-                trace=new ProofTrace(active,endpoints,active*slots,positionIterations,velocityIterations,initialGrains,physical,patches,traceConfiguration,friction);
++                trace=new ProofTrace(active,endpoints,active*slots,coupledPositionSweeps,velocityIterations,initialGrains,physical,patches,traceConfiguration,friction);
+                 BufferBytes+=trace.AllocatedBytes;
+             }
+             metrics=new ProofMetrics(active,bodies,capacity,capacity);BufferBytes+=metrics.AllocatedBytes;
