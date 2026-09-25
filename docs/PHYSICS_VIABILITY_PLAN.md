@@ -1,6 +1,6 @@
-# B.3R physics and performance viability checkpoint
+# B.3R physics and performance viability checkpoint — historical contract
 
-Status: executed with a failed physical acceptance result on 2026-09-24 UTC; see [checkpoint evidence](evidence/B3R-physics-viability.md). This document preserves the original measurement contract. Candidate damage/fuel remains paused pending a revised packed-convergence decision.
+Status: executed with a failed physical acceptance result on 2026-09-24 UTC; see [checkpoint evidence](evidence/B3R-physics-viability.md). This document preserves the original fixture and measurement contract. Its instructions to implement the then-missing benchmark, retain Jacobi mathematics or restrict work to old profiles are historical, not the current assignment. The [V2 architecture](CONTACT_SOLVER_V2.md) and [implementation plan](CONTACT_SOLVER_V2_IMPLEMENTATION.md) now control implementation. Candidate damage/fuel stays gated behind V2 qualification and candidate integration.
 
 ## 1. Deliverable and boundary
 

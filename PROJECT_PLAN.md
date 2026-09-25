@@ -36,7 +36,7 @@ Authoritative detail: [Game Design](GAME_DESIGN.md), [Architecture](ARCHITECTURE
 
 **Gate:** the player can cut an asteroid, collect physical cargo, spill it, leave, load, and return to the same altered site with matching authoritative state. A single free material cell is pushed aside with negligible ship slowdown, piles resist according to coupled mass, and anchored bodies remain fixed. This is the first internal playable.
 
-Current B.3R result: the [8,192-grain physics/performance viability checkpoint](docs/evidence/B3R-physics-viability.md) failed packed physical acceptance before timing could be measured. Scalar 1.8 over-relaxation and fourfold/eightfold full-graph sweep prototypes also failed and were rejected. Test a different coupled position solve against archived failures and the same fixture before additional candidate damage/fuel integration. The original [checkpoint contract](docs/PHYSICS_VIABILITY_PLAN.md) remains the reference.
+Current B.3R result: the [8,192-grain physics/performance checkpoint](docs/evidence/B3R-physics-viability.md) and subsequent relaxation/iteration experiments failed packed acceptance. The [contact solver V2 architecture](docs/CONTACT_SOLVER_V2.md) replaces the local Jacobi/rigid split with a globally coupled GPU contact solve, two-point manifolds, explicit convergence limits and frame-tagged measurements. This is a design decision, not implemented acceptance. Follow the [V2 batches](docs/CONTACT_SOLVER_V2_IMPLEMENTATION.md), starting with exact replay and an independent converged reference, then GPU operator/scheduling cost, full physical acceptance, same-profile throughput and candidate integration. Damage/fuel, migration/travel and default cutover remain behind those gates. The [original checkpoint contract](docs/PHYSICS_VIABILITY_PLAN.md) is retained as historical workload evidence.
 
 ### Phase C — contractor loop and home hub
 
@@ -81,6 +81,8 @@ Basic hub walking and ship exit/return are Phase C requirements; advanced EVA re
 | GPU representation and benchmark risks | [GPU Simulation](docs/GPU_SIMULATION.md), [Implementation Research](docs/IMPLEMENTATION_RESEARCH.md) |
 | Saves and 100,000-site target | [Persistence](docs/PERSISTENCE.md), [Save Format](docs/SAVE_FORMAT.md) |
 | Forces, mass, collision response and anchoring | [Contact Physics](docs/CONTACT_PHYSICS.md) |
+| Coupled solver equations, buffers and GPU scheduling | [Contact Solver V2](docs/CONTACT_SOLVER_V2.md) |
+| Solver implementation batches, measurements and cutover | [V2 Implementation](docs/CONTACT_SOLVER_V2_IMPLEMENTATION.md) |
 | Working instructions and session efficiency | [AGENTS.md](AGENTS.md), [Workflow](docs/WORKFLOW.md) |
 | Ships, components, structures | [Ship System](docs/SHIP_SYSTEM.md), [Component System](docs/COMPONENT_SYSTEM.md) |
 | Debt, market, recovery | [Economy and Logistics](docs/ECONOMY_AND_LOGISTICS.md) |

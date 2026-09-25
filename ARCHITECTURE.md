@@ -4,7 +4,7 @@
 
 Unity LTS/latest stable with URP. The authoritative close-up site is a chunked, texture-backed material field, with GPU compute owning high-volume per-pixel simulation. CPU code owns lifecycle, player/input, strategic state, saves, content data, coarse site queries, and low-frequency commands. No pixel is a GameObject or Rigidbody.
 
-The first prototype is deliberately a narrow implementation of these production boundaries; it is not a disposable physics demo.
+The current prototypes establish these ownership boundaries, but their collision algorithms have not earned packed-cargo acceptance. The [contact solver V2 design](docs/CONTACT_SOLVER_V2.md) replaces that subsystem while preserving authoritative material, identity and transaction ownership. V2 is planned and must pass its [implementation gates](docs/CONTACT_SOLVER_V2_IMPLEMENTATION.md) before adoption.
 
 ## Modules and ownership
 
@@ -40,7 +40,7 @@ Strategic coordinates use `double` kilometres relative to the world origin. A lo
 
 Each site streams fixed-size chunks (initial benchmark candidate: 128×128 cells, not a permanent promise). A chunk contains authoritative material/flags fields and transient simulation fields in GPU textures. Static generated chunks are reconstructed from the seed. A dirty chunk has a compact CPU-side persistence mirror only when needed for saving; this is updated via batched GPU readback on unload/save, never continuously.
 
-Cells encode material index, occupancy/state flags, damage/heat channels, and optional variant seed. Sealed cavities additionally have a sparse compartment record (vacuum/pressurized, gas composition/pressure as needed) derived from boundary/topology changes; this is not a per-cell GameObject simulation. **A cell is the universal indivisible material unit:** fixed terrain, hull structure, loose debris, fuel, and cargo all use exactly one cell's volume and material mass. Occupancy is exclusive—two material cells cannot share a position. Fixed matter belongs to the structural/material field. Loose material initially simulates as individual GPU particles/cells with material ID, velocity, temperature, and site-local position. It can collide with coarse field samples and is eligible for suction/cargo transfer. The authoritative state of every loose cell and detached fragment persists; sleeping/compacted representations must be lossless and restore individual state, never despawn material. This distinction prevents cutting from requiring structural fields to move as one giant rigid body.
+Cells encode material index, occupancy/state flags, damage/heat channels, and optional variant seed. Sealed cavities additionally have a sparse compartment record (vacuum/pressurized, gas composition/pressure as needed) derived from boundary/topology changes; this is not a per-cell GameObject simulation. **A cell is the universal indivisible material unit:** fixed terrain, hull structure, loose debris, fuel, and cargo all use exactly one cell's volume and material mass. Occupancy is exclusive—two material cells cannot share a position. Fixed matter belongs to the structural/material field. Loose material initially simulates as individual GPU particles/cells with material ID, velocity, temperature, and site-local position. Contact geometry comes from exposed material boundaries and oriented square manifolds, with final geometric validation; coarse field sampling alone cannot establish collision correctness. Loose matter is eligible for suction and physical cargo admission. The authoritative state of every loose cell and detached fragment persists; sleeping/compacted representations must be lossless and restore individual state, never despawn material. This distinction prevents cutting from requiring structural fields to move as one giant rigid body.
 
 ## Simulation and commands
 
@@ -52,11 +52,11 @@ Update order:
 2. active site streaming/activation resolves;
 3. ship components emit simulation commands;
 4. fixed GPU site steps execute (possibly multiple capped steps);
-5. cargo intake consumes qualifying loose material and emits transfer records;
+5. successful GPU ticks classify whole physical cargo squares and publish compact completion facts; explicit inventory transfers commit only through their fenced transaction;
 6. CPU applies compact transfer/events, UI snapshots, and persistence dirty marks;
 7. rendering/effects consume GPU outputs; diagnostics records timings.
 
-CPU does not poll every pixel. Hover inspection is a one-cell asynchronous readback, cached and rate-limited. B.3R contacts use cached exposed boundary cells, square SAT and swept two-cell spatial bins; see the locked contact contract.
+CPU does not poll every pixel. Hover inspection is a one-cell asynchronous readback, cached and rate-limited. B.3R V2 contacts use cached exposed boundary proxies, swept four-cell bins, true clipped square manifolds and one coupled GPU solve for grains and rigid bodies. Cargo entry preserves the grain record and motion; it is not an inventory consumption operation. See [CONTACT_PHYSICS](docs/CONTACT_PHYSICS.md).
 
 ## Ships and cargo
 
@@ -87,9 +87,9 @@ Unity main thread owns Unity object lifecycle and public orchestration. Jobs/Bur
 | Risk | Mitigation/decision |
 |---|---|
 | GPU mutation persistence can stall | read back only dirty chunks at save/eviction; compress off-frame; cap work per frame |
-| pixel-level collisions are costly | chunk activity/sleeping plus SDF/coarse occupancy; no general Rigidbody-per-pixel approach |
+| dense finite-mass contacts fail to converge or exceed GPU time | V2 independent reference gate, coupled matrix-free solve, indexed collision proxies, explicit schedule-cost and same-profile correctness/throughput gates; SDF/occupancy alone cannot certify physical contact |
 | loose debris can explode in count | bounded active GPU pool plus streamed, losslessly encoded sleeping cells/fragments; no authoritative cell despawn or lossy aggregation |
-| cargo appears to violate physical capacity | cargo field shares the universal cell grid; only empty visible cavity cells accept material and capacity is derived from their count |
+| cargo appears to violate physical capacity | independently rotating unit squares collide with real hull boundaries; whole-square classification and the physical 2,501st-grain rejection test prevent hidden compression or duplicated capacity |
 | visual scale conflicts with simulation scale | one canonical cell unit; camera/pixel-perfect presentation configured separately |
 | generator changes break saves | generator revision in each site record and migration/fallback snapshots |
 | custom ships diverge from starter ships | one structural field + component/blueprint model from day one |
@@ -110,6 +110,12 @@ The [continuous execution contract](docs/EXECUTION_PLAN.md) governs phases A–E
 
 [CONTACT_PHYSICS](docs/CONTACT_PHYSICS.md) defines the replacement for the current hard-stop collision prototype. The GPU owns dynamic ship/fragment poses and velocities as well as loose matter; CPU components submit force/torque and lifecycle commands. Finite-mass contacts exchange momentum and rotational impulses. Anchored planets, home bases and designated giant bodies have explicit persistent mobility policies. Rendering/storage class, sleeping state and resource exhaustion do not determine whether a loose object is immovable. Independent cargo contributes mass once through its dynamics; it cannot simultaneously be counted as rigid hull mass. This boundary supersedes the current CPU-prescribed translation path when B.3R is implemented.
 
-## Parallel redesign cutover
+## Coupled contact solver V2 and cutover
 
-[CONTACT_PHYSICS](docs/CONTACT_PHYSICS.md) is the locked replacement contract. World-space 48-byte square grains retain independent spin in cargo; 32-byte body state carries COM motion. CPU owns body definitions and transactional inventories; GPU owns motion and geometric cargo classification. Parallel mass-split impulses and separate position cleanup couple to bounded rigid-only sweeps. Compact tick acknowledgements commit provisional flight fuel; saves drain submissions. The opt-in proof must pass before gameplay, schema-5/schema-3 migration and removal of the old path. Historical occupancy acceptance does not certify the .01 grain/.001 boundary penetration limits or physical capacity.
+[CONTACT_PHYSICS](docs/CONTACT_PHYSICS.md) owns the product contract; [CONTACT_SOLVER_V2](docs/CONTACT_SOLVER_V2.md) owns the new numerical/GPU architecture. Public 48-byte grain and 32-byte body motion records remain. A common operator couples grain/grain, grain/ship, fragment and terrain contacts with true masses. Semismooth Newton and bounded GMRES compute globally coupled search directions without storing a dense contact matrix. Two-point manifolds preserve face support; position correction starts a fresh constrained problem after each geometry change. Velocity warm starts are derived transactional caches. The old degree-split Jacobi and separate rigid sweeps are retained only as comparison code until explicit cutover.
+
+The CPU owns commands, definitions and lifecycle; the GPU owns convergence and whole-tick publication. Matrix products use sorted endpoint adjacency and segmented reductions, so a hull's many contacts do not require one sequential color per contact. Persistent command schedules avoid per-frame reconstruction of the numerical loop. All native instrumentation is observational and cannot publish physical state.
+
+The design budget is 8,192 active grains, 17 dynamic rigid bodies, one terrain endpoint and 111 MiB of planned explicit buffer allowances under a 128 MiB cap. These figures are capacities and targets, not measured acceptance. Runtime limits, saturation, sleeping and page boundaries never justify deleting matter or anchoring dynamic cargo. Large-world streaming, origin shifting and giant hulls retain separate later workload gates.
+
+Follow V2-0 reference, V2-1 operator/scheduling cost, V2-2 full physical steps, V2-3 matching throughput, and V2-4 candidate integration in order. Damage/fuel then persistence/travel, schema-5/schema-3 migration, default cutover and old-path removal remain gated. Compact tick acknowledgements commit provisional fuel; saves drain submissions and rebuild solver caches cold on load. Historical occupancy acceptance does not certify the .01 grain/.001 solid penetration limits or physical capacity.

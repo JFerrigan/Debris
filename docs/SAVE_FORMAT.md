@@ -1,5 +1,13 @@
 # Save Format
 
+## Planned V2 migration boundary — not implemented
+
+Current executable schema history below remains unchanged. [Contact solver V2](CONTACT_SOLVER_V2.md) preserves public 48-byte world-grain and 32-byte body records while replacing derived contact data. Candidate persistence is deferred until R2, including qualified V2 candidate integration and damage/fuel transactions, passes.
+
+R3 reserves active checkpoint schema 5 and sparse-site schema 3 for the world-grain/body representation. Save exact authoritative poses, velocity/spin, stable identities, material/fuel state, body mass/inertia definitions, persistent mobility, page origin and effective topology/door policy. Drain queued ticks and publish one completed generation before capture. Do not serialize Newton vectors, manifolds, adjacency, warm impulses, convergence flags or profiling rings; rebuild those caches cold on load. Cold continuation has explicit physical tests in the [implementation plan](CONTACT_SOLVER_V2_IMPLEMENTATION.md#10-v2-5-and-later-migrationremoval-gates).
+
+Existing schema readers and immutable-world transaction/recovery rules remain required. V2-0 diagnostic replay archives are separately versioned test artifacts and must not be mistaken for a production save migration. No schema field or decoder is changed by this design checkpoint.
+
 ## Purpose
 
 Debris saves reconstruct deterministic generation plus every authoritative modification. The format must preserve every loose material/fuel cell and detached fragment, avoid serializing render textures, support safe interrupted writes, and remain migratable as content evolves.

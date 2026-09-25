@@ -1,6 +1,6 @@
-# Prompt for Terra in a new context
+# Historical prompt for the completed viability checkpoint
 
-Copy the text below into a new Terra implementation conversation in `/Users/jakeferrigan/Documents/Debris`.
+Archived on 2026-09-24. The benchmark now exists and its measured result failed. Do not use this prompt for the current solver redesign. Use [CONTACT_SOLVER_V2_PROMPT](CONTACT_SOLVER_V2_PROMPT.md) with the user's selected model and effort. The original task text follows for historical context.
 
 ---
 

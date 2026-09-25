@@ -55,10 +55,11 @@ Every performance/stress result records frame time percentiles; active, visible,
 
 ## Immediate next work
 
-1. B.3R.1–B.3R.2: establish finite body mass/inertia and the analytical single-cell impulse case, then replace GPU/CPU hard-stop paths with force-driven ship motion and momentum exchange.
-2. B.3R.3–B.3R.4: verify dense piles, free cargo without double-counted mass, fragment torque, anchors, save/resume and the player scenario. Detailed criteria: [CONTACT_PHYSICS](CONTACT_PHYSICS.md).
-3. Resume B.5 large masks/streaming and explicit scale validation afterward. The pending 100,000-site run failed the runner timeout despite internal success logs; fix its runtime budget and large-world maintenance scheduling before claiming that gate.
-4. Follow [AGENTS.md](../AGENTS.md): focused tests during iteration, applicable regression/build/player checks once the feature batch is stable. No engine launch for documentation-only changes.
+1. B.3R.R1.V2-0: exact replay archives, independent two-point contact geometry and a converged packed reference. Existing analytical/scoped physics evidence remains useful; all legacy packed profiles still fail.
+2. V2-1–V2-3: implement the [coupled GPU architecture](CONTACT_SOLVER_V2.md), first proving the finite-body operator and schedule cost, then full physical steps and the same-profile 8,192-grain throughput gate. Follow the concrete [implementation batches](CONTACT_SOLVER_V2_IMPLEMENTATION.md).
+3. V2-4/R2: port and verify opt-in candidate flight/drilling/doors/cargo/suction; only then resume damage/fuel. R3 migration/travel, R4 default cutover/removal and full B.GATE follow in order.
+4. Resume B.5 large masks/streaming and explicit scale validation afterward. The pending 100,000-site run failed the runner timeout despite internal success logs; fix its runtime budget and large-world maintenance scheduling before claiming that gate. The 10,000-grain exploratory physics workload is also deferred.
+5. Follow [AGENTS.md](../AGENTS.md): focused tests during iteration, applicable regression/build/player checks once the feature batch is stable. No engine launch for documentation-only changes.
 
 ## Implementation checklist
 

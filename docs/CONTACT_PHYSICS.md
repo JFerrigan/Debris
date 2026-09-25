@@ -1,70 +1,76 @@
-# Contact physics — B.3R parallel redesign
+# Contact physics — B.3R solver V2 contract
 
-Status: the opt-in parallel solver fails the current packed viability checkpoint at the temporary .002-cell grain/solid gate; the original .001-cell target also fails. A 1.8 position over-relaxation prototype and deeper full-graph Jacobi sweep prototype failed and were rejected; original solver math is restored. Limited opt-in terrain drilling is a separate accepted integration scope: one cell releases one grain while terrain/cache/render publication is ordered and player telemetry remains fault-free. See [current viability evidence](evidence/B3R-physics-viability.md), [historical parallel results](evidence/B3R-parallel-pieces.md) and [candidate drilling evidence](evidence/B3R-candidate-drilling.md). B.GATE remains open. Baseline is `f3aa5c9`; the unfinished gatherer is preserved in [baseline evidence](evidence/B3R-redesign-baseline/unfinished-contacts.patch).
+Status, 2026-09-24: **V2 is designed but unimplemented.** The restored Jacobi solver still fails packed physical acceptance. Its 8,192-grain profiles commit 0/0/1 ticks before faults; all throughput p95 values remain unmeasured. The [legacy evidence](evidence/B3R-physics-viability.md) is preserved. R1 and B.GATE remain open, candidate gameplay remains opt-in, and damage/fuel integration is paused.
 
-The [physics/performance viability checkpoint](evidence/B3R-physics-viability.md) measured the 8,192-active-grain fixture. All three profiles rejected before warmup, so throughput and long-run interim bounds remain unproven. Identical-state reference replay agrees with checked contact arithmetic; the packed wall trace shows opposing contacts nearly cancel position correction. Scalar 1.8 over-relaxation and fourfold/eightfold graph sweeps also failed; both were rejected and the locked solver iteration counts restored. The next task is a different coupled-position solve on the archived failing states and fixture before more candidate damage/fuel work. Grain/solid rejection remains .002 and rigid/solid remains .001.
+The authoritative replacement design is [CONTACT_SOLVER_V2](CONTACT_SOLVER_V2.md). The concrete batch sequence, source map, reference methodology, timing implementation and acceptance matrix are in [CONTACT_SOLVER_V2_IMPLEMENTATION](CONTACT_SOLVER_V2_IMPLEMENTATION.md). The immediate next task is V2-0, using the [implementation prompt](CONTACT_SOLVER_V2_PROMPT.md). This supersedes the previous locked Jacobi architecture; it does not claim measured acceptance of the replacement.
 
-## Locked architecture
+## 1. What changes and what remains binding
 
-GPU parallel, mass-split Jacobi square-grain contacts couple to a small GPU sequential rigid-body solver. `MatterSession` owns resources and one ordered graphics-queue command buffer. No CPU contacts, float atomic reactions, graph coloring, contact islands, general physics interface, automatic anchoring or serial grain movement retries.
+| Previous prescription | New decision |
+|---|---|
+| Degree-split Jacobi corrections and a separate rigid-only solver | One matrix-free coupled contact operator for grains, ships, fragments and anchors; semismooth Newton with bounded GMRES directions |
+| One representative point for a square/patch contact | Up to two clipped points on the selected physical face, stable feature identities and explicit exterior-face validation |
+| Position lambda retained while contact geometry changes | A fresh minimum-displacement contact problem for each geometric linearization; no positional warm start |
+| No cross-substep warm starting | Validated velocity-only warm starts, with cold-start acceptance and transactional cache rollback |
+| Only 4/2, 8/4 and 12/6 profiles | Preserve those as historical comparators; V2 uses explicitly defined C1/C2/C3 caps and identical physical tolerances |
+| Grain/solid interim runtime rejection .002 | Existing comparator keeps its historical setting; V2 requires original .001 for grain/solid and rigid/solid |
+| No graph coloring/contact islands as an architectural principle | These are implementation techniques, not product prohibitions. The selected V2 path does not need coloring or islands; adding them later requires measured benefit and preserved finite-body coupling. |
+| All-boundary scans and per-frame schedule recording | Indexed boundary proxies, compact active rows, segmented hull reactions and pre-recorded bounded GPU schedules |
 
-All grains (cargo and fuel included) have world-space centres/velocities and independent angle/spin. The final record is 48 bytes: float2 centre, float2 velocity, float angle, float spin, uint material/identity/flags and three reserved uints. Unit-square mass is density and inertia is mass/6. Cargo classification changes no physical state. Body state is a 32-byte COM pose/motion record; 32-byte body parameters carry inverse mass/inertia, local COM, boundary range, mobility and revision. Ship slot 0 and fragment slots 1–16 are transient indices, never persistent IDs. Hull origin = COM position − Rotate(local COM, angle).
+User invariants remain binding: no per-cell GameObjects/Rigidbodies, matter deletion, overlapping cargo, duplicate inventories, CPU runtime contact fallback, automatic anchoring or hidden velocity reset. CPU submits commands and reads compact facts. GPU owns high-volume matter and every active body's authoritative motion. Sleeping, rendering class and resource limits never make loose matter immovable.
 
-CPU owns structure, machinery, tank inventories, cached attached mass and explicit mobility. GPU owns grain/body motion. ShipRuntime pose values are presentation mirrors. Independent cargo is excluded from attached mass. Topology and inventory changes remain fenced transactions. Cache exposed boundary cells/faces on shape revision or effective door changes; terrain refreshes dirty chunks and border strips only.
+## 2. State and ownership
 
-## Numerical contract
+A grain is a world/site-space unit square with independent center, velocity, angle and spin. Its 48-byte public GPU record remains compatible with the candidate renderer. Mass is material density and inertia is mass/6. Cargo flags change classification only. Independent cargo mass is not added to attached hull mass.
 
-Fixed dt 1/60, 4–16 adaptive substeps: max(4, ceil(2 * maximumSurfaceSpeed * dt / .25)). Include spin, rigid surface motion and submitted acceleration. Exceeding 16 faults the whole tick without velocity clamping.
+Body state retains a 32-byte COM pose/motion record; parameters retain inverse mass/inertia, local COM, boundary range, mobility and shape revision. Hull origin is COM position minus rotated local COM. Ship and fragment endpoint slots are temporary runtime indices, never persistent IDs. Explicitly anchored endpoints have zero inverse mass/inertia and motion; dynamic endpoints retain finite positive mass/inertia.
 
-Only three profiles: 4/2, 8/4, 12/6 velocity/position iterations, with two rigid-only sweeps after each grain iteration. Restitution 0, Coulomb friction .3 (0 for analytical fixtures). Position targets .002 grain–grain and .0001 solid. No warm starting across substeps, springs or compliance.
+CPU owns structure, units, tank inventories, material catalog, persistent IDs, topology and attached mass. GPU owns active endpoint motion, contact solving and step acceptance. Sessions own resources and one ordered graphics-queue schedule. Topology, door policy, mass and cache revisions publish together after prior work is fenced. Per-frame full-state readback remains forbidden.
 
-For normal A→B, vn = dot(surfaceVelocityB − surfaceVelocityA, normal). kA = invMassA + invInertiaA * cross(rA, normal)^2; similarly kB. Ksplit = degreeA*kA + degreeB*kB, where degree counts incident candidate constraints and is at least one. Accumulate unilateral normal impulses against Ksplit; reduce equal/opposite increments using actual inverse mass/inertia, without endpoint averaging. Speculative contacts allow closing only through the remaining gap. Touching friction is clamped to μ times accumulated normal impulse. Separate mass-split position correction never changes physical velocity.
+## 3. Numerical and physical contract
 
-Maximum penetration over the entire run: .01 cell grain–grain, .002 grain/rigid–solid for the interim integration gate; after 120 unforced steps residual grain penetration ≤ .002. TODO(B.3R): revisit the original .001-cell solid target with explicit packed-cargo, capacity, door, high-speed, and save/reload evidence. These bounded errors never authorize extra cargo capacity. Normalized linear momentum error ≤ 1e-4 using max(1, sum(initial mass*speed)); isolated angular momentum error ≤ 1e-3. Energy, including all spin, may not exceed initial energy by more than max(.1%, .0001) without external work. Keep the stricter 10000:1 analytical speed assertion (100000/10001 ± .0001).
+The exact equations, branch derivatives, line searches, singular-system handling, tolerances, manifold construction and profiles live in the V2 architecture document; implementers must not substitute another contact law while keeping its profile label.
 
-## GPU scheduling and bounds
+- Fixed dt 1/60; 4–16 speed-derived substeps, including spin/radius and commanded acceleration. No velocity clamping. Post-contact motion must still fit the declared substep/search envelope.
+- Restitution zero; Coulomb friction .3, explicitly zero in analytical fixtures. Hard unilateral normal contact and non-associated friction; no contact springs or compliance.
+- Position correction changes poses without writing physical velocities. Target slop remains .002 grain/grain and .0001 solid. V2 validates every substep at <=.01 grain/grain and <=.001 grain/solid and rigid/solid. After 120 unforced ticks residual grain penetration must be <=.002.
+- Normalized linear momentum error <=1e-4 using max(1, sum(initial mass*speed)); isolated angular momentum error <=1e-3. Unforced kinetic energy, including spin, may not increase by more than max(.1% initial energy,.0001). Controlled forced tests account for external work separately.
+- Preserve the 10,000:1 analytical speed check, 100000/10001 ± .0001, and 120-cell/s anchor/finite-body impacts without tunneling inside the 16-substep cap.
+- Capacity, nonfinite, convergence, page, speed, envelope and physical-validation faults roll back the whole tick, including provisional contact caches and dependent gameplay operations.
 
-Copy committed state to working state, choose substeps on GPU, apply local forces using current GPU angle, gather swept candidates once per substep, solve velocities, predict, correct positions, validate, then commit only if every substep succeeded. Cutting runs after commit, reserves a grain slot and validates placement before removing terrain. Publish compact tick/fault/pose/cargo/door/impact facts.
+All physical and throughput acceptance must belong to the same profile. A passing local contact test or reference arithmetic replay does not certify packed convergence. A diagnostic repeat of a failed attempt can measure its cost, but cannot qualify sustained throughput.
 
-Four-cell dense bins cover the fixed [-512,512) page with integer counts, hierarchical exclusive scan and index spans. Multiple grains may occupy a bin. Swept bounds include angular extent and .25-cell correction margin. An escaped envelope faults; stale candidate coverage is never accepted. Each grain has at most 64 sorted candidate slots. Deduplicate pairs by identity, compact contacts, build endpoint degree/adjacency spans once per substep. Contact threads write only their own increments; grains gather adjacency and bodies use workgroup reductions. Use indirect dispatch for active counts/substeps. Bind only each kernel's resources within Metal writable limits.
+## 4. Gameplay and transaction boundaries
 
-Use oriented-square SAT and clipped contact points. Merge coplanar hull contacts into physical patches, preserving corner normals. Rigid patches have at most two points, 64 points/body pair and 4096 total. Capacity, nonfinite, page boundary, excessive speed and search-envelope failures preserve all committed state and identify the failed limit. Sleeping retains finite mass and wakes on meaningful contact.
+Cargo remains individual rotating grains inside real hull geometry. The GPU classifies only whole oriented squares inside a cavity. A 2,501st grain cannot acquire physical room through classification or tolerated compression. Door opening updates effective boundaries after a fence; obstructed closing stays open and preserves the obstructing grain. Suction acts only through the exterior mouth strip using the current GPU body pose.
 
-## Gameplay and submission cutover
+Flight submits local force/torque and attached mass. Keep up to 16 submitted ticks and provisional fuel operations in FIFO order. Compact acknowledgements commit successful operations; a failed tick and later dependent operations consume no fuel or matter. Backpressure preserves simulation time. Saves and topology changes drain the queue.
 
-Upload blueprint CargoCavity. A grain is cargo only when its whole oriented square fits within boundary tolerance. Defer travel for passage straddlers. Reduce door overlap to one obstruction flag; obstructed closure stays open without changing grains. Suction uses current body pose and cannot cross intact walls.
+Cutting reserves a grain slot/identity and validates placement before removing terrain. Shape, mass/COM, collider proxies, contact-cache generation and renderer views publish atomically. The V2 arena budget forbids keeping two complete solvers alive for routine reconfiguration; use the bounded fenced scratch protocol in the implementation plan.
 
-Retain up to 16 submitted ticks and provisional fuel changes in FIFO order. Later preparation uses provisional fuel; compact completion commits acknowledged changes. Failure discards that tick and later changes. Backpressure preserves time and fuel. Saves drain the queue. MatterStepInput contains tools/door/local force/torque/attached mass, never displacement. Mass-only updates preserve body motion.
+Pre-existing strongest-impulse/feature capture in the dirty source is unfinished user work. Preserve it. Later damage events need accepted tick, body/feature, local contact point, converged normal impulse and effective energy based on pre-contact closing speed and true effective inverse mass. Retain the later policy `effectiveEnergy=.5*preContactClosingSpeed²/actualEffectiveInverseMass` and damage equivalent speed `sqrt(2*effectiveEnergy)`; this damage input is distinct from the actual contact velocity. Keep the strongest accepted event per body/tick pending until acknowledgement, with deterministic feature tie breaks. Detached matter inherits surface velocity and spin. They are not complete merely because a largest impulse is available.
 
-Impact events contain tick, body/feature, local point, accumulated normal impulse and effective energy = .5*preContactClosingSpeed^2/actualEffectiveInverseMass. Keep strongest event per body/tick pending until acknowledgement. Damage uses equivalent speed sqrt(2*energy); update topology, boundaries and mass together. Detached grains/fragments inherit surface velocity and spin.
+## 5. Scale and measurement
 
-## Migration and removal
+The mandatory target remains 8,192 active grains, one finite ship, 16 finite fragments and 16 allocated 128² terrain chunks on M4 Pro/Metal/Unity 6000.3.11f1 at 1280x800, v-sync off and one fixed step per frame. Keep the exact existing dense bay/pile/sparse-exterior fixture. The V2 plan budgets 111 MiB of explicit pools under the unchanged 128 MiB ceiling; this is unmeasured planned capacity.
 
-After proof and gameplay gates, checkpoint schema 5 and sparse-site schema 3 store world grains and complete stable body/mass/mobility/impact state. Write only new formats. Read checkpoint 1–4 and sparse 1–2 through legacy DTOs; convert sparse grains after loading both core and blobs. External centre = old lower-left + .5. Cargo centre transforms old local centre; preserve stored world velocity, inherit ship angle/spin for old cargo, zero these for old external grains. Legacy GPU linear motion is interpreted as COM velocity unchanged; old rotating trajectories are not promised. Resolve content before fragment mass reconstruction. Keep old files until atomic publication succeeds.
+A profile qualifies only after 120 accepted warmup frames and 600 accepted measured frames with physics GPU p95 <=8 ms, total GPU p95 <=12 ms, frame p95 <=20 ms, CPU submission p95 <=2 ms and no steady-state submission allocations. GPU measurements must carry validated frame/tick identity. The implementation plan defines a tagged Metal timestamp bridge if Unity's timing cannot establish that identity. Unavailable timing remains unmeasured.
 
-Spatial buckets are world chunks; preserve order, identity, material keys and fuel energy. Save no derived solver scratch. Exact new snapshot restore, continued-step centre .0001/velocity .001, 120-step bounded conservation, legacy schema-1/schema-4/sparse-2, reordered catalogs, corrupt-primary recovery, interrupted writes and future-version rejection are required.
+Boundaries use a spatial proxy index; finite hull reactions use segmented reductions. Global contact-matrix storage, all-site scans and serial work proportional to hull contact degree are excluded from the hot path. Large worlds use lossless stored matter and explicit activation, not hidden deletion or immovable budget-exhausted grains. Larger active counts, giant irregular hulls, streaming and other platforms require their own measured gates. The 10,000-grain exploration and 100,000-site experiment are deferred.
 
-Travel geometrically selects cargo and rotates its centre/angle with relocation. Relative velocity subtracts old ship surface velocity and is rotated before adding new surface velocity; spin subtracts old ship spin and adds new ship spin. Deposits/fragments stay at departure.
+## 6. Execution and migration order
 
-After default cutover delete IntegratePhysical/64 retries, serial SolveShipCells/gatherer, dual-coordinate TransferCargo/_CargoOccupancy, Free/CargoFree admission, pose rejection, physicalShip mode, legacy displacement stepping/Tick integration, retry Step and unused CargoGrid. Keep SAT, mass, materials, transactions and support helpers.
+1. **V2-0:** exact replay capture, independent geometry, analytical/direct small cases and high-accuracy packed reference. Stop if no trustworthy reference exists.
+2. **V2-1:** GPU manifolds/operator, high-degree finite hull tests, buffer accounting and schedule/product cost. Stop if the selected schedule cannot fit its engineering budget.
+3. **V2-2:** complete Newton/GMRES velocity and fresh geometric solves, caches, strict validation and rollback; all physical fixtures.
+4. **V2-3:** one stable fast suite and matching final build/player matrix; a common profile must pass all correctness and throughput budgets before adoption.
+5. **V2-4:** port opt-in candidate flight/drilling/doors/cargo/suction through existing transaction boundaries, then verify actual player controls.
+6. **R2 remainder, then R3:** complete damage/fuel transactions and exceptional cases; migrate checkpoint schema 5/sparse schema 3, travel and restoration. Save only authoritative physical state; rebuild contact caches cold.
+7. **R4:** pass full B.GATE, switch default explicitly, then remove superseded solver/occupancy/retry paths and unused duplicate compute assets. Historical evidence and old schema readers remain.
 
-## Phase order and stop gate
+Schema migration preserves every world-grain identity/material/fuel residual and body pose/motion/mobility. Legacy external lower-left positions become centers by +.5; ship-local cargo transforms into site coordinates with preserved world velocity and inherited ship angle/spin as specified by its old encoding. Do not invent motion for external grains. Travel transforms selected cargo's relative velocity and spin with the ship, preserving deposited matter. Exact restore and bounded continued-step/long-run comparisons are mandatory.
 
-0. Freeze this contract and preserve changes; documentation checks only.
-1. Opt-in runnable GPU proof using production-intended kernels; normal gameplay stays unchanged. Test two grains, 10000:1, 100/1000 dense piles, 2500 tightly packed grains in a 50×50 cavity (shared initial rigid motion and initially resting cargo under thrust/torque), free spinning cargo, off-centre fragment, anchored glancing wall, existing 201 layout, 8192 combined and 10000 exploratory. Sweep only 4/2, 8/4 and 12/6. The interim integration gate uses .002 solid penetration; the original .001 target is tracked as TODO(B.3R). Continue integration only with the remaining correctness, rollback, persistence, and performance checks visible; do not treat the relaxed gate as proof that the tighter target is solved.
-2. Complete masks/boundaries, mining/suction/cargo/door/rendering, fuel/damage/topology acknowledgement and exceptional limits on candidate path. Limited integration has already proceeded; the current viability checkpoint interrupts further damage/fuel work and ends with an explicit continuation decision.
-3. Migrate persistence/travel, port fixtures, then switch default.
-4. Remove legacy paths; stable fast suite and one matching final Mac build/player batch; close gate only with every acceptance case verified.
-
-Mining counts identities once; fuel grade/residual energy survives failed placement and transfers; capacity test attempts a 2501st grain without hiding compression behind classification. High speed: mass-1 grain at 120 cells/s against one-cell anchor and dynamic body without tunnelling within 16 substeps. Deliberately test contact/manifold capacity, density, envelope and speed faults with no partial state, cutting or fuel commit.
-
-## Benchmark protocol
-
-M4 Pro, Metal, pinned Unity 6000.3.11f1, 1280×800 development player, v-sync off, 16 active 128² chunks. Warm 120 frames, sample 600 with one fixed step/frame; identical geometry, seed, forces, renderer and camera across profiles. Keep page boundaries and snapshots outside timing windows. GPU stage timings must account for delayed samples; invalid/missing GPU timing cannot pass.
-
-8192 grains including packed bay/dense pile/up to 16 fragments: physics GPU p95 ≤ 8 ms; total GPU p95 ≤ 12 ms; frame p95 ≤ 20 ms; CPU submission p95 ≤ 2 ms; explicit buffers ≤ 128 MiB; no steady-state submission allocations. 10000 is exploratory only. Publish named tick/fault, counts, bin maximum, candidate/contact degree/manifold, substeps/profile, penetration classes, envelope/overflow, cargo/volume, sleep/wake and stage timing diagnostics. Reduce conservation/energy/maxima on GPU; no full-array readback per measured frame.
-
-The previous combined 201-cell result is 324.505 ms GPU p95 and 29 fallbacks. The 1.876 ms loose-only result is a different workload, not a speedup comparison. The historical rotating fixture had only 100 widely spaced cells, not packed acceptance.
+The old gatherer is preserved in [baseline evidence](evidence/B3R-redesign-baseline/unfinished-contacts.patch). Current implementation remains the restored source recorded in the legacy checkpoint. Planning V2 neither deletes that unfinished work nor verifies the new architecture.
 
 ## Historical scoped evidence
 

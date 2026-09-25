@@ -1,6 +1,6 @@
 # Implementation status
 
-Current handoff: **the [B.3R physics viability checkpoint](evidence/B3R-physics-viability.md) still fails physical acceptance.** Full-graph Jacobi position relaxation at fourfold and eightfold sweep counts improved some saved states but failed the same packed and 8,192-grain acceptance; it was rejected and the solver restored to source hash `3798fe07…`. Next: isolate the archived wall residual and test a genuinely different coupled position solve, with a defined mass/iteration contract and measured cost. Candidate damage/fuel stays paused; R1 and B.GATE remain open.
+Current handoff: **the solver V2 architecture is planned; implementation has not started.** The [design](CONTACT_SOLVER_V2.md) specifies a global matrix-free Newton/GMRES contact solve, two-point manifolds and fresh coupled position correction, with fixed numerical, memory and timing contracts. The [implementation plan](CONTACT_SOLVER_V2_IMPLEMENTATION.md) defines each gate and stop condition. **Next task: V2-0 independent geometry/reference and immutable failing-state replay**, using the [ready assignment](CONTACT_SOLVER_V2_PROMPT.md). Complete its formulation decision before GPU implementation. The [design evidence](evidence/B3R-v2-design.md) records this documentation-only checkpoint. R1/B.GATE remain open; damage/fuel stays paused.
 
 Limited candidate flight, drilling, effective door collision, GPU cavity classification/capacity admission and mounted suction exist under `-debrisParallelGameplay`; legacy remains the default. Candidate startup has 96 grains. Terrain/door topology changes are fenced, obstructed closure stays open, and classification accepts only whole oriented squares.
 
@@ -12,7 +12,7 @@ The restored final fast EditMode suite passed 140 with one explicit scale skip (
 
 The opt-in runner creates 8,192 active grains, 16 dynamic fragments and 16 allocated terrain chunks, but correctness rejects before throughput sampling. All canonical packed profiles cross the original .001 target and later reject at the interim .002 grain/solid limit; rigid/solid remains .001. The 720-tick extension never reaches its unforced phase, so long-run residual and fragment participation remain unverified. Scalar over-relaxation and deeper full-graph sweeps did not solve coupled convergence. The candidate renderer uses procedural grain, rigid-patch and sparse terrain draws. Physics GPU samples now require submitted-frame identity and one marker block; this check remains unexercised, and unmatched total GPU timing is explicitly unmeasured.
 
-The [candidate damage/fuel transaction](CANDIDATE_DAMAGE_FUEL_PLAN.md) remains paused pending a packed-convergence decision. Damage, fuel transfer, persistence, travel and streaming remain unavailable on the candidate. R1 and B.GATE remain open.
+The [candidate damage/fuel transaction](CANDIDATE_DAMAGE_FUEL_PLAN.md) remains paused until V2-3 qualification and V2-4 candidate integration pass. V2 C1/C2/C3 profiles and the 111 MiB buffer allowance are design values, with convergence and all costs unmeasured. Damage, fuel transfer, persistence, travel and streaming remain unavailable on the candidate. R1 and B.GATE remain open.
 
 ## Preserved unfinished work
 

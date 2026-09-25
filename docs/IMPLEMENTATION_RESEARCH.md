@@ -1,5 +1,7 @@
 # Implementation Research: Unity GPU Simulation and Steam Delivery
 
+Current contact decision: the previous occupancy and local-relaxation methods failed packed physical acceptance. [CONTACT_SOLVER_V2](CONTACT_SOLVER_V2.md) and its [implementation gates](CONTACT_SOLVER_V2_IMPLEMENTATION.md) supersede contact recommendations below. The global solver is a planned replacement, with unmeasured convergence and cost; other research sections retain their historical scope.
+
 ## Conclusion
 
 Debris should use Unity/URP as the engine and renderer, with compute shaders for active close-up simulation. Steam is the PC distribution/platform layer; it does not replace Unity or own the material simulation. This is a hybrid architecture, deliberately not a direct clone of Noita’s custom general-purpose falling-sand engine.
@@ -11,7 +13,7 @@ The primary comparison is Nolla Games’ published Noita technical talk. It desc
 | State | Representation | Owner | Why |
 |---|---|---|---|
 | Fixed asteroid/hull/station cells | chunk-local GPU textures/texture arrays | `SiteSimulation` ComputeShaders | dense 2D neighbourhood work, direct palette rendering, sparse dirty chunks |
-| Individual loose material and fuel cells | structured `GraphicsBuffer` records, spatial buckets/occupancy grid | compute shaders | zero-g velocity, non-overlap, suction, collision, cargo tumbling, and spills |
+| Individual loose material and fuel cells | structured `GraphicsBuffer` records, indexed contact candidates and clipped manifolds | compute shaders | zero-g velocity, non-overlap, suction, collision, cargo tumbling, and spills |
 | Cargo | same loose-cell buffer, bounded by ship-local collision/cavity field | compute shaders | cargo remains physical rather than becoming inventory slots |
 | Components | sparse CPU records mirrored to compact GPU lookup/command data | ship/component systems | low count, explicit behavior and save identity |
 | Structural support/collapse | dirty-region field masks and iterative GPU connectivity passes | compute shaders | severed anchors and detached regions without whole-site CPU scans |
@@ -19,17 +21,17 @@ The primary comparison is Nolla Games’ published Noita technical talk. It desc
 
 ## Refined cell representation
 
-A “pixel” is a square simulation cell with fixed world dimensions. Fixed structure occupies integer cell coordinates in a chunk field. A loose cell retains the same dimensions but has fixed-point subcell position and velocity, so it can drift and bounce naturally in zero gravity. It is not a Unity physics body. Each simulation step resolves it to local occupancy buckets; a cell may not enter a bucket/position already occupied by another cell or fixed material.
+A “pixel” is a square simulation cell with fixed world dimensions. Fixed structure occupies integer cell coordinates in a chunk field. A loose cell retains the same dimensions with floating-point local position, velocity, angle and spin, so it can drift and rotate in zero gravity. It is not a Unity physics body. Spatial bins enumerate possible contacts; they do not determine physical occupancy or block motion. The planned coupled solver resolves oriented geometry and mass-based contact, then independently validates penetration.
 
-This gives Debris the visible inertial cargo behavior required by the design without treating every cell as an arbitrary rotating rigid body. Cell rotation is visually irrelevant for a square cell. Larger future loose chunks are a separate body type made of linked cells; they are not an optimisation that silently changes initial individual-cell salvage rules.
+Each loose square has independent angle and spin: orientation changes its contact geometry and must be simulated. GPU records represent these dynamics without a Unity Rigidbody per cell. Larger future loose chunks are a separate body type made of linked cells; they are not an optimisation that silently changes initial individual-cell salvage rules.
 
-Each loose-cell record needs only compact authoritative state: stable runtime ID, material index, fixed-point position, velocity, flags (cargo/fuel/fragment), and optional temperature/damage/variant seed. Do not store a per-cell Unity transform. The exact GPU record stride is selected after a memory/bandwidth benchmark and recorded in `docs/PERFORMANCE.md`.
+V2 retains the public 48-byte grain record with identity/material, floating-point center, angle, velocity, spin and flags. Additional material-specific state retains its existing authoritative owner. Do not store a per-cell Unity transform. Derived contact records have separately budgeted strides in the V2 architecture.
 
 ## Per-step GPU pipeline
 
 1. CPU input/components generate a bounded command list: thrust, drill/saw/laser damage, suction, door state, repair, and chunk activation.
 2. Compute kernels apply material/tool gates and damage to active fixed-field chunks. Destroyed cells append one loose-cell record per cell; no initial mining shortcut creates a fake inventory stack.
-3. A local occupancy/spatial-hash pass bins loose cells. Integration, collisions, cavity boundaries, suction, thrust acceleration, and fuel/cargo spills run only in active chunks/ship-local regions.
+3. A swept spatial index builds candidate pairs for world-space active grains and boundary proxies. The V2 contact operator couples every finite endpoint; cargo classification does not move grains into an independent ship-local physics system. Activation boundaries must retain every body that can mechanically interact.
 4. Dirty-region connectivity passes identify supported structure, severed component anchors, and newly detached connected regions. The first prototype needs the event/data path; stress/support collapse is expanded behind measured dispatch budgets.
 5. Rendering draws fixed fields directly from textures and loose cells through GPU-driven instancing/indirect draws where profiling supports it. Effects consume append-buffer events.
 6. Only compact facts return to CPU: cargo/UI events, material hover sample, dirty-chunk/save work, and diagnostics. Unity’s `AsyncGPUReadback` supports asynchronous requests from compute and graphics buffers; do not synchronously read a field texture for normal gameplay. [Unity AsyncGPUReadback](https://docs.unity3d.com/6000.0/ScriptReference/Rendering.AsyncGPUReadback.Request.html)
