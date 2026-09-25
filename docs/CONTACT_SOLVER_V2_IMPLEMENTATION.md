@@ -4,7 +4,7 @@ Revision: 2026-09-24. **All V2 implementation gates are open.** This plan implem
 
 ## 1. Deliverable and sequencing rules
 
-The next implementation assignment is **V2-0: establish exact replay inputs, independent contact geometry and an independent converged reference**, followed by the bounded batches below when their prerequisites pass. The reference must distinguish an implementation that follows an equation from an equation that satisfies physical constraints. Finish V2-0's decision before writing the GPU Newton solver.
+V2-0 establishes exact replay inputs, independent contact geometry and an independent converged reference. For the next lower-tier Claude session, execute only **V2-0A: immutable pre-step input capture and failing-attempt replay**, following the [detailed session plan](CLAUDE_V2_0A_PLAN.md) and [prompt](CLAUDE_V2_0A_PROMPT.md), then stop. Subsequent assignments V2-0B (geometry/tiny direct reference) and V2-0C (packed reference/V2 comparison) complete the same full gate below; this split changes no acceptance criterion. The reference must distinguish an implementation that follows an equation from an equation that satisfies physical constraints. Finish V2-0's decision before writing the GPU Newton solver.
 
 One agent; retain the user's selected model/effort. Start from `git status --short`, STATUS, current EXECUTION_PLAN and PROJECT_PLAN once per fresh context. Read the owning V2 sections and relevant source. Preserve pre-existing tracked and untracked changes, especially impact capture. Create a task-specific manifest of HEAD, dirty patches and SHA-256 hashes before changing dirty source. Stage explicit paths. Commit coherent accepted batches with evidence under existing ordinary push authorization.
 
