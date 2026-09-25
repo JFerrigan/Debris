@@ -87,7 +87,7 @@ The later full-graph Jacobi relaxation prototype increased position sweeps from 
 
 ## Planned B.3R V2 cost contract — no new runtime measurements
 
-The next bounded Claude session is [V2-0A archive/replay](CLAUDE_V2_0A_PLAN.md), an Editor diagnostic deliverable. Its CPU elapsed time, archived faults and rollback checks cannot qualify physics convergence or GPU throughput; V2-0B/V2-0C must complete the reference gate before V2-1 cost measurement.
+[V2-0A archive/replay](evidence/B3R-v2-convergence.md) passed all nine exact pre-step legacy reproductions in an Editor diagnostic run. Its elapsed time, archived faults and rollback checks do not qualify physics convergence or GPU throughput. V2-0B independent geometry/tiny reference and V2-0C packed reference must complete the reference gate before V2-1 cost measurement.
 
 The [V2 architecture](CONTACT_SOLVER_V2.md) replaces local Jacobi updates with a global matrix-free Newton/GMRES solve and indexed two-point manifolds. [Implementation gates](CONTACT_SOLVER_V2_IMPLEMENTATION.md) require reference validation first, then GPU operator and scheduler-cost measurements before full adoption. C1/C2/C3 are new explicit caps, not new names for 4/2, 8/4 and 12/6. All V2 physical results and runtime costs are **unmeasured**. The documentation-only checkpoint ran no tests, builds or players; the failed runtime evidence above remains current.
 

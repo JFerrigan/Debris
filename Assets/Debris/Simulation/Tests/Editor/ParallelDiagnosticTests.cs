@@ -120,6 +120,8 @@ namespace Debris.Simulation.Tests
         public IEnumerator TraceDisabledAndEnabledMatchRejectedPackedCases()
         {
             RequireGpu();
+            string exportDirectory = Path.Combine("/private/tmp", "b3r-current-diagnostic-tests-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(exportDirectory);
             foreach (bool sharedMotion in new[] { true, false })
             foreach (var profile in Profiles())
             {
@@ -147,7 +149,7 @@ namespace Debris.Simulation.Tests
                 AssertRejectedTrace(enabled);
                 string family = sharedMotion ? "shared" : "resting";
                 // Keep archived checkpoint traces immutable across later solver experiments.
-                string tracePath = Path.Combine("/private/tmp/b3r-current-diagnostic-tests",
+                string tracePath = Path.Combine(exportDirectory,
                     string.Format("packed-{0}-{1}-{2}.json", family, profile[0], profile[1]));
                 string archivePath = enabled.Trace.Export(tracePath);
                 ParallelTraceReport.WriteSelectedWall(archivePath + ".wall.csv", enabled.Trace);
