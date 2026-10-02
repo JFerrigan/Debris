@@ -1,12 +1,12 @@
 # Implementation status
 
-Current handoff: **V2-0A exact pre-step capture/replay passed; next task is V2-0B independent Float64 geometry and tiny direct contact reference.** The unchanged legacy comparator reproduced all nine rejected attempts with bitwise physical rollback; see [V2-0A evidence](evidence/B3R-v2-convergence.md). Generated archives are under `Logs/b3r-v2-0a/20260925T005106Z-f0c73f7-3c17c6d83c514f76b0db7db4c9f06ce1/`. V2-0C packed reference, the full V2-0 decision, R1 and B.GATE remain open. No new solver or qualified throughput exists; damage/fuel stays paused.
+Current handoff: **V2-0B independent Float64 geometry and tiny direct contact reference passed; next task is V2-0C independent converged packed reference and separate double V2 residual/solve comparison.** V2-0A's unchanged legacy comparator reproduced all nine rejected attempts with bitwise physical rollback; see [V2 evidence](evidence/B3R-v2-convergence.md). Immutable archives remain under `Logs/b3r-v2-0a/20260925T005106Z-f0c73f7-3c17c6d83c514f76b0db7db4c9f06ce1/`. Full V2-0, R1 and B.GATE remain open. No GPU V2 solver or qualified throughput exists; damage/fuel stays paused.
 
 Limited candidate flight, drilling, effective door collision, GPU cavity classification/capacity admission and mounted suction exist under `-debrisParallelGameplay`; legacy remains the default. Candidate startup has 96 grains. Terrain/door topology changes are fenced, obstructed closure stays open, and classification accepts only whole oriented squares.
 
 ## Latest validation
 
-V2-0A focused EditMode results: archive codec 4/4, ordinary accepted/rejected replay 1/1, explicit nine-case matrix 1/1, and diagnostic export-path coverage 1/1, all passed. No Mac build/player run was needed. The prior fast suite passed 140 with one explicit scale skip (2026-09-24 04:58 UTC); its matching player still failed combined 4/2, 8/4 and 12/6 after 0, 0 and 1 committed ticks. Physics/total GPU and frame/CPU p95 remain unmeasured. Windows/Linux and candidate suction input remain unverified.
+V2-0B focused EditMode results: geometry 5/5 and contact/archive 9/9 passed; direct diagnostics include rank-1 duplicate support with zero residual and rank-4 flat support with 1.61e-15 residual. All nine V2-0A archive hashes were checked on read. No broad suite, Mac build, player or GPU replay was needed. The prior fast suite passed 140 with one explicit scale skip (2026-09-24 04:58 UTC); its matching player still failed combined 4/2, 8/4 and 12/6 after 0, 0 and 1 committed ticks. Physics/total GPU and frame/CPU p95 remain unmeasured. Windows/Linux and candidate suction input remain unverified.
 
 ## Remaining limitation and next work
 
