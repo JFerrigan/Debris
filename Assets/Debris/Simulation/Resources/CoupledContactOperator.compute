@@ -1,0 +1,76 @@
+#pragma kernel ExpandRows
+#pragma kernel ReduceSegments
+#pragma kernel ApplyBodies
+#pragma kernel ApplyRows
+
+// Frozen V2 J W J-transpose diagnostic. Contact generation and the nonlinear
+// solve remain separate. Every segment has at most 64 incident row sides.
+struct Body { float2 center; float inverseMass; float inverseInertia; };
+struct Row { uint a,b; float2 point,direction; float inverseRoot,pad; };
+struct Segment { uint body,start,count,pad; };
+
+StructuredBuffer<Body> _Bodies;
+StructuredBuffer<Row> _Rows;
+StructuredBuffer<float> _X;
+StructuredBuffer<float4> _FreeMotion;
+StructuredBuffer<uint> _Adjacency;
+StructuredBuffer<Segment> _Segments;
+StructuredBuffer<uint> _BodySegmentStarts;
+RWStructuredBuffer<float4> _SideReactions;
+RWStructuredBuffer<float4> _SegmentReactions;
+RWStructuredBuffer<float4> _Motion;
+RWStructuredBuffer<float> _Y;
+uint _RowCount,_BodyCount,_SegmentCount;
+
+float cross2(float2 a,float2 b) { return a.x*b.y-a.y*b.x; }
+groupshared float4 _Reduction[64];
+
+[numthreads(64,1,1)]
+void ExpandRows(uint id:SV_DispatchThreadID)
+{
+    if(id>=_RowCount)return;
+    Row row=_Rows[id];float impulse=_X[id]*row.inverseRoot;
+    float2 armA=row.point-_Bodies[row.a].center;
+    float2 armB=row.point-_Bodies[row.b].center;
+    _SideReactions[2*id]=float4(-row.direction*impulse,-cross2(armA,row.direction)*impulse,0);
+    _SideReactions[2*id+1]=float4(row.direction*impulse,cross2(armB,row.direction)*impulse,0);
+}
+
+[numthreads(64,1,1)]
+void ReduceSegments(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
+{
+    if(group.x>=_SegmentCount)return;
+    uint lane=thread.x;Segment segment=_Segments[group.x];
+    _Reduction[lane]=lane<segment.count?_SideReactions[_Adjacency[segment.start+lane]]:float4(0,0,0,0);
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=32;width>0;width>>=1)
+    {
+        if(lane<width)_Reduction[lane]+=_Reduction[lane+width];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(lane==0)_SegmentReactions[group.x]=_Reduction[0];
+}
+
+[numthreads(64,1,1)]
+void ApplyBodies(uint id:SV_DispatchThreadID)
+{
+    if(id>=_BodyCount)return;
+    float4 reaction=0;
+    for(uint i=_BodySegmentStarts[id];i<_BodySegmentStarts[id+1];i++)
+        reaction+=_SegmentReactions[i];
+    Body body=_Bodies[id];
+    _Motion[id]=_FreeMotion[id]+float4(reaction.xy*body.inverseMass,reaction.z*body.inverseInertia,0);
+}
+
+[numthreads(64,1,1)]
+void ApplyRows(uint id:SV_DispatchThreadID)
+{
+    if(id>=_RowCount)return;
+    Row row=_Rows[id];
+    float4 a=_Motion[row.a],b=_Motion[row.b];
+    float2 armA=row.point-_Bodies[row.a].center;
+    float2 armB=row.point-_Bodies[row.b].center;
+    float velocity=dot(row.direction,b.xy-a.xy)
+        +cross2(armB,row.direction)*b.z-cross2(armA,row.direction)*a.z;
+    _Y[id]=velocity*row.inverseRoot;
+}
