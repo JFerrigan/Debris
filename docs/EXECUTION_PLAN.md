@@ -51,7 +51,7 @@ Current B.3R.R2 checkpoint (2026-09-21 UTC): limited [candidate drilling](CANDID
 - [ ] B.3R.R1.V2-0 Exact replay inputs, independent geometry, direct analytical contact checks and converged packed reference; explicit formulation decision before GPU solver implementation.
   - [x] V2-0A Immutable exact pre-step archives, nine-case legacy capture/replay and unchanged physical rollback; [evidence](evidence/B3R-v2-convergence.md).
   - [x] V2-0B Independent Float64 geometry and tiny direct analytical contact reference; [evidence](evidence/B3R-v2-convergence.md).
-  - [ ] V2-0C Independent converged packed reference and separate V2 double residual/solve comparison. Editor-only implementation is present; focused checks, exact nine-case acceptance, global packed rank and the full V2-0 decision remain open under the user's no-tests direction.
+  - [ ] V2-0C Independent converged packed reference and separate V2 double residual/solve comparison. Editor-only implementation, restarted V2 diagnostic GMRES and focused regression definitions are present; focused checks, exact nine-case acceptance, global packed rank and the full V2-0 decision remain open under the user's no-tests direction.
 - [ ] B.3R.R1.V2-1 GPU manifolds/operator, finite high-degree hull reactions, explicit arena and scheduling/product-cost gate.
 - [ ] B.3R.R1.V2-2 Full bounded Newton/GMRES step, cold/warm caches, strict penetration/conservation/speed cases and whole-tick rollback.
 - [ ] B.3R.R1.V2-3 Same C1/C2/C3 profile passes physical matrix and all 8,192-grain throughput/resource budgets with tagged timing; final suite/build/player evidence.

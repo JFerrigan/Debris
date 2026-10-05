@@ -43,8 +43,8 @@ namespace Debris.Simulation.Tests
                 }
                 if(result.PositionFreeBodies!=null&&result.PositionContacts!=null)
                     v2Position=new CoupledV2Double(result.PositionFreeBodies,result.PositionContacts,0,archive.Dt/result.Substeps,true).Solve(result.PositionBodies);
-                TestContext.WriteLine("{0} hash={1} substeps={2} points-max={3} local-rank-max={4} normal-rank-upper-max={5} sweeps={6} refresh={7} velocity={8:R} position={9:R} grain={10:R} solid={11:R} accepted={12} first={13} feature={14} v2={15} v2-residual={16:R} v2-physical={17:R} endpoint={18:R} v2-position={19} position-residual={20:R} position-endpoint={21:R} v2-feature={22} v2-position-feature={23} v2-normal={24:R} v2-friction={25:R}",
-                    Names[i],archive.Hash,result.Substeps,result.Points,result.LocalRank,result.RankUpper,result.Sweeps,result.Refreshes,result.VelocityResidual,result.PositionResidual,result.GrainGap,result.SolidGap,result.Converged,result.FirstFailure,result.FirstFeature,v2==null?"unavailable":v2.Converged?"converged":v2.Failure,v2==null?double.NaN:v2.Residual,v2==null?double.NaN:v2.PhysicalResidual,v2==null?double.NaN:v2.EndpointError,v2Position==null?"unavailable":v2Position.Converged?"converged":v2Position.Failure,v2Position==null?double.NaN:v2Position.PhysicalResidual,v2Position==null?double.NaN:v2Position.EndpointError,v2?.FirstFeature,v2Position?.FirstFeature,v2==null?double.NaN:v2.NormalResidual,v2==null?double.NaN:v2.FrictionResidual);
+                TestContext.WriteLine("{0} hash={1} substeps={2} points-max={3} local-rank-max={4} normal-rank-upper-max={5} sweeps={6} refresh={7} velocity={8:R} position={9:R} grain={10:R} solid={11:R} accepted={12} first={13} feature={14} v2={15} v2-residual={16:R} v2-physical={17:R} endpoint={18:R} v2-position={19} position-residual={20:R} position-endpoint={21:R} v2-feature={22} v2-position-feature={23} v2-normal={24:R} v2-friction={25:R} v2-cycles={26} v2-krylov={27} v2-search-shift={28:R}",
+                    Names[i],archive.Hash,result.Substeps,result.Points,result.LocalRank,result.RankUpper,result.Sweeps,result.Refreshes,result.VelocityResidual,result.PositionResidual,result.GrainGap,result.SolidGap,result.Converged,result.FirstFailure,result.FirstFeature,v2==null?"unavailable":v2.Converged?"converged":v2.Failure,v2==null?double.NaN:v2.Residual,v2==null?double.NaN:v2.PhysicalResidual,v2==null?double.NaN:v2.EndpointError,v2Position==null?"unavailable":v2Position.Converged?"converged":v2Position.Failure,v2Position==null?double.NaN:v2Position.PhysicalResidual,v2Position==null?double.NaN:v2Position.EndpointError,v2?.FirstFeature,v2Position?.FirstFeature,v2==null?double.NaN:v2.NormalResidual,v2==null?double.NaN:v2.FrictionResidual,v2==null?0:v2.Restarts,v2==null?0:v2.Krylov,v2==null?double.NaN:v2.SearchShift);
                 if(result.Converged)
                 {
                     Assert.That(result.VelocityResidual,Is.LessThanOrEqualTo(1e-8));
@@ -82,6 +82,29 @@ namespace Debris.Simulation.Tests
             Assert.That(result.Points,Is.GreaterThanOrEqualTo(2));
             Assert.That(result.VelocityBodies[0].Velocity.X,Is.EqualTo(1).Within(1e-7));
             Assert.That(result.VelocityBodies[1].Velocity.X,Is.EqualTo(1).Within(1e-7));
+        }
+        [Test] public void SeparateV2DoubleSolvePropagatesAcrossTwentyBodyChain()
+        {
+            const int count=20;var free=new DBody[count];var expected=new DBody[count];
+            var manifolds=new List<CoupledPackedReference.Manifold>();
+            for(int i=0;i<count;i++)
+            {
+                free[i]=Body(i,0,i==0?1:0);expected[i]=free[i];
+                expected[i].Velocity=new DVec(1.0/count,0);
+            }
+            for(int i=0;i<count-1;i++)
+            {
+                var point=new CoupledPackedReference.Point{A=i,B=i+1,P=new DVec(i+.5,0),
+                    N=new DVec(1,0),BaseA=free[i].Center,BaseB=free[i+1].Center,Key="chain-"+i};
+                manifolds.Add(new CoupledPackedReference.Manifold{Points=new[]{point}});
+            }
+            var answer=new CoupledV2Double(free,manifolds,0,1.0/60).Solve(expected);
+            TestContext.WriteLine("twenty-body V2 converged={0} failure={1} feature={2} cycles={3} krylov={4} shift={5:R} physical={6:R} endpoint={7:R}",
+                answer.Converged,answer.Failure,answer.FirstFeature,answer.Restarts,answer.Krylov,
+                answer.SearchShift,answer.PhysicalResidual,answer.EndpointError);
+            Assert.That(answer.Converged,Is.True,answer.Failure+" "+answer.FirstFeature);
+            Assert.That(answer.PhysicalResidual,Is.LessThanOrEqualTo(1e-5));
+            Assert.That(answer.EndpointError,Is.LessThanOrEqualTo(1e-5));
         }
         internal static DArchive FiniteChain(int count)
         {
