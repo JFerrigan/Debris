@@ -25,12 +25,6 @@ namespace Debris.Simulation.CoupledContacts
     // rows; no gameplay state or legacy solver buffer is modified by this probe.
     public sealed class CoupledContactOperator : IDisposable
     {
-        [StructLayout(LayoutKind.Sequential, Pack=4, Size=16)]
-        struct Segment
-        {
-            public uint Body,Start,Count,Padding;
-        }
-
         public sealed class Result
         {
             public Vector4[] EndpointMotion;
@@ -41,9 +35,12 @@ namespace Debris.Simulation.CoupledContacts
         readonly CommandBuffer commands=new CommandBuffer{name="V2 frozen contact operator"};
         readonly List<GraphicsBuffer> owned=new List<GraphicsBuffer>();
         readonly GraphicsBuffer bodyBuffer,rowBuffer,xBuffer,freeBuffer,adjacencyBuffer,
-            segmentBuffer,segmentStartBuffer,sideBuffer,partialBuffer,motionBuffer,yBuffer;
-        readonly int expand,reduce,applyBodies,applyRows;
-        readonly int bodyCount,rowCount,segmentCount;
+            segmentBuffer,segmentStartBuffer,sideBuffer,partialBuffer,motionBuffer,yBuffer,
+            degreeBuffer,cursorBuffer,adjLocalBuffer,segmentLocalBuffer,adjBlockSums,
+            segmentBlockSums,adjBlockStarts,segmentBlockStarts,segmentArgs;
+        readonly int expand,clear,count,scanLocal,scanBlocks,scatter,buildSegments,
+            reduce,applyBodies,applyRows;
+        readonly int bodyCount,rowCount,segmentCount,blockCount;
         bool disposed;
         public int BodyCount=>bodyCount;
         public int RowCount=>rowCount;
@@ -56,13 +53,12 @@ namespace Debris.Simulation.CoupledContacts
             if(bodies==null||rows==null||bodies.Length==0||bodies.Length>8210||rows.Length>262144)
                 throw new ArgumentException("Frozen graph exceeds the V2-1 endpoint or row limit");
             bodyCount=bodies.Length;rowCount=rows.Length;
-            var incident=new List<uint>[bodyCount];
+            var degrees=new int[bodyCount];
             for(int i=0;i<bodyCount;i++)
             {
                 var b=bodies[i];
                 if(!Finite(b.Center.x)||!Finite(b.Center.y)||!Finite(b.InverseMass)||!Finite(b.InverseInertia)||
                     b.InverseMass<0||b.InverseInertia<0)throw new ArgumentException("Invalid body mass or center");
-                incident[i]=new List<uint>();
             }
             for(int i=0;i<rowCount;i++)
             {
@@ -80,54 +76,66 @@ namespace Debris.Simulation.CoupledContacts
                     a.InverseInertia*torqueA*torqueA+b.InverseInertia*torqueB*torqueB;
                 if(!(diagonal>0)||Math.Abs(row.InverseRoot*Math.Sqrt(diagonal)-1)>1e-4)
                     throw new ArgumentException("Row scaling does not match physical mass and inertia");
-                incident[row.A].Add((uint)(2*i));incident[row.B].Add((uint)(2*i+1));
+                degrees[row.A]++;degrees[row.B]++;
             }
-            var adjacency=new List<uint>(rowCount*2);
-            var segments=new List<Segment>();var starts=new uint[bodyCount+1];int maxSegments=0;
+            int segments=0,maxSegments=0;
             for(int body=0;body<bodyCount;body++)
             {
-                starts[body]=(uint)segments.Count;
-                var list=incident[body];
-                for(int first=0;first<list.Count;first+=64)
-                {
-                    int count=Math.Min(64,list.Count-first);
-                    segments.Add(new Segment{Body=(uint)body,Start=(uint)adjacency.Count,Count=(uint)count});
-                    for(int j=0;j<count;j++)adjacency.Add(list[first+j]);
-                }
-                maxSegments=Math.Max(maxSegments,segments.Count-(int)starts[body]);
+                int count=(degrees[body]+63)/64;
+                segments+=count;maxSegments=Math.Max(maxSegments,count);
             }
-            starts[bodyCount]=(uint)segments.Count;
-            segmentCount=segments.Count;MaxSegmentsPerBody=maxSegments;
+            segmentCount=segments;MaxSegmentsPerBody=maxSegments;
+            blockCount=(bodyCount+255)/256;
             var asset=Resources.Load<ComputeShader>("CoupledContactOperator");
             if(asset==null)throw new InvalidOperationException("Missing CoupledContactOperator compute resource");
             shader=UnityEngine.Object.Instantiate(asset);
             bodyBuffer=Buffer(bodyCount,16);rowBuffer=Buffer(Math.Max(1,rowCount),32);
             xBuffer=Buffer(Math.Max(1,rowCount),4);freeBuffer=Buffer(bodyCount,16);
-            adjacencyBuffer=Buffer(Math.Max(1,adjacency.Count),4);
-            segmentBuffer=Buffer(Math.Max(1,segmentCount),16);segmentStartBuffer=Buffer(bodyCount+1,4);
+            adjacencyBuffer=Buffer(Math.Max(1,rowCount*2),4);
+            segmentBuffer=Buffer(Math.Max(1,bodyCount+(rowCount*2+63)/64),16);
+            segmentStartBuffer=Buffer(bodyCount+1,4);
+            degreeBuffer=Buffer(bodyCount,4);cursorBuffer=Buffer(bodyCount,4);
+            adjLocalBuffer=Buffer(bodyCount,4);segmentLocalBuffer=Buffer(bodyCount,4);
+            adjBlockSums=Buffer(blockCount,4);segmentBlockSums=Buffer(blockCount,4);
+            adjBlockStarts=Buffer(blockCount,4);segmentBlockStarts=Buffer(blockCount,4);
+            segmentArgs=Buffer(3,4,GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.IndirectArguments);
             sideBuffer=Buffer(Math.Max(1,rowCount*2),16);
-            partialBuffer=Buffer(Math.Max(1,segmentCount),16);
+            partialBuffer=Buffer(Math.Max(1,bodyCount+(rowCount*2+63)/64),16);
             motionBuffer=Buffer(bodyCount,16);yBuffer=Buffer(Math.Max(1,rowCount),4);
             bodyBuffer.SetData(bodies);if(rowCount>0)rowBuffer.SetData(rows);
-            if(adjacency.Count>0)adjacencyBuffer.SetData(adjacency.ToArray());
-            if(segmentCount>0)segmentBuffer.SetData(segments.ToArray());
-            segmentStartBuffer.SetData(starts);
             shader.SetInt("_BodyCount",bodyCount);shader.SetInt("_RowCount",rowCount);
-            shader.SetInt("_SegmentCount",segmentCount);
-            expand=shader.FindKernel("ExpandRows");reduce=shader.FindKernel("ReduceSegments");
+            shader.SetInt("_BlockCount",blockCount);
+            expand=shader.FindKernel("ExpandRows");clear=shader.FindKernel("ClearIncidence");
+            count=shader.FindKernel("CountIncidence");scanLocal=shader.FindKernel("ScanIncidenceLocal");
+            scanBlocks=shader.FindKernel("ScanIncidenceBlocks");scatter=shader.FindKernel("ScatterIncidence");
+            buildSegments=shader.FindKernel("BuildSegments");reduce=shader.FindKernel("ReduceSegments");
             applyBodies=shader.FindKernel("ApplyBodies");applyRows=shader.FindKernel("ApplyRows");
             Bind(expand,("_Rows",rowBuffer),("_Bodies",bodyBuffer),("_X",xBuffer),("_SideReactions",sideBuffer));
+            Bind(clear,("_Degrees",degreeBuffer),("_Cursors",cursorBuffer));
+            Bind(count,("_Rows",rowBuffer),("_Degrees",degreeBuffer));
+            Bind(scanLocal,("_Degrees",degreeBuffer),("_AdjLocalStarts",adjLocalBuffer),
+                ("_SegmentLocalStarts",segmentLocalBuffer),("_AdjBlockSums",adjBlockSums),
+                ("_SegmentBlockSums",segmentBlockSums));
+            Bind(scanBlocks,("_AdjBlockSums",adjBlockSums),("_SegmentBlockSums",segmentBlockSums),
+                ("_AdjBlockStarts",adjBlockStarts),("_SegmentBlockStarts",segmentBlockStarts),
+                ("_SegmentArgs",segmentArgs));
+            Bind(scatter,("_Rows",rowBuffer),("_Cursors",cursorBuffer),("_AdjLocalStarts",adjLocalBuffer),
+                ("_AdjBlockStarts",adjBlockStarts),("_Adjacency",adjacencyBuffer));
+            Bind(buildSegments,("_Degrees",degreeBuffer),("_AdjLocalStarts",adjLocalBuffer),
+                ("_AdjBlockStarts",adjBlockStarts),("_SegmentLocalStarts",segmentLocalBuffer),
+                ("_SegmentBlockStarts",segmentBlockStarts),("_Segments",segmentBuffer),
+                ("_BodySegmentStarts",segmentStartBuffer),("_SegmentArgs",segmentArgs));
             Bind(reduce,("_Adjacency",adjacencyBuffer),("_Segments",segmentBuffer),
-                ("_SideReactions",sideBuffer),("_SegmentReactions",partialBuffer));
+                ("_SideReactions",sideBuffer),("_SegmentReactions",partialBuffer),("_SegmentArgs",segmentArgs));
             Bind(applyBodies,("_Bodies",bodyBuffer),("_BodySegmentStarts",segmentStartBuffer),
                 ("_SegmentReactions",partialBuffer),("_FreeMotion",freeBuffer),("_Motion",motionBuffer));
             Bind(applyRows,("_Rows",rowBuffer),("_Bodies",bodyBuffer),("_Motion",motionBuffer),("_Y",yBuffer));
         }
 
         static bool Finite(float x)=>!float.IsNaN(x)&&!float.IsInfinity(x);
-        GraphicsBuffer Buffer(int count,int stride)
+        GraphicsBuffer Buffer(int count,int stride,GraphicsBuffer.Target target=GraphicsBuffer.Target.Structured)
         {
-            var buffer=new GraphicsBuffer(GraphicsBuffer.Target.Structured,count,stride);
+            var buffer=new GraphicsBuffer(target,count,stride);
             owned.Add(buffer);BufferBytes+=(long)count*stride;return buffer;
         }
         void Bind(int kernel,params (string Name,GraphicsBuffer Buffer)[] bindings)
@@ -145,11 +153,19 @@ namespace Debris.Simulation.CoupledContacts
             foreach(float value in scaledImpulse)if(!Finite(value))throw new ArgumentException("Nonfinite scaled impulse");
             freeBuffer.SetData(freeMotion);if(rowCount>0)xBuffer.SetData(scaledImpulse);
             commands.Clear();
+            commands.DispatchCompute(shader,clear,(bodyCount+63)/64,1,1);
+            if(rowCount>0)commands.DispatchCompute(shader,count,(rowCount+63)/64,1,1);
+            commands.DispatchCompute(shader,scanLocal,blockCount,1,1);
+            commands.DispatchCompute(shader,scanBlocks,1,1,1);
+            if(rowCount>0)commands.DispatchCompute(shader,scatter,(rowCount+63)/64,1,1);
+            commands.DispatchCompute(shader,buildSegments,(bodyCount+64)/64,1,1);
             if(rowCount>0)commands.DispatchCompute(shader,expand,(rowCount+63)/64,1,1);
-            if(segmentCount>0)commands.DispatchCompute(shader,reduce,segmentCount,1,1);
+            if(segmentCount>0)commands.DispatchCompute(shader,reduce,segmentArgs,0u);
             commands.DispatchCompute(shader,applyBodies,(bodyCount+63)/64,1,1);
             if(rowCount>0)commands.DispatchCompute(shader,applyRows,(rowCount+63)/64,1,1);
             Graphics.ExecuteCommandBuffer(commands);
+            var args=new uint[3];segmentArgs.GetData(args);
+            if(args[0]!=(uint)segmentCount)throw new InvalidOperationException("GPU incidence segment count mismatch");
             var result=new Result{EndpointMotion=new Vector4[bodyCount],RowVelocity=new float[rowCount]};
             motionBuffer.GetData(result.EndpointMotion);
             if(rowCount>0)yBuffer.GetData(result.RowVelocity);

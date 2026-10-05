@@ -8,6 +8,22 @@ namespace Debris.Simulation.Tests
 {
     public sealed class CoupledContactOperatorTests
     {
+        [Test] public void EmptyFrozenGraphKeepsFreeMotionAcrossRepeatedProducts()
+        {
+            Assume.That(SystemInfo.supportsComputeShaders,Is.True);
+            var bodies=new[]{new CoupledContactBody{Center=Vector2.zero,InverseMass=1,InverseInertia=1}};
+            using(var op=new CoupledContactOperator(bodies,Array.Empty<CoupledContactRow>()))
+            {
+                var free=new[]{new Vector4(2,-3,.25f,0)};
+                for(int i=0;i<2;i++)
+                {
+                    var result=op.Apply(free,Array.Empty<float>());
+                    Assert.That(op.SegmentCount,Is.Zero);
+                    Assert.That(result.RowVelocity,Is.Empty);
+                    Assert.That(result.EndpointMotion[0],Is.EqualTo(free[0]));
+                }
+            }
+        }
         [Test] public void FrozenGpuProductMatchesOffCenterTwoBodyMassAndTorque()
         {
             Assert.That(Marshal.SizeOf<CoupledContactBody>(),Is.EqualTo(16));
@@ -29,6 +45,8 @@ namespace Debris.Simulation.Tests
                 Assert.That(result.EndpointMotion[0].z,Is.EqualTo(.25).Within(1e-5));
                 Assert.That(result.EndpointMotion[1].z,Is.EqualTo(-.25).Within(1e-5));
                 Assert.That(result.RowVelocity[0],Is.EqualTo(root).Within(1e-5));
+                var repeated=op.Apply(new Vector4[2],new[]{root});
+                Assert.That(repeated.RowVelocity[0],Is.EqualTo(result.RowVelocity[0]).Within(1e-6));
             }
         }
 

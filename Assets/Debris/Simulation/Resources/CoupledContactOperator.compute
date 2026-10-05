@@ -1,4 +1,10 @@
 #pragma kernel ExpandRows
+#pragma kernel ClearIncidence
+#pragma kernel CountIncidence
+#pragma kernel ScanIncidenceLocal
+#pragma kernel ScanIncidenceBlocks
+#pragma kernel ScatterIncidence
+#pragma kernel BuildSegments
 #pragma kernel ReduceSegments
 #pragma kernel ApplyBodies
 #pragma kernel ApplyRows
@@ -13,17 +19,23 @@ StructuredBuffer<Body> _Bodies;
 StructuredBuffer<Row> _Rows;
 StructuredBuffer<float> _X;
 StructuredBuffer<float4> _FreeMotion;
-StructuredBuffer<uint> _Adjacency;
-StructuredBuffer<Segment> _Segments;
-StructuredBuffer<uint> _BodySegmentStarts;
+RWStructuredBuffer<uint> _Adjacency;
+RWStructuredBuffer<Segment> _Segments;
+RWStructuredBuffer<uint> _BodySegmentStarts;
+RWStructuredBuffer<uint> _Degrees,_Cursors;
+RWStructuredBuffer<uint> _AdjLocalStarts,_SegmentLocalStarts;
+RWStructuredBuffer<uint> _AdjBlockSums,_SegmentBlockSums;
+RWStructuredBuffer<uint> _AdjBlockStarts,_SegmentBlockStarts;
+RWStructuredBuffer<uint> _SegmentArgs;
 RWStructuredBuffer<float4> _SideReactions;
 RWStructuredBuffer<float4> _SegmentReactions;
 RWStructuredBuffer<float4> _Motion;
 RWStructuredBuffer<float> _Y;
-uint _RowCount,_BodyCount,_SegmentCount;
+uint _RowCount,_BodyCount,_BlockCount;
 
 float cross2(float2 a,float2 b) { return a.x*b.y-a.y*b.x; }
 groupshared float4 _Reduction[64];
+groupshared uint _AdjScan[256],_SegmentScan[256];
 
 [numthreads(64,1,1)]
 void ExpandRows(uint id:SV_DispatchThreadID)
@@ -37,9 +49,112 @@ void ExpandRows(uint id:SV_DispatchThreadID)
 }
 
 [numthreads(64,1,1)]
+void ClearIncidence(uint id:SV_DispatchThreadID)
+{
+    if(id>=_BodyCount)return;
+    _Degrees[id]=0;_Cursors[id]=0;
+}
+
+[numthreads(64,1,1)]
+void CountIncidence(uint id:SV_DispatchThreadID)
+{
+    if(id>=_RowCount)return;
+    Row row=_Rows[id];
+    InterlockedAdd(_Degrees[row.a],1);
+    InterlockedAdd(_Degrees[row.b],1);
+}
+
+[numthreads(256,1,1)]
+void ScanIncidenceLocal(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
+{
+    uint lane=thread.x,id=group.x*256+lane;
+    uint degree=id<_BodyCount?_Degrees[id]:0;
+    uint segments=(degree+63)/64;
+    _AdjScan[lane]=degree;_SegmentScan[lane]=segments;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=1;width<256;width<<=1)
+    {
+        uint precedingAdj=lane>=width?_AdjScan[lane-width]:0;
+        uint precedingSegments=lane>=width?_SegmentScan[lane-width]:0;
+        GroupMemoryBarrierWithGroupSync();
+        _AdjScan[lane]+=precedingAdj;_SegmentScan[lane]+=precedingSegments;
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(id<_BodyCount)
+    {
+        _AdjLocalStarts[id]=_AdjScan[lane]-degree;
+        _SegmentLocalStarts[id]=_SegmentScan[lane]-segments;
+    }
+    if(lane==255)
+    {
+        _AdjBlockSums[group.x]=_AdjScan[lane];
+        _SegmentBlockSums[group.x]=_SegmentScan[lane];
+    }
+}
+
+[numthreads(64,1,1)]
+void ScanIncidenceBlocks(uint3 thread:SV_GroupThreadID)
+{
+    uint lane=thread.x;
+    uint adj=lane<_BlockCount?_AdjBlockSums[lane]:0;
+    uint segments=lane<_BlockCount?_SegmentBlockSums[lane]:0;
+    _AdjScan[lane]=adj;_SegmentScan[lane]=segments;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=1;width<64;width<<=1)
+    {
+        uint precedingAdj=lane>=width?_AdjScan[lane-width]:0;
+        uint precedingSegments=lane>=width?_SegmentScan[lane-width]:0;
+        GroupMemoryBarrierWithGroupSync();
+        _AdjScan[lane]+=precedingAdj;_SegmentScan[lane]+=precedingSegments;
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(lane<_BlockCount)
+    {
+        _AdjBlockStarts[lane]=_AdjScan[lane]-adj;
+        _SegmentBlockStarts[lane]=_SegmentScan[lane]-segments;
+    }
+    if(lane==0)
+    {
+        _SegmentArgs[0]=_SegmentScan[_BlockCount-1];
+        _SegmentArgs[1]=1;_SegmentArgs[2]=1;
+    }
+}
+
+[numthreads(64,1,1)]
+void ScatterIncidence(uint id:SV_DispatchThreadID)
+{
+    if(id>=_RowCount)return;
+    Row row=_Rows[id];uint ordinalA,ordinalB;
+    InterlockedAdd(_Cursors[row.a],1,ordinalA);
+    InterlockedAdd(_Cursors[row.b],1,ordinalB);
+    uint startA=_AdjLocalStarts[row.a]+_AdjBlockStarts[row.a/256];
+    uint startB=_AdjLocalStarts[row.b]+_AdjBlockStarts[row.b/256];
+    _Adjacency[startA+ordinalA]=2*id;
+    _Adjacency[startB+ordinalB]=2*id+1;
+}
+
+[numthreads(64,1,1)]
+void BuildSegments(uint id:SV_DispatchThreadID)
+{
+    if(id>_BodyCount)return;
+    if(id==_BodyCount){_BodySegmentStarts[id]=_SegmentArgs[0];return;}
+    uint first=_SegmentLocalStarts[id]+_SegmentBlockStarts[id/256];
+    uint adjacencyStart=_AdjLocalStarts[id]+_AdjBlockStarts[id/256];
+    uint degree=_Degrees[id],count=(degree+63)/64;
+    _BodySegmentStarts[id]=first;
+    for(uint i=0;i<count;i++)
+    {
+        Segment segment;
+        segment.body=id;segment.start=adjacencyStart+64*i;
+        segment.count=min(64,degree-64*i);segment.pad=0;
+        _Segments[first+i]=segment;
+    }
+}
+
+[numthreads(64,1,1)]
 void ReduceSegments(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
 {
-    if(group.x>=_SegmentCount)return;
+    if(group.x>=_SegmentArgs[0])return;
     uint lane=thread.x;Segment segment=_Segments[group.x];
     _Reduction[lane]=lane<segment.count?_SideReactions[_Adjacency[segment.start+lane]]:float4(0,0,0,0);
     GroupMemoryBarrierWithGroupSync();
