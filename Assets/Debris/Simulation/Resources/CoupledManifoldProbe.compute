@@ -1,4 +1,5 @@
 #pragma kernel BuildManifolds
+#pragma kernel BuildRows
 
 // V2-1 convex pair narrow phase. The broad phase supplies candidate pairs;
 // output is one or two distinct points on the winning SAT reference face.
@@ -18,9 +19,14 @@ struct Manifold
     float2 point0,point1;
     float gap0,gap1;
 };
+struct Body { float2 center; float inverseMass; float inverseInertia; };
+struct Row { uint a,b; float2 point,direction; float inverseRoot,gap; };
 StructuredBuffer<BoxPair> _Pairs;
 RWStructuredBuffer<Manifold> _Manifolds;
+StructuredBuffer<Body> _Bodies;
+RWStructuredBuffer<Row> _Rows;
 uint _PairCount;
+uint _BodyCount;
 float _Margin;
 
 float2 rotate2(float2 p,float angle)
@@ -106,4 +112,37 @@ void BuildManifolds(uint id:SV_DispatchThreadID)
         result.count++;
     }
     _Manifolds[id]=result;
+}
+
+float cross2(float2 a,float2 b){return a.x*b.y-a.y*b.x;}
+
+[numthreads(64,1,1)]
+void BuildRows(uint id:SV_DispatchThreadID)
+{
+    if(id>=_PairCount)return;
+    BoxPair pair=_Pairs[id];Manifold manifold=_Manifolds[id];
+    Row empty=(Row)0;
+    for(uint slot=0;slot<4;slot++)_Rows[4*id+slot]=empty;
+    if(pair.aIdentity>=_BodyCount||pair.bIdentity>=_BodyCount||
+       pair.aIdentity==pair.bIdentity)return;
+    Body a=_Bodies[pair.aIdentity],b=_Bodies[pair.bIdentity];
+    for(uint point=0;point<min(2u,manifold.count);point++)
+    {
+        float2 position=point==0?manifold.point0:manifold.point1;
+        float gap=point==0?manifold.gap0:manifold.gap1;
+        for(uint axis=0;axis<2;axis++)
+        {
+            float2 direction=axis==0?manifold.normal:float2(-manifold.normal.y,manifold.normal.x);
+            float angularA=cross2(position-a.center,direction);
+            float angularB=cross2(position-b.center,direction);
+            float diagonal=a.inverseMass+b.inverseMass+
+                a.inverseInertia*angularA*angularA+b.inverseInertia*angularB*angularB;
+            if(!(diagonal>0)||!isfinite(diagonal))continue;
+            Row row=(Row)0;
+            row.a=pair.aIdentity;row.b=pair.bIdentity;
+            row.point=position;row.direction=direction;
+            row.inverseRoot=rsqrt(diagonal);row.gap=gap;
+            _Rows[4*id+2*point+axis]=row;
+        }
+    }
 }

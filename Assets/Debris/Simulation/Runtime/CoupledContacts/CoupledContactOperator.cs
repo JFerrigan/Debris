@@ -18,7 +18,18 @@ namespace Debris.Simulation.CoupledContacts
     {
         public uint A,B;
         public Vector2 Point,Direction;
-        public float InverseRoot,Padding;
+        public float InverseRoot,Gap;
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack=4, Size=48)]
+    public struct CoupledContactPair
+    {
+        public Vector2 ACenter,AHalf;
+        public float AAngle;
+        public uint AEndpoint;
+        public Vector2 BCenter,BHalf;
+        public float BAngle;
+        public uint BEndpoint;
     }
 
     // Isolated frozen-graph GPU product for V2-1. The caller supplies contact
@@ -29,30 +40,43 @@ namespace Debris.Simulation.CoupledContacts
         {
             public Vector4[] EndpointMotion;
             public float[] RowVelocity;
+            public CoupledContactRow[] Rows;
+            public int ActiveRows;
         }
 
         readonly ComputeShader shader;
+        readonly ComputeShader manifoldShader;
         readonly CommandBuffer commands=new CommandBuffer{name="V2 frozen contact operator"};
         readonly List<GraphicsBuffer> owned=new List<GraphicsBuffer>();
         readonly GraphicsBuffer bodyBuffer,rowBuffer,xBuffer,freeBuffer,adjacencyBuffer,
             segmentBuffer,segmentStartBuffer,sideBuffer,partialBuffer,motionBuffer,yBuffer,
             degreeBuffer,cursorBuffer,adjLocalBuffer,segmentLocalBuffer,adjBlockSums,
-            segmentBlockSums,adjBlockStarts,segmentBlockStarts,segmentArgs;
+            segmentBlockSums,adjBlockStarts,segmentBlockStarts,segmentArgs,
+            pairBuffer,manifoldBuffer;
         readonly int expand,clear,count,scanLocal,scanBlocks,scatter,buildSegments,
-            reduce,applyBodies,applyRows;
-        readonly int bodyCount,rowCount,segmentCount,blockCount;
+            reduce,applyBodies,applyRows,buildManifolds,buildRows;
+        readonly int bodyCount,rowCount,blockCount,pairCount;
+        readonly bool gpuPairs;
         bool disposed;
         public int BodyCount=>bodyCount;
         public int RowCount=>rowCount;
-        public int SegmentCount=>segmentCount;
+        public int SegmentCount { get; private set; }
         public int MaxSegmentsPerBody { get; }
         public long BufferBytes { get; private set; }
 
         public CoupledContactOperator(CoupledContactBody[] bodies,CoupledContactRow[] rows)
+            :this(bodies,rows,null){}
+
+        public CoupledContactOperator(CoupledContactBody[] bodies,CoupledContactPair[] pairs)
+            :this(bodies,null,pairs){}
+
+        CoupledContactOperator(CoupledContactBody[] bodies,CoupledContactRow[] rows,CoupledContactPair[] pairs)
         {
-            if(bodies==null||rows==null||bodies.Length==0||bodies.Length>8210||rows.Length>262144)
+            if(bodies==null||bodies.Length==0||bodies.Length>8210||(rows==null)==(pairs==null)||
+                (rows!=null&&rows.Length>262144)||(pairs!=null&&pairs.Length>65536))
                 throw new ArgumentException("Frozen graph exceeds the V2-1 endpoint or row limit");
-            bodyCount=bodies.Length;rowCount=rows.Length;
+            bodyCount=bodies.Length;gpuPairs=pairs!=null;pairCount=gpuPairs?pairs.Length:0;
+            rowCount=gpuPairs?pairCount*4:rows.Length;
             var degrees=new int[bodyCount];
             for(int i=0;i<bodyCount;i++)
             {
@@ -60,7 +84,16 @@ namespace Debris.Simulation.CoupledContacts
                 if(!Finite(b.Center.x)||!Finite(b.Center.y)||!Finite(b.InverseMass)||!Finite(b.InverseInertia)||
                     b.InverseMass<0||b.InverseInertia<0)throw new ArgumentException("Invalid body mass or center");
             }
-            for(int i=0;i<rowCount;i++)
+            if(gpuPairs)foreach(var pair in pairs)
+            {
+                if(pair.AEndpoint>=bodyCount||pair.BEndpoint>=bodyCount||pair.AEndpoint==pair.BEndpoint||
+                    !Finite(pair.ACenter.x)||!Finite(pair.ACenter.y)||!Finite(pair.AHalf.x)||!Finite(pair.AHalf.y)||
+                    !Finite(pair.BCenter.x)||!Finite(pair.BCenter.y)||!Finite(pair.BHalf.x)||!Finite(pair.BHalf.y)||
+                    !Finite(pair.AAngle)||!Finite(pair.BAngle)||pair.AHalf.x<=0||pair.AHalf.y<=0||
+                    pair.BHalf.x<=0||pair.BHalf.y<=0)
+                    throw new ArgumentException("Invalid convex pair");
+            }
+            for(int i=0;!gpuPairs&&i<rowCount;i++)
             {
                 var row=rows[i];
                 if(row.A>=bodyCount||row.B>=bodyCount||row.A==row.B||
@@ -84,12 +117,32 @@ namespace Debris.Simulation.CoupledContacts
                 int count=(degrees[body]+63)/64;
                 segments+=count;maxSegments=Math.Max(maxSegments,count);
             }
-            segmentCount=segments;MaxSegmentsPerBody=maxSegments;
+            SegmentCount=gpuPairs?-1:segments;MaxSegmentsPerBody=gpuPairs?-1:maxSegments;
             blockCount=(bodyCount+255)/256;
             var asset=Resources.Load<ComputeShader>("CoupledContactOperator");
             if(asset==null)throw new InvalidOperationException("Missing CoupledContactOperator compute resource");
+            var manifoldAsset=gpuPairs?Resources.Load<ComputeShader>("CoupledManifoldProbe"):null;
+            if(gpuPairs&&manifoldAsset==null)throw new InvalidOperationException("Missing CoupledManifoldProbe compute resource");
             shader=UnityEngine.Object.Instantiate(asset);
+            if(gpuPairs)manifoldShader=UnityEngine.Object.Instantiate(manifoldAsset);
             bodyBuffer=Buffer(bodyCount,16);rowBuffer=Buffer(Math.Max(1,rowCount),32);
+            if(gpuPairs)
+            {
+                pairBuffer=Buffer(Math.Max(1,pairCount),48);
+                manifoldBuffer=Buffer(Math.Max(1,pairCount),40);
+                if(pairCount>0)pairBuffer.SetData(pairs);
+                manifoldShader.SetInt("_PairCount",pairCount);
+                manifoldShader.SetInt("_BodyCount",bodyCount);
+                manifoldShader.SetFloat("_Margin",.25f);
+                buildManifolds=manifoldShader.FindKernel("BuildManifolds");
+                buildRows=manifoldShader.FindKernel("BuildRows");
+                manifoldShader.SetBuffer(buildManifolds,"_Pairs",pairBuffer);
+                manifoldShader.SetBuffer(buildManifolds,"_Manifolds",manifoldBuffer);
+                manifoldShader.SetBuffer(buildRows,"_Pairs",pairBuffer);
+                manifoldShader.SetBuffer(buildRows,"_Manifolds",manifoldBuffer);
+                manifoldShader.SetBuffer(buildRows,"_Bodies",bodyBuffer);
+                manifoldShader.SetBuffer(buildRows,"_Rows",rowBuffer);
+            }
             xBuffer=Buffer(Math.Max(1,rowCount),4);freeBuffer=Buffer(bodyCount,16);
             adjacencyBuffer=Buffer(Math.Max(1,rowCount*2),4);
             segmentBuffer=Buffer(Math.Max(1,bodyCount+(rowCount*2+63)/64),16);
@@ -98,11 +151,11 @@ namespace Debris.Simulation.CoupledContacts
             adjLocalBuffer=Buffer(bodyCount,4);segmentLocalBuffer=Buffer(bodyCount,4);
             adjBlockSums=Buffer(blockCount,4);segmentBlockSums=Buffer(blockCount,4);
             adjBlockStarts=Buffer(blockCount,4);segmentBlockStarts=Buffer(blockCount,4);
-            segmentArgs=Buffer(3,4,GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.IndirectArguments);
+            segmentArgs=Buffer(4,4,GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.IndirectArguments);
             sideBuffer=Buffer(Math.Max(1,rowCount*2),16);
             partialBuffer=Buffer(Math.Max(1,bodyCount+(rowCount*2+63)/64),16);
             motionBuffer=Buffer(bodyCount,16);yBuffer=Buffer(Math.Max(1,rowCount),4);
-            bodyBuffer.SetData(bodies);if(rowCount>0)rowBuffer.SetData(rows);
+            bodyBuffer.SetData(bodies);if(!gpuPairs&&rowCount>0)rowBuffer.SetData(rows);
             shader.SetInt("_BodyCount",bodyCount);shader.SetInt("_RowCount",rowCount);
             shader.SetInt("_BlockCount",blockCount);
             expand=shader.FindKernel("ExpandRows");clear=shader.FindKernel("ClearIncidence");
@@ -153,6 +206,11 @@ namespace Debris.Simulation.CoupledContacts
             foreach(float value in scaledImpulse)if(!Finite(value))throw new ArgumentException("Nonfinite scaled impulse");
             freeBuffer.SetData(freeMotion);if(rowCount>0)xBuffer.SetData(scaledImpulse);
             commands.Clear();
+            if(pairCount>0)
+            {
+                commands.DispatchCompute(manifoldShader,buildManifolds,(pairCount+63)/64,1,1);
+                commands.DispatchCompute(manifoldShader,buildRows,(pairCount+63)/64,1,1);
+            }
             commands.DispatchCompute(shader,clear,(bodyCount+63)/64,1,1);
             if(rowCount>0)commands.DispatchCompute(shader,count,(rowCount+63)/64,1,1);
             commands.DispatchCompute(shader,scanLocal,blockCount,1,1);
@@ -160,15 +218,20 @@ namespace Debris.Simulation.CoupledContacts
             if(rowCount>0)commands.DispatchCompute(shader,scatter,(rowCount+63)/64,1,1);
             commands.DispatchCompute(shader,buildSegments,(bodyCount+64)/64,1,1);
             if(rowCount>0)commands.DispatchCompute(shader,expand,(rowCount+63)/64,1,1);
-            if(segmentCount>0)commands.DispatchCompute(shader,reduce,segmentArgs,0u);
+            if(rowCount>0)commands.DispatchCompute(shader,reduce,segmentArgs,0u);
             commands.DispatchCompute(shader,applyBodies,(bodyCount+63)/64,1,1);
             if(rowCount>0)commands.DispatchCompute(shader,applyRows,(rowCount+63)/64,1,1);
             Graphics.ExecuteCommandBuffer(commands);
-            var args=new uint[3];segmentArgs.GetData(args);
-            if(args[0]!=(uint)segmentCount)throw new InvalidOperationException("GPU incidence segment count mismatch");
-            var result=new Result{EndpointMotion=new Vector4[bodyCount],RowVelocity=new float[rowCount]};
+            var args=new uint[4];segmentArgs.GetData(args);
+            if(!gpuPairs&&args[3]!=(uint)SegmentCount)
+                throw new InvalidOperationException("GPU incidence segment count mismatch");
+            SegmentCount=(int)args[3];
+            var result=new Result{EndpointMotion=new Vector4[bodyCount],RowVelocity=new float[rowCount],
+                Rows=new CoupledContactRow[rowCount]};
             motionBuffer.GetData(result.EndpointMotion);
             if(rowCount>0)yBuffer.GetData(result.RowVelocity);
+            if(rowCount>0)rowBuffer.GetData(result.Rows);
+            foreach(var row in result.Rows)if(row.InverseRoot>0)result.ActiveRows++;
             return result;
         }
 
@@ -178,6 +241,8 @@ namespace Debris.Simulation.CoupledContacts
             commands.Release();foreach(var buffer in owned)buffer.Release();
             if(shader!=null)
             {if(Application.isPlaying)UnityEngine.Object.Destroy(shader);else UnityEngine.Object.DestroyImmediate(shader);}
+            if(manifoldShader!=null)
+            {if(Application.isPlaying)UnityEngine.Object.Destroy(manifoldShader);else UnityEngine.Object.DestroyImmediate(manifoldShader);}
         }
     }
 }

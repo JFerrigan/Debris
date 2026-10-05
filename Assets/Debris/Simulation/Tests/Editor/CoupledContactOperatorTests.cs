@@ -50,6 +50,64 @@ namespace Debris.Simulation.Tests
             }
         }
 
+        [Test] public void GpuConvexManifoldFeedsScaledRowsAndOperator()
+        {
+            Assume.That(SystemInfo.supportsComputeShaders,Is.True);
+            Assert.That(Marshal.SizeOf<CoupledContactPair>(),Is.EqualTo(48));
+            var bodies=new[]
+            {
+                new CoupledContactBody{Center=Vector2.zero,InverseMass=1,InverseInertia=1},
+                new CoupledContactBody{Center=Vector2.right,InverseMass=1,InverseInertia=1}
+            };
+            var pair=new CoupledContactPair{ACenter=Vector2.zero,AHalf=Vector2.one*.5f,
+                AEndpoint=0,BCenter=Vector2.right,BHalf=Vector2.one*.5f,BEndpoint=1};
+            float root=Mathf.Sqrt(2.5f);
+            var explicitRows=new CoupledContactRow[4];
+            for(int point=0;point<2;point++)for(int axis=0;axis<2;axis++)
+                explicitRows[2*point+axis]=new CoupledContactRow{A=0,B=1,
+                    Point=new Vector2(.5f,point==0?-.5f:.5f),
+                    Direction=axis==0?Vector2.right:Vector2.up,InverseRoot=1/root};
+            var impulses=new[]{root,0,root,0};
+            using(var generated=new CoupledContactOperator(bodies,new[]{pair}))
+            using(var expected=new CoupledContactOperator(bodies,explicitRows))
+            {
+                var actual=generated.Apply(new Vector4[2],impulses);
+                var direct=expected.Apply(new Vector4[2],impulses);
+                Assert.That(actual.ActiveRows,Is.EqualTo(4));
+                for(int i=0;i<4;i++)
+                {
+                    Assert.That(actual.Rows[i].Point.x,Is.EqualTo(explicitRows[i].Point.x).Within(1e-5));
+                    Assert.That(actual.Rows[i].Point.y,Is.EqualTo(explicitRows[i].Point.y).Within(1e-5));
+                    Assert.That(actual.Rows[i].InverseRoot,Is.EqualTo(explicitRows[i].InverseRoot).Within(1e-5));
+                    Assert.That(actual.RowVelocity[i],Is.EqualTo(direct.RowVelocity[i]).Within(1e-5));
+                }
+                for(int i=0;i<2;i++)
+                {
+                    Assert.That(actual.EndpointMotion[i].x,Is.EqualTo(direct.EndpointMotion[i].x).Within(1e-5));
+                    Assert.That(actual.EndpointMotion[i].z,Is.EqualTo(direct.EndpointMotion[i].z).Within(1e-5));
+                }
+            }
+        }
+
+        [Test] public void SeparatedGpuPairProducesNoActiveRowsOrReaction()
+        {
+            Assume.That(SystemInfo.supportsComputeShaders,Is.True);
+            var bodies=new[]
+            {
+                new CoupledContactBody{Center=Vector2.zero,InverseMass=1,InverseInertia=1},
+                new CoupledContactBody{Center=new Vector2(3,0),InverseMass=1,InverseInertia=1}
+            };
+            var pair=new CoupledContactPair{ACenter=Vector2.zero,AHalf=Vector2.one*.5f,
+                AEndpoint=0,BCenter=new Vector2(3,0),BHalf=Vector2.one*.5f,BEndpoint=1};
+            using(var op=new CoupledContactOperator(bodies,new[]{pair}))
+            {
+                var result=op.Apply(new Vector4[2],new[]{1f,1f,1f,1f});
+                Assert.That(result.ActiveRows,Is.Zero);
+                Assert.That(result.EndpointMotion[0],Is.EqualTo(Vector4.zero));
+                Assert.That(result.EndpointMotion[1],Is.EqualTo(Vector4.zero));
+            }
+        }
+
         [TestCase(200),TestCase(4096),Explicit("V2-1 high-degree GPU operator workload")]
         public void SegmentedFiniteHullReactionIncludesEveryIncidentPoint(int count)
         {
