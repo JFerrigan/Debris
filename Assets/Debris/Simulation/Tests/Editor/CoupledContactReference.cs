@@ -8,7 +8,7 @@ namespace Debris.Simulation.Tests
     internal struct DBody
     {
         public DVec Center,Velocity;
-        public double Spin,InverseMass,InverseInertia;
+        public double Angle,Spin,InverseMass,InverseInertia;
     }
     internal struct DRow
     {
@@ -152,19 +152,19 @@ namespace Debris.Simulation.Tests
     }
     internal sealed class DArchive
     {
-        public string Hash; public int ActiveGrains,GrainCapacity,BodyEndpointStart; public DBody[] Bodies; public DBox[] Grains; public CoupledReferenceGeometry.Patch[] Patches; public int[] PatchBodies; public DVec Force; public double Dt,Friction;
+        public string Hash; public int ActiveGrains,GrainCapacity,BodyEndpointStart; public DBody[] Bodies; public DBox[] Grains; public CoupledReferenceGeometry.Patch[] Patches; public int[] PatchBodies; public DVec[] LocalCOM; public DVec Force; public double Dt,Friction,Torque,SuctionForce; public bool MountedSuction;
         public static DArchive Read(string directory,string expectedHash)
         {
             var input=CoupledReplayArchive.Read(directory,out var manifest);
             if(manifest.sha256!=expectedHash)throw new InvalidDataException("Unexpected immutable archive hash");
             if(manifest.bodyEndpointStart!=input.GrainCapacity)throw new InvalidDataException("Body endpoint index mismatch");
             var result=new DArchive {Hash=manifest.sha256,ActiveGrains=input.Grains.Length,GrainCapacity=input.GrainCapacity,BodyEndpointStart=manifest.bodyEndpointStart,
-                Bodies=new DBody[input.Endpoints.Length],Grains=new DBox[input.Grains.Length],Patches=new CoupledReferenceGeometry.Patch[input.Boundaries.Length],PatchBodies=new int[input.Boundaries.Length],Dt=input.Dt,Friction=input.Friction,Force=new DVec(input.Force.x,input.Force.y)};
+                Bodies=new DBody[input.Endpoints.Length],Grains=new DBox[input.Grains.Length],Patches=new CoupledReferenceGeometry.Patch[input.Boundaries.Length],PatchBodies=new int[input.Boundaries.Length],LocalCOM=new DVec[input.Endpoints.Length],Dt=input.Dt,Friction=input.Friction,Force=new DVec(input.Force.x,input.Force.y),Torque=input.Torque,SuctionForce=input.SuctionForce,MountedSuction=input.MountedSuction};
             for(int i=0;i<input.Grains.Length;i++)
-            {var g=input.Grains[i];double mass=input.Masses==null?1:input.Masses[i];result.Bodies[i]=new DBody{Center=new DVec(g.Center.x,g.Center.y),Velocity=new DVec(g.Velocity.x,g.Velocity.y),Spin=g.AngularVelocity,InverseMass=1/mass,InverseInertia=6/mass};
+            {var g=input.Grains[i];double mass=input.Masses==null?1:input.Masses[i];result.Bodies[i]=new DBody{Center=new DVec(g.Center.x,g.Center.y),Velocity=new DVec(g.Velocity.x,g.Velocity.y),Angle=g.Angle,Spin=g.AngularVelocity,InverseMass=1/mass,InverseInertia=6/mass};
              result.Grains[i]=new DBox(result.Bodies[i].Center,new DVec(.5,.5),g.Angle,g.Identity);}
             for(int i=0;i<input.Parameters.Length;i++)
-            {int index=input.GrainCapacity+i;var b=input.Endpoints[index];var p=input.Parameters[i];result.Bodies[index]=new DBody{Center=new DVec(b.Center.x,b.Center.y),Velocity=new DVec(b.Velocity.x,b.Velocity.y),Spin=b.AngularVelocity,InverseMass=p.InverseMass,InverseInertia=p.InverseInertia};}
+            {int index=input.GrainCapacity+i;var b=input.Endpoints[index];var p=input.Parameters[i];result.Bodies[index]=new DBody{Center=new DVec(b.Center.x,b.Center.y),Velocity=new DVec(b.Velocity.x,b.Velocity.y),Angle=b.Angle,Spin=b.AngularVelocity,InverseMass=p.InverseMass,InverseInertia=p.InverseInertia};result.LocalCOM[index]=new DVec(p.LocalCOM.x,p.LocalCOM.y);}
             for(int i=0;i<input.Boundaries.Length;i++)
             {var patch=input.Boundaries[i];if(patch.Body>=(uint)result.Bodies.Length)throw new InvalidDataException("Boundary endpoint exceeds allocated capacity");
              result.Patches[i]=new CoupledReferenceGeometry.Patch(new DVec(patch.Center.x,patch.Center.y),new DVec(patch.HalfSize.x,patch.HalfSize.y),patch.Feature);result.PatchBodies[i]=(int)patch.Body;}

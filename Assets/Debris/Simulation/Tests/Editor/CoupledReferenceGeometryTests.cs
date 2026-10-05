@@ -77,5 +77,18 @@ namespace Debris.Simulation.Tests
             Assert.That(CoupledReferenceGeometry.SquareContained(ring,Box(0,0,.4)),Is.False);
             Assert.That(CoupledReferenceGeometry.SquareContained(solid,Box(0,0,.4)),Is.True);
         }
+        [Test] public void ThinOccupiedStripChoosesOneExitFace()
+        {
+            var strip=new[]{new CoupledReferenceGeometry.Patch(new DVec(0,0),new DVec(.25,1),9)};
+            var centered=CoupledReferenceGeometry.SquareUnion(Box(0,0),strip);
+            Assert.That(centered.Length,Is.EqualTo(2));
+            foreach(var c in centered){Near(c.Gap,-.75);Near(c.Normal.X,-1);}
+            var left=CoupledReferenceGeometry.SquareUnion(Box(-.1,0),strip);
+            Assert.That(left.Length,Is.EqualTo(2));
+            foreach(var c in left)Near(c.Normal.X,1);
+            var right=CoupledReferenceGeometry.SquareUnion(Box(.1,0),strip);
+            Assert.That(right.Length,Is.EqualTo(2));
+            foreach(var c in right)Near(c.Normal.X,-1);
+        }
     }
 }

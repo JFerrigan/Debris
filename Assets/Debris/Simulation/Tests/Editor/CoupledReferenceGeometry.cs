@@ -41,6 +41,14 @@ namespace Debris.Simulation.Tests
         static DVec Normal(DVec a,DVec b) { DVec d=b-a; return new DVec(d.Y,-d.X)/d.Length; }
         static double Separation(DVec[] from,DVec[] to,DVec n)
         { double hi=double.NegativeInfinity,lo=double.PositiveInfinity; foreach(var p in from)hi=Math.Max(hi,p.Dot(n)); foreach(var p in to)lo=Math.Min(lo,p.Dot(n)); return lo-hi; }
+        static double MaximumSat(DVec[] a,DVec[] b)
+        {
+            double maximum=double.NegativeInfinity;
+            for(int i=0;i<8;i++)
+            {DVec[] from=i<4?a:b,to=i<4?b:a;int side=i%4;
+             maximum=Math.Max(maximum,Separation(from,to,Normal(from[side],from[(side+1)%4])));}
+            return maximum;
+        }
         // The previous reference is a face ID: 0..3 on A, 4..7 on B.
         public static DContact[] BoxBox(DBox a,DBox b,double margin=0,int previousFace=-1)
         {
@@ -122,15 +130,30 @@ namespace Debris.Simulation.Tests
         // A is a square, B is the occupied rectangle union. Only exterior
         // intervals can supply a physical contact; containment is separate.
         public static DContact[] SquareUnion(DBox square,IReadOnlyList<Patch> patches,double margin=0,ulong unionIdentity=0,uint unionRevision=0)
+            => SquareUnionPrepared(square,patches,Exterior(patches),margin,unionIdentity,unionRevision);
+        public static DContact[] SquareUnionPrepared(DBox square,IReadOnlyList<Patch> patches,IReadOnlyList<Exposed> faces,double margin=0,ulong unionIdentity=0,uint unionRevision=0)
         {
             var vertices=square.Vertices();var contacts=new List<DContact>();
-            foreach(var face in Exterior(patches))
+            foreach(var face in faces)
             {double radius=0;foreach(var v in vertices)radius=Math.Max(radius,Math.Abs((v-square.Center).Dot(face.Normal)));
              if((square.Center-face.A).Dot(face.Normal)<-radius-1e-12)continue;
              DVec tangent=(face.B-face.A)/(face.B-face.A).Length;int incident=0;double smallest=double.PositiveInfinity;
              for(int i=0;i<4;i++){double projection=Normal(vertices[i],vertices[(i+1)%4]).Dot(face.Normal);if(projection<smallest){smallest=projection;incident=i;}}
              DVec q0=vertices[incident],q1=vertices[(incident+1)%4];double u0=(q0-face.A).Dot(tangent),u1=(q1-face.A).Dot(tangent);
              double low=Math.Max(0,Math.Min(u0,u1)),high=Math.Min((face.B-face.A).Length,Math.Max(u0,u1));if(high<low-1e-12)continue;
+             // Exterior membership alone is insufficient. A square beside a
+             // rectangle also clips its top/bottom edges with a deep negative
+             // gap. Retain this exterior face only when its axis is a winning
+             // SAT axis for an owning patch under the clipped interval.
+             DVec intervalMid=face.A+tangent*((low+high)*.5);bool winning=false;
+             foreach(var patch in patches)
+             {
+                 if(!OnFace(patch,face.Side,intervalMid))continue;
+                 var box=new DBox(patch.Center,patch.Half);DVec[] pv=box.Vertices();
+                 double faceSeparation=Separation(pv,vertices,face.Normal);
+                 if(faceSeparation>=MaximumSat(pv,vertices)-AxisTie){winning=true;break;}
+             }
+             if(!winning)continue;
              foreach(double u in new[]{low,high})
              {double fraction=Math.Abs(u1-u0)<1e-14?0:(u-u0)/(u1-u0);DVec qa=q0+(q1-q0)*fraction,qb=face.A+tangent*u;
               double gap=(qa-qb).Dot(face.Normal);if(gap>margin+1e-12)continue;
@@ -142,12 +165,32 @@ namespace Debris.Simulation.Tests
                   Key=key});
              }
             }
+            // A square that straddles a thin occupied strip sees both exterior
+            // faces. Those are alternative exit directions, not simultaneous
+            // nonpenetration constraints. Pick the shorter translation; on a
+            // tie use the stable normal order (+X exit before -X exit).
+            if(Inside(patches,square.Center))
+            {
+                for(int i=0;i<contacts.Count;i++)for(int j=i+1;j<contacts.Count;j++)
+                {
+                    if((contacts[i].Normal+contacts[j].Normal).Length>1e-8)continue;
+                    double gi=contacts[i].Gap,gj=contacts[j].Gap;
+                    bool removeI=gi<gj-1e-10 || (Math.Abs(gi-gj)<=1e-10 &&
+                        (contacts[i].Normal.X>contacts[j].Normal.X+1e-10 ||
+                         (Math.Abs(contacts[i].Normal.X-contacts[j].Normal.X)<=1e-10 && contacts[i].Normal.Y>contacts[j].Normal.Y)));
+                    DVec discarded=removeI?contacts[i].Normal:contacts[j].Normal;
+                    contacts.RemoveAll(c=>(c.Normal-discarded).Length<1e-8);
+                    i=-1;break;
+                }
+            }
             return contacts.ToArray();
         }
         public static DContact[] SquareUnion(DBox square,IReadOnlyList<Patch> localPatches,DBox unionFrame,double margin=0)
+            => SquareUnionPrepared(square,localPatches,Exterior(localPatches),unionFrame,margin);
+        public static DContact[] SquareUnionPrepared(DBox square,IReadOnlyList<Patch> localPatches,IReadOnlyList<Exposed> faces,DBox unionFrame,double margin=0)
         {
             var localSquare=new DBox(unionFrame.Local(square.Center),square.Half,square.Angle-unionFrame.Angle,square.Identity,square.Revision);
-            var contacts=SquareUnion(localSquare,localPatches,margin,unionFrame.Identity,unionFrame.Revision);
+            var contacts=SquareUnionPrepared(localSquare,localPatches,faces,margin,unionFrame.Identity,unionFrame.Revision);
             for(int i=0;i<contacts.Length;i++)
             {var c=contacts[i];c.AnchorA=unionFrame.World(c.AnchorA);c.AnchorB=unionFrame.World(c.AnchorB);c.Midpoint=unionFrame.World(c.Midpoint);
              c.Normal=unionFrame.World(c.Normal)-unionFrame.Center;c.LocalA=square.Local(c.AnchorA);c.LocalB=unionFrame.Local(c.AnchorB);contacts[i]=c;}
