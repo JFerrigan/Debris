@@ -7,6 +7,7 @@ namespace Debris.Simulation.Tests
     // generalized derivative. It never calls the block sequential oracle.
     internal sealed class CoupledV2Double
     {
+        const double AcceptanceTolerance=1e-6;
         internal sealed class Answer
         {
             public bool Converged; public string Failure,FirstFeature; public int Newton,Krylov,Restarts;
@@ -132,7 +133,7 @@ namespace Debris.Simulation.Tests
                         else error=Math.Max(error,Math.Abs(speed));
                     }
                 }
-                if(error>1e-5 && first==null)first=r.Key;
+                if(error>AcceptanceTolerance && first==null)first=r.Key;
                 if(r.Tangent)friction=Math.Max(friction,error);else normal=Math.Max(normal,error);
             }
             return Math.Max(normal,friction);
@@ -286,14 +287,14 @@ namespace Debris.Simulation.Tests
                 var f=Residual(x,out var w,out double physical);double norm=Norm(f);
                 answer.Residual=norm;answer.PhysicalResidual=physical;answer.Newton=iteration;
                 Physical(x,w,out answer.NormalResidual,out answer.FrictionResidual,out answer.FirstFeature);
-                if(physical<=1e-5)
+                if(physical<=AcceptanceTolerance)
                 {
                     var projected=(double[])x.Clone();
                     for(int i=0;i<rows.Length;i++)if(!rows[i].Tangent)projected[i]=Math.Max(0,projected[i]);
                     for(int i=0;i<rows.Length;i++)if(rows[i].Tangent)
                     {var r=rows[i];double gamma=r.Mu*rows[r.NormalIndex].Root/r.Root,bound=gamma*projected[r.NormalIndex];projected[i]=Math.Max(-bound,Math.Min(bound,projected[i]));}
                     var checkedResidual=Residual(projected,out var checkedW,out double checkedPhysical);
-                    if(checkedPhysical>1e-5)
+                    if(checkedPhysical>AcceptanceTolerance)
                     {
                         x=projected;answer.Residual=Norm(checkedResidual);answer.PhysicalResidual=checkedPhysical;
                         Physical(x,checkedW,out answer.NormalResidual,out answer.FrictionResidual,out answer.FirstFeature);
@@ -318,7 +319,7 @@ namespace Debris.Simulation.Tests
                     double alpha=1.0/(1<<step);var trial=new double[x.Length];for(int i=0;i<x.Length;i++)trial[i]=x[i]+alpha*direction[i];
                     var next=Residual(trial,out _,out double candidatePhysical);double length=Norm(next);
                     if(double.IsNaN(length))continue;
-                    if(length*length<=(1-1e-4*alpha)*norm*norm||candidatePhysical<=1e-5){x=trial;accepted=true;break;}
+                    if(length*length<=(1-1e-4*alpha)*norm*norm||candidatePhysical<=AcceptanceTolerance){x=trial;accepted=true;break;}
                 }
                 if(!accepted){answer.Failure="LineSearch";return answer;}
             }
