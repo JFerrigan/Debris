@@ -127,6 +127,16 @@ namespace Debris.Simulation.Tests
                 Assert.That(third[1],Is.Zero);
                 Assert.That(third[3],Is.EqualTo(3u));
                 Assert.That(f.Bodies()[0].Center.x,Is.EqualTo(-.15f).Within(1e-6));
+                using(var rejected=new GraphicsBuffer(GraphicsBuffer.Target.Structured,1,4))
+                {
+                    rejected.SetData(new uint[]{0});
+                    f.Search.RecordRollback(f.Commands,rejected);
+                    Graphics.ExecuteCommandBuffer(f.Commands);f.Commands.Clear();
+                    Assert.That(f.Bodies()[0].Center,Is.EqualTo(Vector2.zero),
+                        "Rejecting the complete stage also discards its earlier accepted -.15 correction");
+                    var restored=new CoupledContactBody[2];f.Op.BodiesBuffer.GetData(restored);
+                    Assert.That(restored[0].Center,Is.EqualTo(Vector2.zero));
+                }
             }
         }
 

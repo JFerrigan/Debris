@@ -49,15 +49,18 @@ namespace Debris.Simulation.CoupledContacts
         // Reset p even on repeated calls; never carry a multiplier into newly
         // rotated normals. C1/C2/C3 all allow four position Newton updates,
         // with 16/24/32 counted Krylov products per update respectively.
-        public void Record(CommandBuffer target,CoupledSolveProfile profile)
+        public void Record(CommandBuffer target,CoupledSolveProfile profile,
+            GraphicsBuffer activityGate=null)
         {
             if(disposed)throw new ObjectDisposedException(nameof(CoupledPositionSolve));
             if(target==null)throw new ArgumentNullException(nameof(target));
             if(profile!=CoupledSolveProfile.C1&&profile!=CoupledSolveProfile.C2&&
                profile!=CoupledSolveProfile.C3)
                 throw new ArgumentOutOfRangeException(nameof(profile));
-            residual.RecordPositionInitialize(target);
-            solve.Record(target,profile);
+            if(activityGate!=null&&(activityGate.stride!=4||activityGate.count<1))
+                throw new ArgumentException("A GPU uint activity gate is required",nameof(activityGate));
+            residual.RecordPositionInitialize(target,activityGate);
+            solve.Record(target,profile,activityGate);
         }
 
         public void Dispose()

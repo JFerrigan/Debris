@@ -96,10 +96,12 @@ namespace Debris.Simulation.CoupledContacts
                 facts=Buffer(8,4);
                 args=Buffer(3,4,GraphicsBuffer.Target.Structured|
                     GraphicsBuffer.Target.IndirectArguments);
+                args.SetData(new uint[]{1,1,1});
                 meritBlocks=Buffer(Math.Max(1,(rowCapacity+255)/256),4);
                 merit=Buffer(1,4);
                 meritArgs=Buffer(3,4,GraphicsBuffer.Target.Structured|
                     GraphicsBuffer.Target.IndirectArguments);
+                meritArgs.SetData(new uint[]{1,1,1});
                 baseX=Buffer(rowCapacity,4);
                 baseY=Buffer(rowCapacity,4);
                 searchZ=Buffer(rowCapacity,4);
@@ -126,7 +128,7 @@ namespace Debris.Simulation.CoupledContacts
                 shader.SetFloat("_PhysicalTolerance",physicalTolerance);
                 resetPosition=shader.FindKernel("ResetPositionInput");
                 Bind(resetPosition,("_WritableProductInput",op.ProductInput),
-                    ("_FreeMotion",op.FreeMotionInput));
+                    ("_FreeMotion",op.FreeMotionInput),("_ProductGate",alwaysGate));
                 prepare=shader.FindKernel("PrepareVelocityRows");
                 evaluate=shader.FindKernel("EvaluateVelocityResidual");
                 snapshotBase=shader.FindKernel("SnapshotVelocityBase");
@@ -173,9 +175,9 @@ namespace Debris.Simulation.CoupledContacts
                 Bind(snapshotFree,("_FreeMotion",op.FreeMotionInput),
                     ("_SavedFreeMotion",savedFree),
                     ("_ProductGate",alwaysGate));
-                Bind(clearFree,("_FreeMotion",op.FreeMotionInput));
+                Bind(clearFree,("_FreeMotion",op.FreeMotionInput),("_ProductGate",alwaysGate));
                 Bind(restoreFree,("_FreeMotion",op.FreeMotionInput),
-                    ("_SavedFreeMotion",savedFree));
+                    ("_SavedFreeMotion",savedFree),("_ProductGate",alwaysGate));
                 Bind(storeBaseMerit,("_Facts",facts),("_Merit",merit),
                     ("_BaseMerit",baseMerit));
                 Bind(storeTrial,("_Facts",facts),("_Merit",merit),
@@ -220,7 +222,7 @@ namespace Debris.Simulation.CoupledContacts
                     ("_ProjectedX",projected),
                     ("_WritableProductInput",op.ProductInput),
                     ("_ProductGate",alwaysGate));
-                Bind(selectProjection,("_Facts",facts),
+                Bind(selectProjection,("_SelectionGate",alwaysGate),("_Facts",facts),
                     ("_BaseMerit",baseMerit),
                     ("_ProjectionGate",projectionGate),
                     ("_ProjectionStatus",projectionStatus));
@@ -240,7 +242,7 @@ namespace Debris.Simulation.CoupledContacts
                     ("_Facts",facts));
                 lineGateKernels=new[]{prepare,evaluate,snapshotBase,evaluateTrial,
                     storeBaseMerit,storeTrial,selectTrial,applySelected,
-                    reduceMerit,finalizeMerit};
+                    reduceMerit,finalizeMerit,restoreFree};
                 foreach(int kernel in lineGateKernels)
                     shader.SetBuffer(kernel,"_ProductGate",alwaysGate);
             }
@@ -258,11 +260,13 @@ namespace Debris.Simulation.CoupledContacts
         void Bind(int kernel,params (string Name,GraphicsBuffer Buffer)[] entries)
         {foreach(var entry in entries)shader.SetBuffer(kernel,entry.Name,entry.Buffer);}
 
-        internal void RecordPositionInitialize(CommandBuffer target)
+        internal void RecordPositionInitialize(CommandBuffer target,GraphicsBuffer gate=null)
         {
             if(disposed)throw new ObjectDisposedException(nameof(CoupledVelocityResidual));
             if(target==null)throw new ArgumentNullException(nameof(target));
             if(!PositionSystem)throw new InvalidOperationException("Requires a position graph");
+            target.SetComputeIntParam(shader,"_UseProductGate",gate==null?0:1);
+            target.SetComputeBufferParam(shader,resetPosition,"_ProductGate",gate??alwaysGate);
             target.DispatchCompute(shader,resetPosition,
                 Math.Max(1,(Math.Max(op.RowCount,op.BodyCount)+63)/64),1,1);
             prepared=false;
@@ -336,6 +340,8 @@ namespace Debris.Simulation.CoupledContacts
                 "_ProductGate",alwaysGate);
             target.SetComputeBufferParam(shader,snapshotDirection,
                 "_ProductGate",alwaysGate);
+            target.SetComputeBufferParam(shader,clearFree,"_ProductGate",alwaysGate);
+            target.SetComputeBufferParam(shader,restoreFree,"_ProductGate",alwaysGate);
             target.DispatchCompute(shader,clearFree,
                 Math.Max(1,(op.BodyCount+63)/64),1,1);
             op.RecordProduct(target);
@@ -360,6 +366,8 @@ namespace Debris.Simulation.CoupledContacts
             target.SetComputeIntParam(shader,"_UseProductGate",1);
             target.SetComputeBufferParam(shader,applyDerivative,"_ProductGate",gate);
             target.SetComputeBufferParam(shader,snapshotDirection,"_ProductGate",gate);
+            target.SetComputeBufferParam(shader,clearFree,"_ProductGate",gate);
+            target.SetComputeBufferParam(shader,restoreFree,"_ProductGate",gate);
             target.DispatchCompute(shader,clearFree,
                 Math.Max(1,(op.BodyCount+63)/64),1,1);
             op.RecordProductMasked(target,gate);
@@ -479,12 +487,16 @@ namespace Debris.Simulation.CoupledContacts
 
         // The current true residual and direct physical facts decide whether
         // projection is eligible. The subsequent recheck still decides pass.
-        public void RecordProjectionIfPhysical(CommandBuffer target)
+        public void RecordProjectionIfPhysical(CommandBuffer target,GraphicsBuffer activityGate=null)
         {
             if(disposed)throw new ObjectDisposedException(nameof(CoupledVelocityResidual));
             if(target==null)throw new ArgumentNullException(nameof(target));
             if(!prepared)throw new InvalidOperationException(
                 "V2 projection requires a current physical residual");
+            if(activityGate!=null&&(activityGate.stride!=4||activityGate.count<1))
+                throw new ArgumentException("A GPU uint activity gate is required",nameof(activityGate));
+            target.SetComputeIntParam(shader,"_UseSelectionGate",activityGate==null?0:1);
+            target.SetComputeBufferParam(shader,selectProjection,"_SelectionGate",activityGate??alwaysGate);
             target.DispatchCompute(shader,selectProjection,1,1,1);
             target.SetComputeIntParam(shader,"_UseProductGate",1);
             target.SetComputeBufferParam(shader,project,"_ProductGate",projectionGate);

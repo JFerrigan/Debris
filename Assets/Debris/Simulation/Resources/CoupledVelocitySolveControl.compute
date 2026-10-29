@@ -2,6 +2,8 @@
 #pragma kernel AdvanceVelocitySolve
 
 RWStructuredBuffer<uint> _Control;
+StructuredBuffer<uint> _InitialGate;
+uint _UseInitialGate;
 StructuredBuffer<uint> _ProjectionStatus,_TrialSelection,_WorkControl,_Facts;
 uint _MaxUpdates;
 
@@ -13,7 +15,7 @@ uint _MaxUpdates;
 void BeginVelocitySolve(uint id:SV_DispatchThreadID)
 {
     if(id!=0)return;
-    _Control[0]=1;
+    _Control[0]=_UseInitialGate==0||_InitialGate[0]!=0?1u:0u;
     _Control[1]=0;
     _Control[2]=0;
     _Control[3]=0;

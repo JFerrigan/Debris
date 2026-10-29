@@ -40,7 +40,8 @@ StructuredBuffer<Feature> _Features;
 StructuredBuffer<Primitive> _Primitives;
 StructuredBuffer<Row> _Rows;
 StructuredBuffer<uint> _ActiveRowCount;
-StructuredBuffer<uint> _ProductGate;
+StructuredBuffer<uint> _ProductGate,_SelectionGate;
+uint _UseSelectionGate;
 StructuredBuffer<float> _CurrentX,_CurrentY,_DirectionZ,_ProductBz;
 RWStructuredBuffer<float> _BaseX,_BaseY,_SearchZ,_SearchBz;
 RWStructuredBuffer<float4> _FreeMotion,_SavedFreeMotion;
@@ -65,6 +66,7 @@ bool maskedWork(){return _UseProductGate!=0&&_ProductGate[0]==0;}
 [numthreads(64,1,1)]
 void ResetPositionInput(uint id:SV_DispatchThreadID)
 {
+    if(maskedWork())return;
     if(id<_RowCapacity)_WritableProductInput[id]=0;
     if(id<_BodyCount)_FreeMotion[id]=float4(0,0,0,0);
 }
@@ -127,11 +129,11 @@ void SnapshotFreeMotion(uint body:SV_DispatchThreadID)
 
 [numthreads(64,1,1)]
 void ClearFreeMotion(uint body:SV_DispatchThreadID)
-{if(body<_BodyCount)_FreeMotion[body]=float4(0,0,0,0);}
+{if(!maskedWork()&&body<_BodyCount)_FreeMotion[body]=float4(0,0,0,0);}
 
 [numthreads(64,1,1)]
 void RestoreFreeMotion(uint body:SV_DispatchThreadID)
-{if(body<_BodyCount)_FreeMotion[body]=_SavedFreeMotion[body];}
+{if(!maskedWork()&&body<_BodyCount)_FreeMotion[body]=_SavedFreeMotion[body];}
 
 void evaluatePoint(uint contactPoint,float xn,float xt,float rawWn,float wt)
 {
@@ -480,6 +482,8 @@ void ResetVelocityProjection(uint id:SV_DispatchThreadID)
 void SelectVelocityProjection(uint id:SV_DispatchThreadID)
 {
     if(id!=0)return;
+    if(_UseSelectionGate!=0&&_SelectionGate[0]==0)
+    {_ProjectionGate[0]=0;return;}
     if(_ProjectionStatus[0]==2||_ProjectionStatus[0]==3)
     {_ProjectionGate[0]=0;return;}
     _ProjectionGate[0]=physicalVelocityPass()?1u:0u;

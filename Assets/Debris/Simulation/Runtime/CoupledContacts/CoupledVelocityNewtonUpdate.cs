@@ -36,13 +36,13 @@ namespace Debris.Simulation.CoupledContacts
             else velocity.RecordResidualMasked(target,activityGate);
             arnoldi.RecordInitialize(target,0,krylovCap,activityGate);
             RecordCycles(target,krylovCap);
-            RecordCandidate(target);
+            RecordCandidate(target,activityGate);
             arnoldi.RecordRetry(target,1e-5f);
             RecordCycles(target,krylovCap);
-            RecordCandidate(target);
+            RecordCandidate(target,activityGate);
             arnoldi.RecordRetry(target,1e-3f);
             RecordCycles(target,krylovCap);
-            RecordCandidate(target);
+            RecordCandidate(target,activityGate);
         }
 
         void RecordCycles(CommandBuffer target,int krylovCap)
@@ -58,10 +58,10 @@ namespace Debris.Simulation.CoupledContacts
             }
         }
 
-        void RecordCandidate(CommandBuffer target)
+        void RecordCandidate(CommandBuffer target,UnityEngine.GraphicsBuffer activityGate)
         {
             velocity.RecordLineSearch(target,arnoldi.AcceptedDirectionGate);
-            velocity.RecordProjectionIfPhysical(target);
+            velocity.RecordProjectionIfPhysical(target,activityGate);
             velocity.RecordProjectedResidualIfPhysical(target);
         }
     }

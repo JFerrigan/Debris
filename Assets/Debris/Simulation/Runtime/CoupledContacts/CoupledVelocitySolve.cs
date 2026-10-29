@@ -42,6 +42,7 @@ namespace Debris.Simulation.CoupledContacts
                 begin=shader.FindKernel("BeginVelocitySolve");
                 advance=shader.FindKernel("AdvanceVelocitySolve");
                 shader.SetBuffer(begin,"_Control",control);
+                shader.SetBuffer(begin,"_InitialGate",control);
                 shader.SetBuffer(advance,"_Control",control);
                 shader.SetBuffer(advance,"_ProjectionStatus",
                     velocity.ProjectionStatus);
@@ -53,10 +54,14 @@ namespace Debris.Simulation.CoupledContacts
             catch { Dispose();throw; }
         }
 
-        public void Record(CommandBuffer target,CoupledSolveProfile profile)
+        public void Record(CommandBuffer target,CoupledSolveProfile profile,
+            GraphicsBuffer activityGate=null)
         {
             if(disposed)throw new ObjectDisposedException(nameof(CoupledVelocitySolve));
             if(target==null)throw new ArgumentNullException(nameof(target));
+            if(target==null)throw new ArgumentNullException(nameof(target));
+            if(activityGate!=null&&(activityGate.stride!=4||activityGate.count<1))
+                throw new ArgumentException("A GPU uint activity gate is required",nameof(activityGate));
             int maxUpdates,krylovCap;
             switch(profile)
             {
@@ -67,6 +72,8 @@ namespace Debris.Simulation.CoupledContacts
             }
             // All position profiles allow four Newton updates per fresh geometry.
             if(positionSystem)maxUpdates=4;
+            target.SetComputeIntParam(shader,"_UseInitialGate",activityGate==null?0:1);
+            target.SetComputeBufferParam(shader,begin,"_InitialGate",activityGate??control);
             target.SetComputeIntParam(shader,"_MaxUpdates",maxUpdates);
             target.DispatchCompute(shader,begin,1,1,1);
             for(int iteration=0;iteration<maxUpdates;iteration++)

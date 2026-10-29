@@ -18,12 +18,12 @@ namespace Debris.Simulation.CoupledContacts
         readonly ComputeShader shader;
         readonly List<GraphicsBuffer> owned=new List<GraphicsBuffer>();
         readonly GraphicsBuffer control,facts,workingBodies,originBodies,workingPrimitives,
-            workingGroups,originPrimitives,trialBodies,trialPrimitives,trialGroups,
+            workingGroups,originGroups,originPrimitives,trialBodies,trialPrimitives,trialGroups,
             displacement,heads,nodes,metricBlocks,metric,baseMetric;
         readonly int beginSubstep,snapshotSubstep,beginSearch,snapshotDirection,
             resetBaseline,buildBodies,buildPrimitives,buildGroups,resetFacts,
             evaluate,finalize,storeBaseline,select,checkGraph,publishBodies,
-            publishPrimitives,publishGroups;
+            publishPrimitives,publishGroups,rollbackState,rollbackBodies,rollbackPrimitives,rollbackGroups;
         readonly int groupCount;
         readonly bool hasUnion;
         bool disposed,initialized;
@@ -59,6 +59,7 @@ namespace Debris.Simulation.CoupledContacts
                 originBodies=Buffer(owner,op.BodyCount,16);
                 workingPrimitives=Buffer(owner,Math.Max(1,op.SourcePrimitiveCount),56);
                 workingGroups=Buffer(owner,Math.Max(1,groupCount),32);
+                originGroups=Buffer(owner,Math.Max(1,groupCount),32);
                 originPrimitives=Buffer(owner,Math.Max(1,op.SourcePrimitiveCount),56);
                 trialBodies=Buffer(owner,op.BodyCount,16);
                 trialPrimitives=Buffer(owner,Math.Max(1,op.SourcePrimitiveCount),56);
@@ -80,17 +81,20 @@ namespace Debris.Simulation.CoupledContacts
                 select=Kernel("SelectTrial");checkGraph=Kernel("CheckRefreshedGraph");
                 publishBodies=Kernel("PublishWorkingBodies");publishPrimitives=Kernel("PublishWorkingPrimitives");
                 publishGroups=Kernel("PublishWorkingGroups");
+                rollbackState=Kernel("RollbackSearchState");rollbackBodies=Kernel("RollbackBodies");
+                rollbackPrimitives=Kernel("RollbackPrimitives");rollbackGroups=Kernel("RollbackGroups");
                 foreach(int kernel in new[]{beginSubstep,beginSearch,snapshotDirection,
                     buildBodies,buildPrimitives,buildGroups,storeBaseline,select,checkGraph,
-                    publishBodies,publishPrimitives,publishGroups})
+                    publishBodies,publishPrimitives,publishGroups,rollbackState})
                     shader.SetBuffer(kernel,"_Control",control);
                 Bind(snapshotSubstep,("_SourceBodies",op.BodiesBuffer),
                     ("_SourcePrimitives",op.SourcePrimitives),
                     ("_SourceGroups",manifolds.UnionGroupsBuffer),
                     ("_WorkingBodies",workingBodies),("_OriginBodies",originBodies),
                     ("_WorkingPrimitives",workingPrimitives),
-                    ("_WorkingGroups",workingGroups),("_OriginPrimitives",originPrimitives));
-                Bind(beginSearch,("_SolveControl",solve.Control));
+                    ("_WorkingGroups",workingGroups),("_OriginGroups",originGroups),
+                    ("_OriginPrimitives",originPrimitives));
+                Bind(beginSearch,("_SolveControl",solve.Control),("_ActivityGate",control));
                 Bind(snapshotDirection,("_SourceDisplacement",solve.Displacement),
                     ("_Displacement",displacement));
                 Bind(resetBaseline,("_Heads",heads));
@@ -120,6 +124,9 @@ namespace Debris.Simulation.CoupledContacts
                 Bind(publishBodies,("_TrialBodies",trialBodies),("_WorkingBodies",workingBodies));
                 Bind(publishPrimitives,("_TrialPrimitives",trialPrimitives),("_WorkingPrimitives",workingPrimitives));
                 Bind(publishGroups,("_TrialGroups",trialGroups),("_WorkingGroups",workingGroups));
+                Bind(rollbackBodies,("_WorkingBodies",workingBodies),("_OriginBodies",originBodies));
+                Bind(rollbackPrimitives,("_WorkingPrimitives",workingPrimitives),("_OriginPrimitives",originPrimitives));
+                Bind(rollbackGroups,("_WorkingGroups",workingGroups),("_OriginGroups",originGroups));
             }
             catch { Dispose();throw; }
         }
@@ -152,10 +159,14 @@ namespace Debris.Simulation.CoupledContacts
         // Record after the frozen position solve. Full baseline/trial queries
         // reuse the same topology and include previously absent contacts. The
         // selected graph is rebuilt once and its next solve must start p=0.
-        public void Record(CommandBuffer target)
+        public void Record(CommandBuffer target,GraphicsBuffer activityGate=null)
         {
             Check(target);
             if(!initialized)throw new InvalidOperationException("Begin the predicted substep first");
+            if(activityGate!=null&&(activityGate.stride!=4||activityGate.count<1))
+                throw new ArgumentException("A GPU uint activity gate is required",nameof(activityGate));
+            target.SetComputeIntParam(shader,"_UseActivityGate",activityGate==null?0:1);
+            target.SetComputeBufferParam(shader,beginSearch,"_ActivityGate",activityGate??control);
             target.DispatchCompute(shader,beginSearch,1,1,1);
             target.DispatchCompute(shader,snapshotDirection,Groups(op.BodyCount),1,1);
             target.DispatchCompute(shader,resetBaseline,ManifoldCapacity/256,1,1);
@@ -177,6 +188,23 @@ namespace Debris.Simulation.CoupledContacts
             target.DispatchCompute(shader,publishPrimitives,Groups(op.SourcePrimitiveCount),1,1);
             if(groupCount>0)target.DispatchCompute(shader,publishGroups,Groups(groupCount),1,1);
         }
+        // Reject the whole position stage rather than only its last trial.
+        // Rebuild scratch geometry at the retained/restored working pose.
+        internal void RecordRollback(CommandBuffer target,GraphicsBuffer decision)
+        {
+            Check(target);
+            if(!initialized)throw new InvalidOperationException("Begin the predicted substep first");
+            if(decision==null||decision.stride!=4||decision.count<1)
+                throw new ArgumentException("A GPU accepted decision is required",nameof(decision));
+            foreach(int kernel in new[]{rollbackState,rollbackBodies,rollbackPrimitives,rollbackGroups})
+                target.SetComputeBufferParam(shader,kernel,"_RollbackDecision",decision);
+            target.DispatchCompute(shader,rollbackState,1,1,1);
+            target.DispatchCompute(shader,rollbackBodies,Groups(op.BodyCount),1,1);
+            target.DispatchCompute(shader,rollbackPrimitives,Groups(op.SourcePrimitiveCount),1,1);
+            if(groupCount>0)target.DispatchCompute(shader,rollbackGroups,Groups(groupCount),1,1);
+            op.RecordRequeryGraph(target,workingPrimitives,workingBodies,hasUnion?workingGroups:null);
+        }
+
         void RecordPose(CommandBuffer target,bool selected)
         {
             target.SetComputeIntParam(shader,"_SelectOutput",selected?1:0);

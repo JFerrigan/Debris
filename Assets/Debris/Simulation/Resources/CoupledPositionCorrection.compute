@@ -1,0 +1,55 @@
+#pragma kernel BeginCorrection
+#pragma kernel AdvanceCorrection
+#pragma kernel FinishCorrection
+
+RWStructuredBuffer<uint> _Control,_Decision;
+StructuredBuffer<uint> _SolveControl,_SearchControl,_FinalDecision;
+StructuredBuffer<uint> _RowFault,_BroadFault,_CompactFault;
+uint _GeometryCap;
+
+// Control: active, accepted, geometry attempts, fault, cap, target reached,
+// last hard pass, total Krylov products, search fault, solve fault,
+// final geometry fault bits, last frozen position system accepted.
+// Fault: 1=source graph, 2=frozen solve, 3=actual pose search,
+// 5=independent final geometry, 6=missing frozen residual acceptance.
+[numthreads(1,1,1)]
+void BeginCorrection(uint id:SV_DispatchThreadID)
+{
+    for(uint i=0;i<12;i++)_Control[i]=0;
+    for(uint i=0;i<8;i++)_Decision[i]=0;
+    _Control[4]=_GeometryCap;
+    bool valid=_RowFault[0]==0&&_BroadFault[0]==0&&_CompactFault[0]==0;
+    _Control[0]=valid?1u:0u;_Control[3]=valid?0u:1u;
+}
+[numthreads(1,1,1)]
+void AdvanceCorrection(uint id:SV_DispatchThreadID)
+{
+    if(_Control[0]==0)return;
+    _Control[2]++;
+    _Control[7]+=_SolveControl[5];
+    _Control[9]=_SolveControl[3];
+    _Control[11]=_SolveControl[1]==1&&_SolveControl[3]==0?1u:0u;
+    if(_Control[11]==0)
+    {_Control[0]=0;_Control[3]=2;return;}
+    _Control[8]=_SearchControl[3];
+    if(_SearchControl[1]!=1||_SearchControl[3]!=0)
+    {_Control[0]=0;_Control[3]=3;return;}
+    _Control[5]=_SearchControl[4];_Control[6]=_SearchControl[7];
+    if(_Control[5]!=0||_Control[2]>=_Control[4])_Control[0]=0;
+}
+[numthreads(1,1,1)]
+void FinishCorrection(uint id:SV_DispatchThreadID)
+{
+    _Control[0]=0;
+    _Control[10]=_FinalDecision[1];
+    if(_Control[3]==0&&_Control[11]!=1)_Control[3]=6;
+    if(_Control[3]==0&&_FinalDecision[0]!=1)_Control[3]=5;
+    _Control[1]=_Control[3]==0?1u:0u;
+    // Hard-bound acceptance at the cap does not claim target cleanup. The
+    // residual acceptance belongs to the last solved frozen linearization;
+    // actual selected poses receive a separate independent geometry query.
+    _Decision[0]=_Control[1];_Decision[1]=_Control[3];
+    _Decision[2]=_Control[5];_Decision[3]=_Control[2];
+    _Decision[4]=_Control[7];_Decision[5]=_FinalDecision[4];
+    _Decision[6]=_FinalDecision[5];_Decision[7]=_FinalDecision[1];
+}

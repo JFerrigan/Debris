@@ -1,6 +1,6 @@
 # V2-2 GPU solve source handoff
 
-Current checkpoint: frozen velocity/position solve and actual-pose search source; no complete solver tick or V2-2 gate pass. The latest user direction is to write code without launching Unity or the game. Prior focused GPU evidence remains in [STATUS](../STATUS.md); it does not cover the new position path.
+Current checkpoint: bounded position stage with final geometry acceptance and position-stage rollback source; no complete solver tick or V2-2 gate pass. The latest user direction is to write code without launching Unity or the game. Prior focused GPU evidence remains in [STATUS](../STATUS.md); it does not cover the new position path.
 
 ## Position behavior added on 2026-10-29 UTC
 
@@ -41,6 +41,20 @@ C# compilation exited 0 for all contact runtime sources and five fixtures: the f
 
 No Unity launch, shader compilation, GPU fixture run, build or player run occurred. The fixed command schedule still records all eight trial queries after a winner; only subsequent selection decisions stop. GPU query masking, cached production schedules, scratch lifetime/aliasing and all costs remain unverified. No throughput or full solver acceptance is claimed.
 
+## Bounded position-stage controller added on 2026-10-29 UTC
+
+`CoupledPositionCorrection` records one original predicted snapshot and C1/C2/C3 geometry-update caps of 2/3/4. Each live geometry update runs the fresh four-update frozen position solve, actual-pose search and selected graph refresh. The GPU activity word stops later physical solving after target cleanup or failure. It retains counted active geometry attempts, Krylov products, the first solve/search fault and last frozen-system acceptance across inactive slots. At the cap, targetReached=false remains distinct from hard-bound acceptance.
+
+An independent final query supplies the original .01 grain/grain and .001 solid hard bounds, class validation and union containment. Acceptance requires the last live frozen system to have passed its projected residual and the final actual geometry to pass independently. It does not claim that p=0 solves a new final-pose equation when accepting a hard-bound-only result. Earlier geometry-stage faults remain authoritative even if the final query itself passes.
+
+Failure restores the complete position-stage snapshot: body COMs/mobility records, primitive poses and metadata, and union frames. It discards corrections accepted earlier in the same stage and rebuilds the graph at the restored pose. Diagnostic acceptance/fault/max-penetration words are retained separately from the overwritten query scratch. Outputs are provisional positions only; physical velocities, caches, grain/material/fuel records, cargo facts, identities and tick publication are not owned here. Whole-tick rollback is still open.
+
+Source inspection of a cold inactive solve exposed dependencies that needed explicit masking before chaining geometry iterations: free-motion clear/restore previously ran despite an inactive derivative, projection selection could inspect scratch that had never received a base residual, and inactive indirect argument buffers had no initialization contract. The shared residual now gates those stages and initializes indirect argument triplets to [1,1,1]. Later true products remain gated. Activity gates also cover position-input reset, velocity/position controller start and actual-pose search entry.
+
+Direct Roslyn compilation against pinned Unity assemblies exited 0 for all contact runtime sources and six fixtures. Seven new unrun controller cases define the three profile caps with first-target stopping; envelope rejection restoring predicted bodies/primitives/graph; isolated unclassified rejection; a cold inactive solve preserving poisoned free motion, multipliers and endpoint output with zero counted work; and hard-bound acceptance retaining targetReached=false. The prior cumulative-envelope test now explicitly rejects the full stage after nonzero accepted movement and checks restoration to its original pose. The source fixture results are compilation only, not executed physics evidence.
+
+No Unity/game process, shader import, GPU fixture, build or performance workload was run. All eight actual-pose queries, later inactive graph work and rollback graph rebuilds remain in the fixed command schedule. Their driver/GPU cost is unmeasured; production schedule caching and GPU query masking remain open.
+
 ## Next behavior
 
-Connect the bounded profile-specific geometry-update loop, resetting p after each selected graph refresh. Then connect independent final geometry acceptance, cache validity and whole-tick publication/rollback. V2-0C exact packed references, V2-1 geometry/operator/cost gates, V2-3 throughput, V2-4 candidate integration and B.GATE remain open.
+Connect full-tick working-state and provisional-cache ownership, prediction/speed bounds, conservation/count facts, accepted publication and queued-tick dependency failure. Whole-tick rollback must include velocities, identities, material/fuel/cargo facts, topology generations and completion state. V2-0C exact packed references, V2-1 geometry/operator/cost gates, V2-3 throughput, V2-4 candidate integration and B.GATE remain open.

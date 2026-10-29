@@ -1,3 +1,7 @@
+#pragma kernel RollbackSearchState
+#pragma kernel RollbackBodies
+#pragma kernel RollbackPrimitives
+#pragma kernel RollbackGroups
 #pragma kernel BeginSubstep
 #pragma kernel SnapshotSubstep
 #pragma kernel BeginSearch
@@ -36,10 +40,11 @@ StructuredBuffer<Body> _SourceBodies;
 StructuredBuffer<Primitive> _SourcePrimitives;
 StructuredBuffer<Group> _SourceGroups;
 StructuredBuffer<float4> _SourceDisplacement;
-StructuredBuffer<uint> _SolveControl;
+StructuredBuffer<uint> _SolveControl,_ActivityGate,_RollbackDecision;
+uint _UseActivityGate;
 RWStructuredBuffer<Body> _WorkingBodies,_OriginBodies,_TrialBodies;
 RWStructuredBuffer<Primitive> _WorkingPrimitives,_OriginPrimitives,_TrialPrimitives;
-RWStructuredBuffer<Group> _WorkingGroups,_TrialGroups;
+RWStructuredBuffer<Group> _WorkingGroups,_OriginGroups,_TrialGroups;
 RWStructuredBuffer<float4> _Displacement;
 StructuredBuffer<Manifold> _Manifolds;
 StructuredBuffer<uint2> _Indices;
@@ -69,7 +74,7 @@ float trialAlpha()
 }
 
 // Control: active, accepted, selected trial (UINT_MAX for no movement),
-// fault (1=solve,2=geometry,3=envelope,4=invalid pose,5=no trial,6=row graph),
+// fault (1=solve,2=geometry,3=envelope,4=invalid pose,5=no trial,6=row graph,7=stage rollback),
 // target reached, requires relinearization, trials evaluated, hard pass,
 // source solve fault, first failure trial, max surface travel bits, initialized.
 [numthreads(1,1,1)]
@@ -85,11 +90,14 @@ void SnapshotSubstep(uint id:SV_DispatchThreadID)
     {_WorkingBodies[id]=_SourceBodies[id];_OriginBodies[id]=_SourceBodies[id];}
     if(id<_PrimitiveCount)
     {_WorkingPrimitives[id]=_SourcePrimitives[id];_OriginPrimitives[id]=_SourcePrimitives[id];}
-    if(id<_GroupCount)_WorkingGroups[id]=_SourceGroups[id];
+    if(id<_GroupCount)
+    {_WorkingGroups[id]=_SourceGroups[id];_OriginGroups[id]=_SourceGroups[id];}
 }
 [numthreads(1,1,1)]
 void BeginSearch(uint id:SV_DispatchThreadID)
 {
+    if(_UseActivityGate!=0&&_ActivityGate[0]==0)
+    {_Control[0]=0;_Control[1]=0;return;}
     // A failed search is latched until a fresh substep snapshot. Later queued
     // geometry iterations cannot resurrect a failed working transaction.
     if(_Control[11]!=1||_Control[3]!=0){_Control[0]=0;_Control[1]=0;return;}
@@ -315,3 +323,23 @@ void PublishWorkingPrimitives(uint id:SV_DispatchThreadID)
 [numthreads(64,1,1)]
 void PublishWorkingGroups(uint id:SV_DispatchThreadID)
 {if(_Control[1]!=0&&_Control[3]==0&&id<_GroupCount)_WorkingGroups[id]=_TrialGroups[id];}
+
+// The controller supplies its independent final accepted word. A failure
+// restores the complete position-stage snapshot, including earlier accepted
+// geometry updates. These buffers contain no committed velocities/inventory.
+[numthreads(1,1,1)]
+void RollbackSearchState(uint id:SV_DispatchThreadID)
+{
+    if(_RollbackDecision[0]!=0)return;
+    _Control[0]=0;_Control[1]=0;_Control[4]=0;_Control[7]=0;
+    if(_Control[3]==0)_Control[3]=7;
+}
+[numthreads(64,1,1)]
+void RollbackBodies(uint id:SV_DispatchThreadID)
+{if(_RollbackDecision[0]==0&&id<_BodyCount)_WorkingBodies[id]=_OriginBodies[id];}
+[numthreads(64,1,1)]
+void RollbackPrimitives(uint id:SV_DispatchThreadID)
+{if(_RollbackDecision[0]==0&&id<_PrimitiveCount)_WorkingPrimitives[id]=_OriginPrimitives[id];}
+[numthreads(64,1,1)]
+void RollbackGroups(uint id:SV_DispatchThreadID)
+{if(_RollbackDecision[0]==0&&id<_GroupCount)_WorkingGroups[id]=_OriginGroups[id];}
