@@ -1,0 +1,36 @@
+#pragma kernel DecideFinalGeometry
+
+StructuredBuffer<uint> _ValidationFacts,_BroadFault,_CompactFault;
+StructuredBuffer<uint> _FirstContained;
+RWStructuredBuffer<uint> _Decision;
+uint _CheckContainment;
+
+// Decision: pass, fault bits, first failing manifold, first contained
+// primitive, maximum grain/solid penetration bits, hard/invalid counts.
+// Faults: 1=broad phase, 2=compaction, 4=containment,
+// 8=invalid classification/geometry, 16=hard penetration.
+[numthreads(1,1,1)]
+void DecideFinalGeometry(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    uint broad=_BroadFault[0],compact=_CompactFault[0];
+    uint contained=_CheckContainment!=0?_FirstContained[0]:0xffffffffu;
+    uint invalid=_ValidationFacts[4],hard=_ValidationFacts[6];
+    uint grainBits=_ValidationFacts[0],solidBits=_ValidationFacts[1];
+    uint fault=0;
+    if(broad!=0)fault|=1u;
+    if(compact!=0)fault|=2u;
+    if(contained!=0xffffffffu)fault|=4u;
+    if(invalid!=0)fault|=8u;
+    if(hard!=0||grainBits>asuint(.01f)||solidBits>asuint(.001f))
+        fault|=16u;
+    _Decision[0]=fault==0?1u:0u;
+    _Decision[1]=fault;
+    _Decision[2]=_ValidationFacts[5]!=0xffffffffu?
+        _ValidationFacts[5]:_ValidationFacts[2];
+    _Decision[3]=contained;
+    _Decision[4]=grainBits;
+    _Decision[5]=solidBits;
+    _Decision[6]=hard;
+    _Decision[7]=invalid;
+}

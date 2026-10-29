@@ -16,17 +16,18 @@ namespace Debris.Simulation.Tests
             public float BAngle;
             public uint BIdentity;
         }
-        [StructLayout(LayoutKind.Sequential,Pack=4,Size=40)]
+        [StructLayout(LayoutKind.Sequential,Pack=4,Size=52)]
         struct Manifold
         {
             public uint Count,ReferenceFace;
             public Vector2 Normal,Point0,Point1;
             public float Gap0,Gap1;
+            public uint IncidentFace,Provenance0,Provenance1;
         }
         [Test] public void GpuManifoldRetainsTwoFlatPointsAndOneDiagonalCorner()
         {
             Assert.That(Marshal.SizeOf<Pair>(),Is.EqualTo(48));
-            Assert.That(Marshal.SizeOf<Manifold>(),Is.EqualTo(40));
+            Assert.That(Marshal.SizeOf<Manifold>(),Is.EqualTo(52));
             Assume.That(SystemInfo.supportsComputeShaders,Is.True);
             var asset=Resources.Load<ComputeShader>("CoupledManifoldProbe");
             Assert.That(asset,Is.Not.Null);
@@ -39,7 +40,7 @@ namespace Debris.Simulation.Tests
                     BCenter=Vector2.one,BHalf=Vector2.one*.5f}
             };
             var input=new GraphicsBuffer(GraphicsBuffer.Target.Structured,pairs.Length,48);
-            var output=new GraphicsBuffer(GraphicsBuffer.Target.Structured,pairs.Length,40);
+            var output=new GraphicsBuffer(GraphicsBuffer.Target.Structured,pairs.Length,52);
             try
             {
                 input.SetData(pairs);
@@ -49,6 +50,10 @@ namespace Debris.Simulation.Tests
                 shader.Dispatch(kernel,1,1,1);
                 var found=new Manifold[pairs.Length];output.GetData(found);
                 Assert.That(found[0].Count,Is.EqualTo(2));
+                Assert.That(found[0].ReferenceFace,Is.EqualTo(1));
+                Assert.That(found[0].IncidentFace,Is.EqualTo(3));
+                Assert.That(found[0].Provenance0,Is.EqualTo(1));
+                Assert.That(found[0].Provenance1,Is.EqualTo(0));
                 Assert.That(found[0].Normal.x,Is.EqualTo(1).Within(1e-5));
                 Assert.That(found[0].Gap0,Is.EqualTo(0).Within(1e-5));
                 Assert.That(found[0].Gap1,Is.EqualTo(0).Within(1e-5));

@@ -8,18 +8,29 @@
 #pragma kernel ReduceSegments
 #pragma kernel ApplyBodies
 #pragma kernel ApplyRows
+#pragma kernel PrepareRowDispatch
+#pragma kernel PrepareMaskedProducts
+#pragma kernel PrepareSingleMaskedProduct
+#pragma kernel SortAdjacencySegments
+#pragma kernel MergeAdjacencyRuns
+#pragma kernel PrepareMaskedStages
+#pragma kernel MaskedStageNoOp
 
 // Frozen V2 J W J-transpose diagnostic. Contact generation and the nonlinear
 // solve remain separate. Every segment has at most 64 incident row sides.
 struct Body { float2 center; float inverseMass; float inverseInertia; };
-struct Row { uint a,b; float2 point,direction; float inverseRoot,pad; };
+struct Row { uint a,b; float2 contactPoint,direction; float inverseRoot,pad; };
 struct Segment { uint body,start,count,pad; };
 
 StructuredBuffer<Body> _Bodies;
 StructuredBuffer<Row> _Rows;
+StructuredBuffer<uint> _ActualRowCount;
 StructuredBuffer<float> _X;
 StructuredBuffer<float4> _FreeMotion;
 RWStructuredBuffer<uint> _Adjacency;
+RWStructuredBuffer<uint> _SortedAdjacency;
+StructuredBuffer<uint> _MergeInput;
+RWStructuredBuffer<uint> _MergeOutput;
 RWStructuredBuffer<Segment> _Segments;
 RWStructuredBuffer<uint> _BodySegmentStarts;
 RWStructuredBuffer<uint> _Degrees,_Cursors;
@@ -27,20 +38,92 @@ RWStructuredBuffer<uint> _AdjLocalStarts,_SegmentLocalStarts;
 RWStructuredBuffer<uint> _AdjBlockSums,_SegmentBlockSums;
 RWStructuredBuffer<uint> _AdjBlockStarts,_SegmentBlockStarts;
 RWStructuredBuffer<uint> _SegmentArgs;
+RWStructuredBuffer<uint> _RowArgs;
+StructuredBuffer<uint> _ProductGates;
+StructuredBuffer<uint> _SingleGate;
+RWStructuredBuffer<uint> _MaskedRowArgs,_MaskedSegmentArgs,_MaskedBodyArgs;
+RWStructuredBuffer<uint> _SingleRowArgs,_SingleSegmentArgs,_SingleBodyArgs;
+StructuredBuffer<uint> _StageGates;
+RWStructuredBuffer<uint> _StageArgs;
 RWStructuredBuffer<float4> _SideReactions;
 RWStructuredBuffer<float4> _SegmentReactions;
 RWStructuredBuffer<float4> _Motion;
 RWStructuredBuffer<float> _Y;
 uint _RowCount,_BodyCount,_BlockCount;
+uint _ProductSlotCount;
+uint _StageCount;
+uint _MergeSpan;
 
 float cross2(float2 a,float2 b) { return a.x*b.y-a.y*b.x; }
 groupshared float4 _Reduction[64];
 groupshared uint _AdjScan[256],_SegmentScan[256];
+groupshared uint _SortSides[64];
+
+[numthreads(1,1,1)]
+void PrepareRowDispatch(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    uint count=min(_ActualRowCount[0],_RowCount);
+    uint groups=(count+63)/64;
+    _RowArgs[0]=max(1u,groups);
+    _RowArgs[1]=1;_RowArgs[2]=1;_RowArgs[3]=groups;
+}
+
+// The gate is written by GPU solve control. An inactive slot contributes three
+// zero-group dispatches; the immutable command list still charges its overhead.
+[numthreads(64,1,1)]
+void PrepareMaskedProducts(uint id:SV_DispatchThreadID)
+{
+    if(id>=_ProductSlotCount)return;
+    uint active=_ProductGates[id]!=0?1u:0u;
+    uint offset=4*id;
+    _MaskedRowArgs[offset]=active*_RowArgs[0];
+    _MaskedSegmentArgs[offset]=active*_SegmentArgs[0];
+    _MaskedBodyArgs[offset]=active*_BodyCount;
+    _MaskedRowArgs[offset+1]=1;_MaskedRowArgs[offset+2]=1;
+    _MaskedSegmentArgs[offset+1]=1;_MaskedSegmentArgs[offset+2]=1;
+    _MaskedBodyArgs[offset+1]=1;_MaskedBodyArgs[offset+2]=1;
+    _MaskedRowArgs[offset+3]=_RowArgs[3];
+    _MaskedSegmentArgs[offset+3]=_SegmentArgs[3];
+    _MaskedBodyArgs[offset+3]=_BodyCount;
+}
+
+// Called immediately before one product after GPU solve control has updated
+// its gate. Earlier prepared slots cannot predict a later convergence result.
+[numthreads(1,1,1)]
+void PrepareSingleMaskedProduct(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    uint active=_SingleGate[0]!=0?1u:0u;
+    _SingleRowArgs[0]=active*_RowArgs[0];
+    _SingleSegmentArgs[0]=active*_SegmentArgs[0];
+    _SingleBodyArgs[0]=active*_BodyCount;
+    _SingleRowArgs[1]=1;_SingleRowArgs[2]=1;_SingleRowArgs[3]=0;
+    _SingleSegmentArgs[1]=1;_SingleSegmentArgs[2]=1;
+    _SingleSegmentArgs[3]=0;
+    _SingleBodyArgs[1]=1;_SingleBodyArgs[2]=1;_SingleBodyArgs[3]=0;
+}
+
+[numthreads(64,1,1)]
+void PrepareMaskedStages(uint id:SV_DispatchThreadID)
+{
+    if(id>=_StageCount)return;
+    uint offset=4*id;
+    _StageArgs[offset]=_StageGates[id]!=0?1u:0u;
+    _StageArgs[offset+1]=1;
+    _StageArgs[offset+2]=1;
+    _StageArgs[offset+3]=0;
+}
+
+// Dispatch-overhead placeholder for geometry, reductions, control and trial
+// stages. The physical kernels replace these slots in V2-2.
+[numthreads(1,1,1)]
+void MaskedStageNoOp(uint id:SV_DispatchThreadID){}
 
 [numthreads(64,1,1)]
 void ExpandRows(uint id:SV_DispatchThreadID)
 {
-    if(id>=_RowCount)return;
+    if(id>=_RowCount||id>=_ActualRowCount[0])return;
     Row row=_Rows[id];
     if(!(row.inverseRoot>0))
     {
@@ -48,8 +131,8 @@ void ExpandRows(uint id:SV_DispatchThreadID)
         _SideReactions[2*id+1]=float4(0,0,0,0);return;
     }
     float impulse=_X[id]*row.inverseRoot;
-    float2 armA=row.point-_Bodies[row.a].center;
-    float2 armB=row.point-_Bodies[row.b].center;
+    float2 armA=row.contactPoint-_Bodies[row.a].center;
+    float2 armB=row.contactPoint-_Bodies[row.b].center;
     _SideReactions[2*id]=float4(-row.direction*impulse,-cross2(armA,row.direction)*impulse,0);
     _SideReactions[2*id+1]=float4(row.direction*impulse,cross2(armB,row.direction)*impulse,0);
 }
@@ -64,7 +147,7 @@ void ClearIncidence(uint id:SV_DispatchThreadID)
 [numthreads(64,1,1)]
 void CountIncidence(uint id:SV_DispatchThreadID)
 {
-    if(id>=_RowCount)return;
+    if(id>=_RowCount||id>=_ActualRowCount[0])return;
     Row row=_Rows[id];
     if(!(row.inverseRoot>0))return;
     InterlockedAdd(_Degrees[row.a],1);
@@ -132,7 +215,7 @@ void ScanIncidenceBlocks(uint3 thread:SV_GroupThreadID)
 [numthreads(64,1,1)]
 void ScatterIncidence(uint id:SV_DispatchThreadID)
 {
-    if(id>=_RowCount)return;
+    if(id>=_RowCount||id>=_ActualRowCount[0])return;
     Row row=_Rows[id];if(!(row.inverseRoot>0))return;
     uint ordinalA,ordinalB;
     InterlockedAdd(_Cursors[row.a],1,ordinalA);
@@ -161,11 +244,78 @@ void BuildSegments(uint id:SV_DispatchThreadID)
     }
 }
 
+// Integer atomic scatter decides only temporary placement. Sort each fixed
+// 64-side segment before merging entire body spans in ascending row-side ID.
+[numthreads(64,1,1)]
+void SortAdjacencySegments(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
+{
+    bool valid=group.x<_SegmentArgs[3];
+    Segment segment;
+    segment.body=0;segment.start=0;segment.count=0;segment.pad=0;
+    if(valid)segment=_Segments[group.x];
+    uint lane=thread.x;
+    _SortSides[lane]=lane<segment.count?
+        _Adjacency[segment.start+lane]:0xffffffffu;
+    for(uint width=2;width<=64;width<<=1)
+    {
+        for(uint stride=width>>1;stride>0;stride>>=1)
+        {
+            GroupMemoryBarrierWithGroupSync();
+            uint self=_SortSides[lane],peer=_SortSides[lane^stride];
+            bool increasing=(lane&width)==0;
+            bool lower=(lane&stride)==0;
+            uint next=(increasing==lower)?min(self,peer):max(self,peer);
+            GroupMemoryBarrierWithGroupSync();
+            _SortSides[lane]=next;
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if(valid&&lane<segment.count)
+        _SortedAdjacency[segment.start+lane]=_SortSides[lane];
+}
+
+// Every row side chooses its unique position in the merged runs by binary
+// search. No floating atomics or scheduling-dependent ordering is involved.
+[numthreads(64,1,1)]
+void MergeAdjacencyRuns(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
+{
+    if(group.x>=_SegmentArgs[3])return;
+    Segment segment=_Segments[group.x];
+    uint body=segment.body;
+    uint local=64*(group.x-_BodySegmentStarts[body])+thread.x;
+    uint degree=_Degrees[body];
+    if(local>=degree)return;
+    uint bodyStart=segment.start-64*(group.x-_BodySegmentStarts[body]);
+    uint pairSpan=2*_MergeSpan;
+    uint pairStart=(local/pairSpan)*pairSpan;
+    uint leftCount=min(_MergeSpan,degree-pairStart);
+    uint rightStart=pairStart+leftCount;
+    uint rightCount=degree>rightStart?min(_MergeSpan,degree-rightStart):0;
+    uint value=_MergeInput[bodyStart+local];
+    bool left=local<rightStart;
+    uint otherStart=left?rightStart:pairStart;
+    uint otherCount=left?rightCount:leftCount;
+    uint lo=0,hi=otherCount;
+    while(lo<hi)
+    {
+        uint middle=(lo+hi)>>1;
+        uint other=_MergeInput[bodyStart+otherStart+middle];
+        if(left?other<value:other<=value)lo=middle+1;
+        else hi=middle;
+    }
+    uint destination=left?pairStart+(local-pairStart)+lo:
+        pairStart+(local-rightStart)+lo;
+    _MergeOutput[bodyStart+destination]=value;
+}
+
 [numthreads(64,1,1)]
 void ReduceSegments(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
 {
-    if(group.x>=_SegmentArgs[3])return;
-    uint lane=thread.x;Segment segment=_Segments[group.x];
+    bool valid=group.x<_SegmentArgs[3];
+    uint lane=thread.x;
+    Segment segment;
+    segment.body=0;segment.start=0;segment.count=0;segment.pad=0;
+    if(valid)segment=_Segments[group.x];
     _Reduction[lane]=lane<segment.count?_SideReactions[_Adjacency[segment.start+lane]]:float4(0,0,0,0);
     GroupMemoryBarrierWithGroupSync();
     for(uint width=32;width>0;width>>=1)
@@ -173,29 +323,42 @@ void ReduceSegments(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
         if(lane<width)_Reduction[lane]+=_Reduction[lane+width];
         GroupMemoryBarrierWithGroupSync();
     }
-    if(lane==0)_SegmentReactions[group.x]=_Reduction[0];
+    if(lane==0&&valid)_SegmentReactions[group.x]=_Reduction[0];
 }
 
 [numthreads(64,1,1)]
-void ApplyBodies(uint id:SV_DispatchThreadID)
+void ApplyBodies(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
 {
+    uint id=group.x,lane=thread.x;
     if(id>=_BodyCount)return;
     float4 reaction=0;
-    for(uint i=_BodySegmentStarts[id];i<_BodySegmentStarts[id+1];i++)
+    for(uint i=_BodySegmentStarts[id]+lane;i<_BodySegmentStarts[id+1];i+=64)
         reaction+=_SegmentReactions[i];
-    Body body=_Bodies[id];
-    _Motion[id]=_FreeMotion[id]+float4(reaction.xy*body.inverseMass,reaction.z*body.inverseInertia,0);
+    _Reduction[lane]=reaction;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=32;width>0;width>>=1)
+    {
+        if(lane<width)_Reduction[lane]+=_Reduction[lane+width];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(lane==0)
+    {
+        Body body=_Bodies[id];
+        reaction=_Reduction[0];
+        _Motion[id]=_FreeMotion[id]+float4(reaction.xy*body.inverseMass,
+            reaction.z*body.inverseInertia,0);
+    }
 }
 
 [numthreads(64,1,1)]
 void ApplyRows(uint id:SV_DispatchThreadID)
 {
-    if(id>=_RowCount)return;
+    if(id>=_RowCount||id>=_ActualRowCount[0])return;
     Row row=_Rows[id];
     if(!(row.inverseRoot>0)){_Y[id]=0;return;}
     float4 a=_Motion[row.a],b=_Motion[row.b];
-    float2 armA=row.point-_Bodies[row.a].center;
-    float2 armB=row.point-_Bodies[row.b].center;
+    float2 armA=row.contactPoint-_Bodies[row.a].center;
+    float2 armB=row.contactPoint-_Bodies[row.b].center;
     float velocity=dot(row.direction,b.xy-a.xy)
         +cross2(armB,row.direction)*b.z-cross2(armA,row.direction)*a.z;
     _Y[id]=velocity*row.inverseRoot;

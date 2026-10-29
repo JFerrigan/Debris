@@ -1,0 +1,814 @@
+#pragma kernel BuildUnionManifolds
+#pragma kernel ResolveStripExits
+#pragma kernel ClearIndexedUnionDegrees
+#pragma kernel CountIndexedUnionAdjacency
+#pragma kernel BuildIndexedUnionManifolds
+#pragma kernel ResolveIndexedUnionExits
+#pragma kernel ValidateIndexedContainment
+#pragma kernel ResetFirstContained
+#pragma kernel CopyUnionPoses
+#pragma kernel BuildUnionWorldBounds
+
+// Prepared exterior intervals are expressed in one rigid body's local frame.
+// Each query targets one square and one interval; groups share the same union.
+struct Patch { float2 center,half; uint feature; };
+struct CoverageRange { uint start,count; };
+struct Face { float2 a,b,normal; uint feature,side; };
+struct Query
+{
+    float2 squareCenter,squareHalf;
+    float squareAngle;
+    uint squareEndpoint;
+    uint faceIndex,unionEndpoint,groupIndex,pad;
+};
+struct Group
+{
+    float2 unionCenter;
+    float unionAngle;
+    uint patchStart,patchCount,firstQuery,queryCount,reserved;
+};
+struct Manifold
+{
+    uint count,referenceFace;
+    float2 normal;
+    float2 point0,point1;
+    float gap0,gap1;
+    uint incidentFace,provenance0,provenance1;
+};
+struct Primitive
+{
+    float2 center,half;
+    float angle;
+    uint endpoint;
+    float2 sweep;
+    uint anchored,kind,faceIndex,unionIndex,contactClass,featureId;
+};
+StructuredBuffer<Patch> _Patches;
+StructuredBuffer<Face> _Faces;
+StructuredBuffer<Query> _Queries;
+StructuredBuffer<Group> _Groups;
+StructuredBuffer<Group> _UpdatedGroups;
+RWStructuredBuffer<Group> _WritableGroups;
+RWStructuredBuffer<Manifold> _RawManifolds,_Manifolds;
+RWStructuredBuffer<uint> _Fault;
+uint _PatchCount,_FaceCount,_QueryCount,_GroupCount;
+float _Margin;
+StructuredBuffer<Primitive> _IndexedPrimitives;
+StructuredBuffer<uint2> _IndexedPairIndices;
+StructuredBuffer<uint> _IndexedCount;
+RWStructuredBuffer<Manifold> _UnionManifolds;
+RWStructuredBuffer<uint> _UnionManifoldSlots,_UnionManifoldCount;
+RWStructuredBuffer<uint> _IndexedMasks,_UnionDegrees,_UnionSlots;
+StructuredBuffer<float4> _UnionBounds;
+RWStructuredBuffer<float4> _WritableUnionBounds;
+StructuredBuffer<Patch> _CoveragePatches;
+StructuredBuffer<CoverageRange> _CoverageRanges;
+RWStructuredBuffer<uint> _FirstContainedPrimitive;
+uint _IndexedPrimitiveCount,_IndexedCapacity;
+uint _UnionManifoldCapacity;
+
+float2 rotate2(float2 p,float angle)
+{
+    float s,c;sincos(angle,s,c);
+    return float2(c*p.x-s*p.y,s*p.x+c*p.y);
+}
+float2 vertex(float2 center,float2 half,float angle,uint index)
+{
+    float2 local=index==0?float2(-half.x,-half.y):
+        index==1?float2(half.x,-half.y):
+        index==2?float2(half.x,half.y):float2(-half.x,half.y);
+    return center+rotate2(local,angle);
+}
+float2 normal2(float2 a,float2 b)
+{
+    float2 edge=b-a;
+    return normalize(float2(edge.y,-edge.x));
+}
+void fault(uint mask)
+{
+    uint old;InterlockedOr(_Fault[0],mask,old);
+}
+
+[numthreads(1,1,1)]
+void ResetFirstContained(uint id:SV_DispatchThreadID)
+{
+    if(id==0)_FirstContainedPrimitive[0]=0xffffffffu;
+}
+
+[numthreads(64,1,1)]
+void CopyUnionPoses(uint id:SV_DispatchThreadID)
+{
+    if(id>=_GroupCount)return;
+    Group original=_Groups[id],updated=_UpdatedGroups[id];
+    if(original.patchStart!=updated.patchStart||
+       original.patchCount!=updated.patchCount||
+       original.firstQuery!=updated.firstQuery||
+       original.queryCount!=updated.queryCount||
+       original.reserved!=updated.reserved||
+       !all(isfinite(float3(updated.unionCenter,updated.unionAngle))))
+    {fault(4);return;}
+    original.unionCenter=updated.unionCenter;
+    original.unionAngle=updated.unionAngle;
+    _WritableGroups[id]=original;
+}
+
+[numthreads(64,1,1)]
+void BuildUnionWorldBounds(uint id:SV_DispatchThreadID)
+{
+    if(id>=_GroupCount)return;
+    Group group=_Groups[id];
+    if(group.patchCount==0)
+    {_WritableUnionBounds[id]=float4(1,1,0,0);return;}
+    if(group.patchStart+group.patchCount>_PatchCount)
+    {fault(4);_WritableUnionBounds[id]=float4(1,1,0,0);return;}
+    float s,c;sincos(group.unionAngle,s,c);
+    float2 minimum=float2(3.4e38,3.4e38);
+    float2 maximum=-minimum;
+    for(uint p=group.patchStart;p<group.patchStart+group.patchCount;p++)
+    {
+        Patch patch=_Patches[p];
+        float2 center=group.unionCenter+float2(c*patch.center.x-s*patch.center.y,
+                                                s*patch.center.x+c*patch.center.y);
+        float2 extent=float2(abs(c)*patch.half.x+abs(s)*patch.half.y,
+                             abs(s)*patch.half.x+abs(c)*patch.half.y);
+        minimum=min(minimum,center-extent);
+        maximum=max(maximum,center+extent);
+    }
+    _WritableUnionBounds[id]=float4(minimum,maximum);
+}
+void storeIndexedManifold(uint candidate,Manifold result)
+{
+    if(result.count==0){_IndexedMasks[candidate]=0;return;}
+    uint slot;
+    InterlockedAdd(_UnionManifoldCount[0],1,slot);
+    if(slot>=_UnionManifoldCapacity)
+    {fault(256);_IndexedMasks[candidate]=0;return;}
+    _UnionManifolds[slot]=result;
+    _UnionManifoldSlots[candidate]=slot;
+    _IndexedMasks[candidate]=1;
+}
+float separation(float2 from[4],float2 to[4],float2 n)
+{
+    float maximum=-3.4e38,minimum=3.4e38;
+    for(uint i=0;i<4;i++)
+    {maximum=max(maximum,dot(from[i],n));minimum=min(minimum,dot(to[i],n));}
+    return minimum-maximum;
+}
+float bestSat(float2 a[4],float2 b[4])
+{
+    float best=-3.4e38;
+    for(uint i=0;i<8;i++)
+    {
+        uint edge=i&3;
+        float2 n=i<4?normal2(a[edge],a[(edge+1)&3]):
+            normal2(b[edge],b[(edge+1)&3]);
+        best=max(best,i<4?separation(a,b,n):separation(b,a,n));
+    }
+    return best;
+}
+float bestSatAxis(float2 a[4],float2 b[4],out float2 chosen)
+{
+    chosen=normal2(a[0],a[1]);
+    float best=separation(a,b,chosen);
+    for(uint i=1;i<8;i++)
+    {
+        uint edge=i&3;
+        float2 n=i<4?normal2(a[edge],a[(edge+1)&3]):
+            normal2(b[edge],b[(edge+1)&3]);
+        float gap=i<4?separation(a,b,n):separation(b,a,n);
+        if(gap>best+1e-6)
+        {best=gap;chosen=i<4?n:-n;}
+    }
+    return best;
+}
+bool ownsInterval(Patch p,uint side,float2 contactPoint)
+{
+    float fixedAxis=side==0?p.center.y-p.half.y:
+        side==2?p.center.y+p.half.y:
+        side==1?p.center.x+p.half.x:p.center.x-p.half.x;
+    return (side&1)==0?
+        abs(contactPoint.y-fixedAxis)<=1e-5 && contactPoint.x>=p.center.x-p.half.x-1e-5 &&
+            contactPoint.x<=p.center.x+p.half.x+1e-5:
+        abs(contactPoint.x-fixedAxis)<=1e-5 && contactPoint.y>=p.center.y-p.half.y-1e-5 &&
+            contactPoint.y<=p.center.y+p.half.y+1e-5;
+}
+
+[numthreads(64,1,1)]
+void BuildUnionManifolds(uint id:SV_DispatchThreadID)
+{
+    if(id>=_QueryCount)return;
+    Manifold result=(Manifold)0;
+    Query query=_Queries[id];
+    if(query.faceIndex>=_FaceCount||query.groupIndex>=_GroupCount||
+       any(query.squareHalf<=0)||!all(isfinite(float4(query.squareCenter,query.squareHalf)))||
+       !isfinite(query.squareAngle))
+    {fault(1);_RawManifolds[id]=result;return;}
+    Group group=_Groups[query.groupIndex];
+    if(group.patchStart+group.patchCount>_PatchCount||
+       id<group.firstQuery||id>=group.firstQuery+group.queryCount||
+       query.squareEndpoint==query.unionEndpoint||!isfinite(group.unionAngle))
+    {fault(2);_RawManifolds[id]=result;return;}
+    Face face=_Faces[query.faceIndex];
+    float2 normal=rotate2(face.normal,group.unionAngle);
+    float2 a=group.unionCenter+rotate2(face.a,group.unionAngle);
+    float2 b=group.unionCenter+rotate2(face.b,group.unionAngle);
+    float length=distance(a,b);
+    if(length<=1e-8){fault(4);_RawManifolds[id]=result;return;}
+    float2 tangent=(b-a)/length;
+    float2 square[4];
+    for(uint i=0;i<4;i++)square[i]=vertex(query.squareCenter,query.squareHalf,query.squareAngle,i);
+    float radius=0;
+    for(uint i=0;i<4;i++)radius=max(radius,abs(dot(square[i]-query.squareCenter,normal)));
+    if(dot(query.squareCenter-a,normal)<-radius-1e-6)
+    {_RawManifolds[id]=result;return;}
+    uint incident=0;float anti=3.4e38;
+    for(uint i=0;i<4;i++)
+    {
+        float projection=dot(normal2(square[i],square[(i+1)&3]),normal);
+        if(projection<anti){anti=projection;incident=i;}
+    }
+    float2 q0=square[incident],q1=square[(incident+1)&3];
+    float u0=dot(q0-a,tangent),u1=dot(q1-a,tangent);
+    float lo=max(0,min(u0,u1)),hi=min(length,max(u0,u1));
+    if(hi<lo-1e-6){_RawManifolds[id]=result;return;}
+    float2 intervalMid=a+tangent*((lo+hi)*.5);
+    float2 localMid=rotate2(intervalMid-group.unionCenter,-group.unionAngle);
+    bool winning=false;
+    for(uint p=group.patchStart;p<group.patchStart+group.patchCount;p++)
+    {
+        Patch owner=_Patches[p];
+        if(!ownsInterval(owner,face.side,localMid))continue;
+        float2 patch[4];
+        float2 center=group.unionCenter+rotate2(owner.center,group.unionAngle);
+        for(uint v=0;v<4;v++)patch[v]=vertex(center,owner.half,group.unionAngle,v);
+        if(separation(patch,square,normal)>=bestSat(patch,square)-1e-6)
+        {winning=true;break;}
+    }
+    if(!winning){_RawManifolds[id]=result;return;}
+    result.referenceFace=query.faceIndex;
+    result.incidentFace=incident;
+    result.normal=-normal;
+    for(uint contactPoint=0;contactPoint<2;contactPoint++)
+    {
+        float u=contactPoint==0?lo:hi;
+        float t=abs(u1-u0)<1e-8?0:(u-u0)/(u1-u0);
+        float2 qa=lerp(q0,q1,t),qb=a+tangent*u;
+        float gap=dot(qa-qb,normal);
+        if(gap>_Margin+1e-6)continue;
+        float2 midpoint=(qa+qb)*.5;
+        if(result.count!=0&&distance(midpoint,result.point0)<1e-5)continue;
+        uint provenance=abs(t)<=1e-6?0u:
+            abs(t-1)<=1e-6?1u:abs(u)<=1e-6?2u:3u;
+        if(result.count==0)
+        {result.point0=midpoint;result.gap0=gap;result.provenance0=provenance;}
+        else
+        {result.point1=midpoint;result.gap1=gap;result.provenance1=provenance;}
+        result.count++;
+    }
+    _RawManifolds[id]=result;
+}
+
+[numthreads(64,1,1)]
+void ResolveStripExits(uint id:SV_DispatchThreadID)
+{
+    if(id>=_QueryCount)return;
+    Manifold current=_RawManifolds[id];
+    if(current.count==0){_Manifolds[id]=current;return;}
+    Query query=_Queries[id];
+    if(query.groupIndex>=_GroupCount){_Manifolds[id]=(Manifold)0;return;}
+    Group group=_Groups[query.groupIndex];
+    if(group.patchStart+group.patchCount>_PatchCount||
+       group.firstQuery+group.queryCount>_QueryCount||
+       id<group.firstQuery||id>=group.firstQuery+group.queryCount)
+    {_Manifolds[id]=(Manifold)0;fault(2);return;}
+    float2 center=rotate2(query.squareCenter-group.unionCenter,-group.unionAngle);
+    bool inside=false;
+    for(uint p=group.patchStart;p<group.patchStart+group.patchCount;p++)
+    {
+        Patch patch=_Patches[p];
+        if(all(abs(center-patch.center)<=patch.half)){inside=true;break;}
+    }
+    if(inside)
+    {
+        float score=min(current.gap0,current.count>1?current.gap1:current.gap0);
+        for(uint other=group.firstQuery;other<group.firstQuery+group.queryCount;other++)
+        {
+            if(other==id)continue;
+            Manifold competing=_RawManifolds[other];
+            if(competing.count==0||dot(current.normal,competing.normal)>-.9999)continue;
+            float rival=min(competing.gap0,competing.count>1?competing.gap1:competing.gap0);
+            bool wins=rival>score+1e-6||
+                (abs(rival-score)<=1e-6&&
+                 (competing.normal.x>current.normal.x+1e-6||
+                 (abs(competing.normal.x-current.normal.x)<=1e-6&&
+                  competing.normal.y>current.normal.y+1e-6)));
+            if(wins){current=(Manifold)0;break;}
+        }
+    }
+    _Manifolds[id]=current;
+}
+
+[numthreads(64,1,1)]
+void ClearIndexedUnionDegrees(uint id:SV_DispatchThreadID)
+{
+    if(id<_IndexedPrimitiveCount)_UnionDegrees[id]=0;
+}
+
+bool classifyIndexed(uint2 indices,out uint grain,out uint face)
+{
+    grain=0;face=0;
+    if(indices.x>=_IndexedPrimitiveCount||indices.y>=_IndexedPrimitiveCount)
+    {fault(4);return false;}
+    Primitive a=_IndexedPrimitives[indices.x],b=_IndexedPrimitives[indices.y];
+    if(a.kind==1&&b.kind==0){grain=indices.y;face=indices.x;return true;}
+    if(a.kind==0&&b.kind==1){grain=indices.x;face=indices.y;return true;}
+    return false;
+}
+
+float pointSegmentDistance(float2 contactPoint,float2 a,float2 b)
+{
+    float2 edge=b-a;
+    float lengthSquared=dot(edge,edge);
+    float t=lengthSquared>1e-12?saturate(dot(contactPoint-a,edge)/lengthSquared):0;
+    return distance(contactPoint,a+t*edge);
+}
+float cross2(float2 a,float2 b){return a.x*b.y-a.y*b.x;}
+float segmentDistance(float2 a0,float2 a1,float2 b0,float2 b1)
+{
+    float2 r=a1-a0,s=b1-b0,offset=b0-a0;
+    float denominator=cross2(r,s);
+    if(abs(denominator)>1e-8)
+    {
+        float t=cross2(offset,s)/denominator;
+        float u=cross2(offset,r)/denominator;
+        if(t>=0&&t<=1&&u>=0&&u<=1)return 0;
+    }
+    return min(min(pointSegmentDistance(a0,b0,b1),
+                   pointSegmentDistance(a1,b0,b1)),
+               min(pointSegmentDistance(b0,a0,a1),
+                   pointSegmentDistance(b1,a0,a1)));
+}
+
+Manifold rigidFaceManifold(Primitive primitiveA,Primitive primitiveB)
+{
+    Manifold result=(Manifold)0;
+    if(primitiveA.unionIndex>=_GroupCount||primitiveB.unionIndex>=_GroupCount||
+       primitiveA.faceIndex>=_FaceCount||primitiveB.faceIndex>=_FaceCount)
+    {fault(4);return result;}
+    Group groupA=_Groups[primitiveA.unionIndex],groupB=_Groups[primitiveB.unionIndex];
+    if(primitiveA.endpoint==primitiveB.endpoint||
+       primitiveA.unionIndex==primitiveB.unionIndex||
+       groupA.reserved!=primitiveA.endpoint||groupB.reserved!=primitiveB.endpoint||
+       groupA.patchStart+groupA.patchCount>_PatchCount||
+       groupB.patchStart+groupB.patchCount>_PatchCount||
+       primitiveA.faceIndex<groupA.firstQuery||
+       primitiveA.faceIndex>=groupA.firstQuery+groupA.queryCount||
+       primitiveB.faceIndex<groupB.firstQuery||
+       primitiveB.faceIndex>=groupB.firstQuery+groupB.queryCount)
+    {fault(4);return result;}
+    Face faceA=_Faces[primitiveA.faceIndex],faceB=_Faces[primitiveB.faceIndex];
+    float2 a0=groupA.unionCenter+rotate2(faceA.a,groupA.unionAngle);
+    float2 a1=groupA.unionCenter+rotate2(faceA.b,groupA.unionAngle);
+    float2 b0=groupB.unionCenter+rotate2(faceB.a,groupB.unionAngle);
+    float2 b1=groupB.unionCenter+rotate2(faceB.b,groupB.unionAngle);
+    float2 normalA=rotate2(faceA.normal,groupA.unionAngle);
+    float2 normalB=rotate2(faceB.normal,groupB.unionAngle);
+    float length=distance(a0,a1);
+    if(length<=1e-8||distance(b0,b1)<=1e-8){fault(4);return result;}
+    if(dot(normalA,normalB)>-.98)
+    {
+        float closest=segmentDistance(a0,a1,b0,b1);
+        // A flat support also generates nearby perpendicular proxy pairs at
+        // its endpoints. Only a tied SAT corner can require both faces.
+        if(closest<=_Margin+1e-6&&abs(dot(normalA,normalB))<.98)
+        {
+            for(uint pa=groupA.patchStart;pa<groupA.patchStart+groupA.patchCount;pa++)
+            {
+                Patch ownerA=_Patches[pa];
+                float2 localA=rotate2((a0+a1)*.5-groupA.unionCenter,-groupA.unionAngle);
+                if(!ownsInterval(ownerA,faceA.side,localA))continue;
+                float2 verticesA[4];
+                float2 centerA=groupA.unionCenter+rotate2(ownerA.center,groupA.unionAngle);
+                for(uint v=0;v<4;v++)
+                    verticesA[v]=vertex(centerA,ownerA.half,groupA.unionAngle,v);
+                for(uint pb=groupB.patchStart;pb<groupB.patchStart+groupB.patchCount;pb++)
+                {
+                    Patch ownerB=_Patches[pb];
+                    float2 localB=rotate2((b0+b1)*.5-groupB.unionCenter,-groupB.unionAngle);
+                    if(!ownsInterval(ownerB,faceB.side,localB))continue;
+                    float2 verticesB[4];
+                    float2 centerB=groupB.unionCenter+rotate2(ownerB.center,groupB.unionAngle);
+                    for(uint v=0;v<4;v++)
+                        verticesB[v]=vertex(centerB,ownerB.half,groupB.unionAngle,v);
+                    float2 selectedAxis;
+                    float best=bestSatAxis(verticesA,verticesB,selectedAxis);
+                    if(best>_Margin+1e-6)continue;
+                    if(separation(verticesA,verticesB,normalA)>=best-1e-6&&
+                       separation(verticesB,verticesA,normalB)>=best-1e-6)
+                    {
+                        // A diagonal convex tie is one contact. If an exterior
+                        // face opposes the selected axis, that face pair owns it.
+                        bool opposing=false;
+                        for(uint f=groupB.firstQuery;
+                            f<groupB.firstQuery+groupB.queryCount&&!opposing;f++)
+                        {
+                            Face other=_Faces[f];
+                            float2 n=rotate2(other.normal,groupB.unionAngle);
+                            if(dot(n,normalA)>-.98)continue;
+                            float2 c0=groupB.unionCenter+
+                                rotate2(other.a,groupB.unionAngle);
+                            float2 c1=groupB.unionCenter+
+                                rotate2(other.b,groupB.unionAngle);
+                            opposing=segmentDistance(a0,a1,c0,c1)<=_Margin+1e-6;
+                        }
+                        for(uint f=groupA.firstQuery;
+                            f<groupA.firstQuery+groupA.queryCount&&!opposing;f++)
+                        {
+                            Face other=_Faces[f];
+                            float2 n=rotate2(other.normal,groupA.unionAngle);
+                            if(dot(n,normalB)>-.98)continue;
+                            float2 c0=groupA.unionCenter+
+                                rotate2(other.a,groupA.unionAngle);
+                            float2 c1=groupA.unionCenter+
+                                rotate2(other.b,groupA.unionAngle);
+                            opposing=segmentDistance(c0,c1,b0,b1)<=_Margin+1e-6;
+                        }
+                        if(opposing)return result;
+                        // With no opposed exterior interval, the selected SAT
+                        // axis owns this vertex/edge contact. The incident
+                        // endpoint nearest the reference plane is the sole
+                        // clipped contactPoint; the other tied axis is not a second
+                        // constraint for this owning patch pair.
+                        float2 qa=float2(0,0),qb=float2(0,0);
+                        uint provenance=0;
+                        if(dot(selectedAxis,normalA)>.98)
+                        {
+                            float d0=dot(b0-a0,normalA),d1=dot(b1-a0,normalA);
+                            bool first=d0<=d1;
+                            qb=first?b0:b1;
+                            float u=dot(qb-a0,(a1-a0)/length);
+                            if(u<-_Margin-1e-6||u>length+_Margin+1e-6)
+                                return result;
+                            qa=a0+(a1-a0)/length*clamp(u,0,length);
+                            result.referenceFace=primitiveA.faceIndex;
+                            result.incidentFace=primitiveB.faceIndex;
+                            result.normal=normalA;
+                            provenance=first?0u:1u;
+                        }
+                        else if(dot(selectedAxis,-normalB)>.98)
+                        {
+                            float d0=dot(a0-b0,normalB),d1=dot(a1-b0,normalB);
+                            bool first=d0<=d1;
+                            qa=first?a0:a1;
+                            float bLength=distance(b0,b1);
+                            float2 bTangent=(b1-b0)/bLength;
+                            float u=dot(qa-b0,bTangent);
+                            if(u<-_Margin-1e-6||u>bLength+_Margin+1e-6)
+                                return result;
+                            qb=b0+bTangent*clamp(u,0,bLength);
+                            result.referenceFace=primitiveB.faceIndex;
+                            result.incidentFace=primitiveA.faceIndex;
+                            result.normal=-normalB;
+                            provenance=first?0u:1u;
+                        }
+                        else {fault(128);return result;}
+                        float gap=dot(qb-qa,result.normal);
+                        if(gap<=_Margin+1e-6)
+                        {
+                            result.count=1;
+                            result.point0=(qa+qb)*.5;
+                            result.gap0=gap;
+                            result.provenance0=provenance;
+                        }
+                        return result;
+                    }
+                }
+            }
+        }
+        return result;
+    }
+    float2 tangent=(a1-a0)/length;
+    float u0=dot(b0-a0,tangent),u1=dot(b1-a0,tangent);
+    float lo=max(0,min(u0,u1)),hi=min(length,max(u0,u1));
+    if(hi<lo-1e-6)return result;
+    float2 intervalMidA=a0+tangent*((lo+hi)*.5);
+    float2 intervalMidB=lerp(b0,b1,abs(u1-u0)<1e-8?0:
+        (((lo+hi)*.5-u0)/(u1-u0)));
+    float2 localA=rotate2(intervalMidA-groupA.unionCenter,-groupA.unionAngle);
+    float2 localB=rotate2(intervalMidB-groupB.unionCenter,-groupB.unionAngle);
+    bool winning=false;
+    for(uint pa=groupA.patchStart;pa<groupA.patchStart+groupA.patchCount&&!winning;pa++)
+    {
+        Patch ownerA=_Patches[pa];
+        if(!ownsInterval(ownerA,faceA.side,localA))continue;
+        float2 verticesA[4];
+        float2 centerA=groupA.unionCenter+rotate2(ownerA.center,groupA.unionAngle);
+        for(uint v=0;v<4;v++)
+            verticesA[v]=vertex(centerA,ownerA.half,groupA.unionAngle,v);
+        for(uint pb=groupB.patchStart;pb<groupB.patchStart+groupB.patchCount;pb++)
+        {
+            Patch ownerB=_Patches[pb];
+            if(!ownsInterval(ownerB,faceB.side,localB))continue;
+            float2 verticesB[4];
+            float2 centerB=groupB.unionCenter+rotate2(ownerB.center,groupB.unionAngle);
+            for(uint v=0;v<4;v++)
+                verticesB[v]=vertex(centerB,ownerB.half,groupB.unionAngle,v);
+            float2 selectedAxis;
+            float best=bestSatAxis(verticesA,verticesB,selectedAxis);
+            if(dot(selectedAxis,normalA)>.98&&
+               separation(verticesA,verticesB,normalA)>=best-1e-6)
+            {winning=true;break;}
+        }
+    }
+    if(!winning)return result;
+    result.referenceFace=primitiveA.faceIndex;
+    result.incidentFace=primitiveB.faceIndex;
+    result.normal=normalA;
+    for(uint contactPoint=0;contactPoint<2;contactPoint++)
+    {
+        float u=contactPoint==0?lo:hi;
+        float t=abs(u1-u0)<1e-8?0:(u-u0)/(u1-u0);
+        float2 qa=a0+tangent*u,qb=lerp(b0,b1,t);
+        float gap=dot(qb-qa,normalA);
+        if(gap>_Margin+1e-6)continue;
+        float2 midpoint=(qa+qb)*.5;
+        if(result.count!=0&&distance(result.point0,midpoint)<1e-5)continue;
+        uint provenance=abs(t)<=1e-6?0u:
+            abs(t-1)<=1e-6?1u:abs(u)<=1e-6?2u:3u;
+        if(result.count==0)
+        {result.point0=midpoint;result.gap0=gap;result.provenance0=provenance;}
+        else
+        {result.point1=midpoint;result.gap1=gap;result.provenance1=provenance;}
+        result.count++;
+    }
+    return result;
+}
+
+[numthreads(64,1,1)]
+void CountIndexedUnionAdjacency(uint id:SV_DispatchThreadID)
+{
+    if(id>=min(_IndexedCount[0],_IndexedCapacity))return;
+    uint grain,face;
+    if(!classifyIndexed(_IndexedPairIndices[id],grain,face))return;
+    uint ordinal;
+    InterlockedAdd(_UnionDegrees[grain],1,ordinal);
+    if(ordinal<64)_UnionSlots[grain*64+ordinal]=id;
+    else fault(8);
+}
+
+[numthreads(64,1,1)]
+void BuildIndexedUnionManifolds(uint id:SV_DispatchThreadID)
+{
+    if(id>=min(_IndexedCount[0],_IndexedCapacity))return;
+    uint2 primitiveIndices=_IndexedPairIndices[id];
+    if(primitiveIndices.x>=_IndexedPrimitiveCount||
+       primitiveIndices.y>=_IndexedPrimitiveCount)
+    {fault(4);return;}
+    Primitive first=_IndexedPrimitives[primitiveIndices.x];
+    Primitive second=_IndexedPrimitives[primitiveIndices.y];
+    if(first.kind==1&&second.kind==1)
+    {
+        if(first.unionIndex>=_GroupCount||second.unionIndex>=_GroupCount)
+        {fault(4);_IndexedMasks[id]=0;return;}
+        Manifold rigid=rigidFaceManifold(first,second);
+        storeIndexedManifold(id,rigid);
+        return;
+    }
+    uint grainIndex,faceIndex;
+    if(!classifyIndexed(_IndexedPairIndices[id],grainIndex,faceIndex))return;
+    Primitive squarePrimitive=_IndexedPrimitives[grainIndex];
+    Primitive facePrimitive=_IndexedPrimitives[faceIndex];
+    Manifold result=(Manifold)0;
+    if(facePrimitive.faceIndex>=_FaceCount||facePrimitive.unionIndex>=_GroupCount||
+       squarePrimitive.endpoint==facePrimitive.endpoint)
+    {fault(4);_IndexedMasks[id]=0;return;}
+    Group group=_Groups[facePrimitive.unionIndex];
+    if(group.patchStart+group.patchCount>_PatchCount||
+       facePrimitive.faceIndex<group.firstQuery||
+       facePrimitive.faceIndex>=group.firstQuery+group.queryCount||
+       group.reserved!=facePrimitive.endpoint)
+    {fault(4);_IndexedMasks[id]=0;return;}
+    Face face=_Faces[facePrimitive.faceIndex];
+    float2 outward=rotate2(face.normal,group.unionAngle);
+    float2 a=group.unionCenter+rotate2(face.a,group.unionAngle);
+    float2 b=group.unionCenter+rotate2(face.b,group.unionAngle);
+    float length=distance(a,b);
+    if(length<=1e-8){fault(4);_IndexedMasks[id]=0;return;}
+    float2 tangent=(b-a)/length;
+    float2 square[4];
+    for(uint v=0;v<4;v++)
+        square[v]=vertex(squarePrimitive.center,squarePrimitive.half,squarePrimitive.angle,v);
+    float radius=0;
+    for(uint v=0;v<4;v++)
+        radius=max(radius,abs(dot(square[v]-squarePrimitive.center,outward)));
+    if(dot(squarePrimitive.center-a,outward)>=-radius-1e-6)
+    {
+        uint incident=0;float anti=3.4e38;
+        for(uint v=0;v<4;v++)
+        {
+            float projection=dot(normal2(square[v],square[(v+1)&3]),outward);
+            if(projection<anti){anti=projection;incident=v;}
+        }
+        float2 q0=square[incident],q1=square[(incident+1)&3];
+        float u0=dot(q0-a,tangent),u1=dot(q1-a,tangent);
+        float lo=max(0,min(u0,u1)),hi=min(length,max(u0,u1));
+        if(hi>=lo-1e-6)
+        {
+            float2 intervalMid=a+tangent*((lo+hi)*.5);
+            float2 localMid=rotate2(intervalMid-group.unionCenter,-group.unionAngle);
+            bool winning=false;
+            for(uint p=group.patchStart;p<group.patchStart+group.patchCount;p++)
+            {
+                Patch owner=_Patches[p];
+                if(!ownsInterval(owner,face.side,localMid))continue;
+                float2 patch[4];
+                float2 center=group.unionCenter+rotate2(owner.center,group.unionAngle);
+                for(uint v=0;v<4;v++)patch[v]=vertex(center,owner.half,group.unionAngle,v);
+                if(separation(patch,square,outward)>=bestSat(patch,square)-1e-6)
+                {winning=true;break;}
+            }
+            if(winning)
+            {
+                result.referenceFace=facePrimitive.faceIndex;
+                result.incidentFace=incident;
+                result.normal=-outward;
+                for(uint contactPoint=0;contactPoint<2;contactPoint++)
+                {
+                    float u=contactPoint==0?lo:hi;
+                    float t=abs(u1-u0)<1e-8?0:(u-u0)/(u1-u0);
+                    float2 qa=lerp(q0,q1,t),qb=a+tangent*u;
+                    float gap=dot(qa-qb,outward);
+                    if(gap>_Margin+1e-6)continue;
+                    float2 midpoint=(qa+qb)*.5;
+                    if(result.count!=0&&distance(result.point0,midpoint)<1e-5)continue;
+                    uint provenance=abs(t)<=1e-6?0u:
+                        abs(t-1)<=1e-6?1u:abs(u)<=1e-6?2u:3u;
+                    if(result.count==0)
+                    {result.point0=midpoint;result.gap0=gap;result.provenance0=provenance;}
+                    else
+                    {result.point1=midpoint;result.gap1=gap;result.provenance1=provenance;}
+                    result.count++;
+                }
+            }
+        }
+    }
+    storeIndexedManifold(id,result);
+}
+
+[numthreads(64,1,1)]
+void ResolveIndexedUnionExits(uint id:SV_DispatchThreadID)
+{
+    if(id>=min(_IndexedCount[0],_IndexedCapacity)||_IndexedMasks[id]==0)return;
+    uint grainIndex,faceIndex;
+    if(!classifyIndexed(_IndexedPairIndices[id],grainIndex,faceIndex))return;
+    Primitive grain=_IndexedPrimitives[grainIndex],proxy=_IndexedPrimitives[faceIndex];
+    if(proxy.unionIndex>=_GroupCount){fault(4);return;}
+    Group group=_Groups[proxy.unionIndex];
+    float2 center=rotate2(grain.center-group.unionCenter,-group.unionAngle);
+    bool inside=false;
+    for(uint p=group.patchStart;p<group.patchStart+group.patchCount;p++)
+    {
+        Patch patch=_Patches[p];
+        if(all(abs(center-patch.center)<=patch.half)){inside=true;break;}
+    }
+    if(!inside)return;
+    uint slot=_UnionManifoldSlots[id];
+    if(slot>=_UnionManifoldCapacity){fault(4);return;}
+    Manifold current=_UnionManifolds[slot];
+    float score=min(current.gap0,current.count>1?current.gap1:current.gap0);
+    uint degree=min(_UnionDegrees[grainIndex],64u);
+    for(uint i=0;i<degree;i++)
+    {
+        uint other=_UnionSlots[grainIndex*64+i];
+        if(other==id)continue;
+        uint otherGrain,otherFace;
+        if(!classifyIndexed(_IndexedPairIndices[other],otherGrain,otherFace))continue;
+        if(otherGrain!=grainIndex||
+           _IndexedPrimitives[otherFace].unionIndex!=proxy.unionIndex)continue;
+        uint otherSlot=_UnionManifoldSlots[other];
+        if(otherSlot>=_UnionManifoldCapacity)continue;
+        Manifold competing=_UnionManifolds[otherSlot];
+        if(competing.count==0||dot(current.normal,competing.normal)>-.9999)continue;
+        float rival=min(competing.gap0,competing.count>1?competing.gap1:competing.gap0);
+        bool wins=rival>score+1e-6||
+            (abs(rival-score)<=1e-6&&
+             (competing.normal.x>current.normal.x+1e-6||
+              (abs(competing.normal.x-current.normal.x)<=1e-6&&
+               competing.normal.y>current.normal.y+1e-6)));
+        if(wins){_IndexedMasks[id]=0;break;}
+    }
+}
+
+float clipDistance(float2 contactPoint,float2 minimum,float2 maximum,uint plane)
+{
+    if(plane==0)return contactPoint.x-minimum.x;
+    if(plane==1)return maximum.x-contactPoint.x;
+    if(plane==2)return contactPoint.y-minimum.y;
+    return maximum.y-contactPoint.y;
+}
+
+float coveredArea(float2 square[4],Patch rectangle)
+{
+    float2 minimum=rectangle.center-rectangle.half;
+    float2 maximum=rectangle.center+rectangle.half;
+    float2 polygon[8],scratch[8];
+    for(uint i=0;i<4;i++)polygon[i]=square[i];
+    uint count=4;
+    for(uint plane=0;plane<4;plane++)
+    {
+        if(count==0)break;
+        uint written=0;
+        float2 previous=polygon[count-1];
+        float prior=clipDistance(previous,minimum,maximum,plane);
+        for(uint i=0;i<count;i++)
+        {
+            float2 current=polygon[i];
+            float distanceNow=clipDistance(current,minimum,maximum,plane);
+            bool wasInside=prior>=0,inside=distanceNow>=0;
+            if(wasInside!=inside)
+            {
+                float t=prior/(prior-distanceNow);
+                if(written<8)scratch[written++]=lerp(previous,current,t);
+            }
+            if(inside&&written<8)scratch[written++]=current;
+            previous=current;prior=distanceNow;
+        }
+        count=written;
+        for(uint i=0;i<count;i++)polygon[i]=scratch[i];
+    }
+    if(count<3)return 0;
+    float twice=0;
+    for(uint i=0;i<count;i++)
+    {
+        float2 a=polygon[i],b=polygon[(i+1)%count];
+        twice+=a.x*b.y-a.y*b.x;
+    }
+    return abs(twice)*.5;
+}
+
+[numthreads(64,1,1)]
+void ValidateIndexedContainment(uint id:SV_DispatchThreadID)
+{
+    if(id>=_IndexedPrimitiveCount)return;
+    Primitive grain=_IndexedPrimitives[id];
+    if(grain.kind!=0)return;
+    for(uint groupId=0;groupId<_GroupCount;groupId++)
+    {
+        Group group=_Groups[groupId];
+        if(group.reserved==grain.endpoint)continue;
+        float4 bounds=_UnionBounds[groupId];
+        if(bounds.x>bounds.z||grain.center.x<bounds.x||grain.center.x>bounds.z||
+           grain.center.y<bounds.y||grain.center.y>bounds.w)continue;
+        float2 localCenter=rotate2(grain.center-group.unionCenter,-group.unionAngle);
+        float2 localCorners[4];
+        for(uint corner=0;corner<4;corner++)
+        {
+            float2 world=vertex(grain.center,grain.half,grain.angle,corner);
+            localCorners[corner]=rotate2(world-group.unionCenter,-group.unionAngle);
+        }
+        bool centerInside=false;
+        for(uint patchIndex=group.patchStart;
+            patchIndex<group.patchStart+group.patchCount;patchIndex++)
+        {
+            Patch patch=_Patches[patchIndex];
+            if(all(abs(localCenter-patch.center)<=patch.half))centerInside=true;
+        }
+        float2 squareMin=localCorners[0],squareMax=localCorners[0];
+        for(uint corner=1;corner<4;corner++)
+        {squareMin=min(squareMin,localCorners[corner]);
+         squareMax=max(squareMax,localCorners[corner]);}
+        CoverageRange coverage=_CoverageRanges[groupId];
+        float area=0;
+        for(uint patchIndex=coverage.start;
+            patchIndex<coverage.start+coverage.count;patchIndex++)
+        {
+            Patch patch=_CoveragePatches[patchIndex];
+            if(any(squareMin>patch.center+patch.half)||
+               any(squareMax<patch.center-patch.half))continue;
+            area+=coveredArea(localCorners,patch);
+        }
+        float squareArea=4*grain.half.x*grain.half.y;
+        if(area>=squareArea-1e-5*max(1.0,squareArea))
+        {
+            fault(32);uint old;
+            InterlockedMin(_FirstContainedPrimitive[0],id,old);
+        }
+        if(!centerInside)continue;
+        bool exterior=false;
+        uint degree=min(_UnionDegrees[id],64u);
+        for(uint candidate=0;candidate<degree;candidate++)
+        {
+            uint pairId=_UnionSlots[id*64+candidate];
+            if(_IndexedMasks[pairId]==0)continue;
+            uint otherGrain,face;
+            if(!classifyIndexed(_IndexedPairIndices[pairId],otherGrain,face))continue;
+            if(otherGrain==id&&_IndexedPrimitives[face].unionIndex==groupId)
+            {exterior=true;break;}
+        }
+        if(!exterior)
+        {
+            fault(64);uint old;
+            InterlockedMin(_FirstContainedPrimitive[0],id,old);
+        }
+    }
+}

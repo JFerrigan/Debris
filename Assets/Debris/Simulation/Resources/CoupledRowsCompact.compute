@@ -1,0 +1,257 @@
+#pragma kernel MarkRows
+#pragma kernel ScanRowsLocal
+#pragma kernel ScanRowsBlocks
+#pragma kernel ScatterRows
+#pragma kernel PrepareRowArgs
+#pragma kernel ResetRowFault
+#pragma kernel CopyBodyPoses
+#pragma kernel PrepareKeyArgs
+#pragma kernel BuildContactKeys
+
+struct Pair
+{
+    float2 aCenter,aHalf;
+    float aAngle;
+    uint aEndpoint;
+    float2 bCenter,bHalf;
+    float bAngle;
+    uint bEndpoint;
+};
+struct Manifold
+{
+    uint count,referenceFace;
+    float2 normal;
+    float2 point0,point1;
+    float gap0,gap1;
+    uint incidentFace,provenance0,provenance1;
+};
+struct Body { float2 center; float inverseMass,inverseInertia; };
+struct Row { uint a,b; float2 contactPoint,direction; float inverseRoot,gap; };
+StructuredBuffer<Pair> _Pairs;
+StructuredBuffer<uint2> _PairIndices;
+StructuredBuffer<Manifold> _Manifolds;
+StructuredBuffer<uint> _ManifoldCount;
+StructuredBuffer<Body> _Bodies;
+StructuredBuffer<Body> _UpdatedBodies;
+RWStructuredBuffer<Body> _WritableBodies;
+RWStructuredBuffer<Row> _Rows;
+RWStructuredBuffer<uint> _RowManifoldIds;
+RWStructuredBuffer<uint> _Masks,_LocalStarts,_BlockSums,_BlockStarts;
+struct Feature
+{
+    uint aPrimitive,bPrimitive,referenceFace,incidentFace,provenance,pointAxis;
+};
+RWStructuredBuffer<Feature> _RowFeatures;
+struct Primitive
+{
+    float2 center,half;
+    float angle;
+    uint endpoint;
+    float2 sweep;
+    uint anchored,kind,faceIndex,unionIndex,contactClass,featureId;
+};
+struct Binding
+{
+    uint kind,idLow0,idLow1,idHigh0,idHigh1;
+    uint generation,slotGeneration,revision,bound;
+};
+struct ContactKey
+{
+    uint endpoints,slotGenerationA,slotGenerationB;
+    uint revisionA,revisionB,featureA,featureB,contactPoint;
+};
+StructuredBuffer<Primitive> _SourcePrimitives;
+StructuredBuffer<Binding> _EndpointBindings;
+RWStructuredBuffer<ContactKey> _ContactKeys;
+RWStructuredBuffer<uint> _KeyArgs;
+RWStructuredBuffer<uint> _RowCount,_Fault;
+RWStructuredBuffer<uint> _BuildArgs,_ScanArgs,_ScatterArgs;
+uint _ManifoldCapacity,_BodyCount,_SlotCapacity;
+uint _PrimitiveCount,_KeyCapacity;
+uint _NormalOnly;
+groupshared uint _Scan[256];
+
+float cross2(float2 a,float2 b){return a.x*b.y-a.y*b.x;}
+void fault(uint flag){uint old;InterlockedOr(_Fault[0],flag,old);}
+
+[numthreads(1,1,1)]
+void ResetRowFault(uint id:SV_DispatchThreadID)
+{
+    if(id==0)_Fault[0]=0;
+}
+
+// A requery changes geometry, not the mass contract of the frozen operator.
+[numthreads(64,1,1)]
+void CopyBodyPoses(uint id:SV_DispatchThreadID)
+{
+    if(id>=_BodyCount)return;
+    Body prior=_WritableBodies[id],updated=_UpdatedBodies[id];
+    if(!all(isfinite(updated.center))||
+       !isfinite(updated.inverseMass)||!isfinite(updated.inverseInertia)||
+       updated.inverseMass!=prior.inverseMass||
+       updated.inverseInertia!=prior.inverseInertia)
+    {fault(8);return;}
+    prior.center=updated.center;
+    _WritableBodies[id]=prior;
+}
+
+[numthreads(1,1,1)]
+void PrepareKeyArgs(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    uint count=_RowCount[0];
+    if(count>_KeyCapacity)fault(4);
+    uint groups=(min(count,_KeyCapacity)+63)/64;
+    _KeyArgs[0]=max(1u,groups);
+    _KeyArgs[1]=1;_KeyArgs[2]=1;_KeyArgs[3]=groups;
+}
+
+[numthreads(64,1,1)]
+void BuildContactKeys(uint id:SV_DispatchThreadID)
+{
+    if(id>=_RowCount[0]||id>=_KeyCapacity)return;
+    Row row=_Rows[id];Feature feature=_RowFeatures[id];
+    if(row.a>=_BodyCount||row.b>=_BodyCount||
+       feature.aPrimitive>=_PrimitiveCount||
+       feature.bPrimitive>=_PrimitiveCount||
+       feature.referenceFace>=4096||feature.incidentFace>=4096||
+       feature.provenance>=4||feature.pointAxis>=4)
+    {fault(4);return;}
+    Primitive a=_SourcePrimitives[feature.aPrimitive];
+    Primitive b=_SourcePrimitives[feature.bPrimitive];
+    Binding bindingA=_EndpointBindings[row.a],bindingB=_EndpointBindings[row.b];
+    if(a.endpoint!=row.a||b.endpoint!=row.b||
+       bindingA.bound!=1||bindingB.bound!=1||
+       bindingA.kind==0||bindingB.kind==0||
+       bindingA.slotGeneration==0||bindingB.slotGeneration==0||
+       bindingA.revision==0||bindingB.revision==0)
+    {fault(4);return;}
+    ContactKey key;
+    key.endpoints=row.a|(row.b<<14);
+    key.slotGenerationA=bindingA.slotGeneration;
+    key.slotGenerationB=bindingB.slotGeneration;
+    key.revisionA=bindingA.revision;
+    key.revisionB=bindingB.revision;
+    key.featureA=a.featureId;key.featureB=b.featureId;
+    key.contactPoint=feature.referenceFace|(feature.incidentFace<<12)|
+        (feature.provenance<<24)|(feature.pointAxis<<26);
+    _ContactKeys[id]=key;
+}
+
+[numthreads(1,1,1)]
+void PrepareRowArgs(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    uint active=min(_ManifoldCount[0],_ManifoldCapacity);
+    uint buildGroups=(active+63)/64,slots=4*active;
+    uint scanGroups=(slots+255)/256,scatterGroups=(slots+63)/64;
+    _BuildArgs[0]=max(1u,buildGroups);
+    _BuildArgs[1]=1;_BuildArgs[2]=1;_BuildArgs[3]=buildGroups;
+    _ScanArgs[0]=max(1u,scanGroups);
+    _ScanArgs[1]=1;_ScanArgs[2]=1;_ScanArgs[3]=scanGroups;
+    _ScatterArgs[0]=max(1u,scatterGroups);
+    _ScatterArgs[1]=1;_ScatterArgs[2]=1;_ScatterArgs[3]=scatterGroups;
+}
+
+[numthreads(64,1,1)]
+void MarkRows(uint id:SV_DispatchThreadID)
+{
+    if(id>=min(_ManifoldCount[0],_ManifoldCapacity))return;
+    uint baseSlot=4*id;
+    for(uint slot=0;slot<4;slot++)
+        _Masks[baseSlot+slot]=0;
+    Pair pair=_Pairs[id];Manifold manifold=_Manifolds[id];
+    if(pair.aEndpoint>=_BodyCount||pair.bEndpoint>=_BodyCount||
+       pair.aEndpoint==pair.bEndpoint||manifold.count>2||
+       !all(isfinite(manifold.normal)))
+    {fault(1);return;}
+    Body a=_Bodies[pair.aEndpoint],b=_Bodies[pair.bEndpoint];
+    for(uint contactPoint=0;contactPoint<manifold.count;contactPoint++)
+    {
+        float2 position=contactPoint==0?manifold.point0:manifold.point1;
+        float gap=contactPoint==0?manifold.gap0:manifold.gap1;
+        if(!all(isfinite(position))||!isfinite(gap)){fault(1);continue;}
+        float2 tangent=float2(-manifold.normal.y,manifold.normal.x);
+        float nA=cross2(position-a.center,manifold.normal);
+        float nB=cross2(position-b.center,manifold.normal);
+        float tA=cross2(position-a.center,tangent);
+        float tB=cross2(position-b.center,tangent);
+        float normalDiagonal=a.inverseMass+b.inverseMass+
+            a.inverseInertia*nA*nA+b.inverseInertia*nB*nB;
+        float tangentDiagonal=a.inverseMass+b.inverseMass+
+            a.inverseInertia*tA*tA+b.inverseInertia*tB*tB;
+        if(!(normalDiagonal>0)||!isfinite(normalDiagonal)||
+           (_NormalOnly==0&&(!(tangentDiagonal>0)||!isfinite(tangentDiagonal))))
+        {fault(1);continue;}
+        _Masks[baseSlot+2*contactPoint]=1;
+        _Masks[baseSlot+2*contactPoint+1]=_NormalOnly==0?1:0;
+    }
+}
+
+[numthreads(256,1,1)]
+void ScanRowsLocal(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
+{
+    uint lane=thread.x,id=group.x*256+lane;
+    uint slots=4*min(_ManifoldCount[0],_ManifoldCapacity);
+    uint active=id<slots?_Masks[id]:0;
+    _Scan[lane]=active;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=1;width<256;width<<=1)
+    {
+        uint prior=lane>=width?_Scan[lane-width]:0;
+        GroupMemoryBarrierWithGroupSync();
+        _Scan[lane]+=prior;
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(id<slots)_LocalStarts[id]=_Scan[lane]-active;
+    if(lane==255)_BlockSums[group.x]=_Scan[lane];
+}
+
+[numthreads(1,1,1)]
+void ScanRowsBlocks(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    uint total=0;
+    uint slots=4*min(_ManifoldCount[0],_ManifoldCapacity);
+    uint blocks=max(1u,(slots+255)/256);
+    for(uint block=0;block<blocks;block++)
+    {_BlockStarts[block]=total;total+=_BlockSums[block];}
+    _RowCount[0]=total;
+    if(total>_SlotCapacity)fault(2);
+}
+
+[numthreads(64,1,1)]
+void ScatterRows(uint id:SV_DispatchThreadID)
+{
+    if(id>=4*min(_ManifoldCount[0],_ManifoldCapacity)||_Masks[id]==0)return;
+    uint output=_BlockStarts[id/256]+_LocalStarts[id];
+    if(output>=_SlotCapacity)return;
+    uint manifold=id/4;
+    Pair pair=_Pairs[manifold];
+    Manifold contact=_Manifolds[manifold];
+    uint contactPoint=(id&3)/2;
+    float2 position=contactPoint==0?contact.point0:contact.point1;
+    float gap=contactPoint==0?contact.gap0:contact.gap1;
+    float2 direction=(id&1)==0?contact.normal:
+        float2(-contact.normal.y,contact.normal.x);
+    Body a=_Bodies[pair.aEndpoint],b=_Bodies[pair.bEndpoint];
+    float torqueA=cross2(position-a.center,direction);
+    float torqueB=cross2(position-b.center,direction);
+    float diagonal=a.inverseMass+b.inverseMass+
+        a.inverseInertia*torqueA*torqueA+b.inverseInertia*torqueB*torqueB;
+    if(!(diagonal>0)||!isfinite(diagonal)){fault(1);return;}
+    Row row;
+    row.a=pair.aEndpoint;row.b=pair.bEndpoint;
+    row.contactPoint=position;row.direction=direction;
+    row.inverseRoot=rsqrt(diagonal);row.gap=gap;
+    _Rows[output]=row;
+    _RowManifoldIds[output]=manifold;
+    uint2 primitivePair=_PairIndices[manifold];
+    Feature feature;
+    feature.aPrimitive=primitivePair.x;feature.bPrimitive=primitivePair.y;
+    feature.referenceFace=contact.referenceFace;
+    feature.incidentFace=contact.incidentFace;
+    feature.provenance=contactPoint==0?contact.provenance0:contact.provenance1;
+    feature.pointAxis=id&3;
+    _RowFeatures[output]=feature;
+}

@@ -1,0 +1,369 @@
+#pragma kernel Clear
+#pragma kernel BuildBounds
+#pragma kernel ScanBins
+#pragma kernel ScanBlocks
+#pragma kernel Scatter
+#pragma kernel FindPairs
+#pragma kernel CopyPrimitives
+#pragma kernel PreparePairSort
+#pragma kernel SortPairSegments
+#pragma kernel MergePairRuns
+#pragma kernel ValidateSortedPairs
+
+// Diagnostic V2-1 GPU spatial index. Short swept AABBs occupy at most 64
+// cells; longer boxes use a separate, bounded global list. Each pair is
+// emitted from the first bin shared by its two boxes, or from the long list.
+struct Primitive
+{
+    float2 center,half;
+    float angle;
+    uint endpoint;
+    float2 sweep;
+    uint anchored;
+    uint kind,faceIndex,unionIndex,contactClass,featureId;
+};
+struct Bounds
+{
+    float2 minimum,maximum;
+    int4 bins;
+};
+struct Binding
+{
+    uint kind,idLow0,idLow1,idHigh0,idHigh1;
+    uint generation,slotGeneration,revision,bound;
+};
+StructuredBuffer<Primitive> _Primitives;
+StructuredBuffer<Binding> _EndpointBindings;
+StructuredBuffer<Primitive> _UpdatedPrimitives;
+RWStructuredBuffer<Primitive> _WritablePrimitives;
+RWStructuredBuffer<Bounds> _Bounds;
+RWStructuredBuffer<uint> _BinCounts,_BinCursors,_BinStarts;
+RWStructuredBuffer<uint> _BlockCounts,_BlockStarts;
+RWStructuredBuffer<uint> _References,_LongIds,_LongCount;
+// FindPairs reads the completed index through SRV aliases. Metal allows at
+// most eight writable buffers in one kernel; these buffers are written only
+// by the earlier ordered construction passes.
+StructuredBuffer<Bounds> _ReadBounds;
+StructuredBuffer<uint> _ReadBinCounts,_ReadBinStarts,_ReadBlockStarts;
+StructuredBuffer<uint> _ReadReferences,_ReadLongIds,_ReadLongCount;
+RWStructuredBuffer<uint2> _PairIndices;
+RWStructuredBuffer<uint2> _PairSortScratch;
+StructuredBuffer<uint2> _SortInput;
+RWStructuredBuffer<uint2> _SortOutput;
+RWStructuredBuffer<uint> _PairSortArgs;
+RWStructuredBuffer<uint> _PairCount,_Fault;
+uint _PrimitiveCount,_BinCount,_BlockCount,_ReferenceCapacity,_PairCapacity;
+float2 _Origin;
+float _CellSize,_Margin;
+uint _Width,_Height;
+uint _MergeWidth;
+uint _HasIdentityBindings;
+groupshared uint2 _SortPairs[64];
+
+void fault(uint mask)
+{
+    uint old;
+    InterlockedOr(_Fault[0],mask,old);
+}
+
+[numthreads(64,1,1)]
+void CopyPrimitives(uint id:SV_DispatchThreadID)
+{
+    if(id>=_PrimitiveCount)return;
+    Primitive original=_Primitives[id],updated=_UpdatedPrimitives[id];
+    if(original.endpoint!=updated.endpoint||original.anchored!=updated.anchored||
+       original.kind!=updated.kind||original.faceIndex!=updated.faceIndex||
+       original.unionIndex!=updated.unionIndex||
+       original.contactClass!=updated.contactClass||
+       original.featureId!=updated.featureId||
+       any(original.half!=updated.half))
+    {fault(32);return;}
+    original.center=updated.center;
+    original.angle=updated.angle;
+    // Final-pose validation queries actual overlap, not the earlier sweep.
+    original.sweep=float2(0,0);
+    _WritablePrimitives[id]=original;
+}
+
+[numthreads(64,1,1)]
+void Clear(uint id:SV_DispatchThreadID)
+{
+    if(id<_BinCount)
+    {
+        _BinCounts[id]=0;
+        _BinCursors[id]=0;
+        _BinStarts[id]=0;
+    }
+    if(id==0)
+    {
+        _LongCount[0]=0;
+        _PairCount[0]=0;
+        _Fault[0]=0;
+    }
+}
+
+[numthreads(64,1,1)]
+void BuildBounds(uint id:SV_DispatchThreadID)
+{
+    if(id>=_PrimitiveCount)return;
+    Primitive p=_Primitives[id];
+    Bounds b=(Bounds)0;
+    if(!all(isfinite(float4(p.center,p.half))) || !all(isfinite(p.sweep)) ||
+       !isfinite(p.angle) || any(p.half<=0) || p.kind>1 || p.contactClass>2)
+    {
+        b.bins=int4(-1,-1,-1,-1);_Bounds[id]=b;fault(1);return;
+    }
+    float s,c;sincos(p.angle,s,c);
+    float2 extent=float2(abs(c)*p.half.x+abs(s)*p.half.y,
+                         abs(s)*p.half.x+abs(c)*p.half.y)+_Margin;
+    b.minimum=p.center-extent+min(p.sweep,0);
+    b.maximum=p.center+extent+max(p.sweep,0);
+    int2 lo=(int2)floor((b.minimum-_Origin)/_CellSize);
+    int2 hi=(int2)floor((b.maximum-_Origin)/_CellSize);
+    b.bins=int4(lo,hi);
+    if(any(lo<0)||hi.x>=int(_Width)||hi.y>=int(_Height))
+    {b.bins=int4(-1,-1,-1,-1);_Bounds[id]=b;fault(2);return;}
+    _Bounds[id]=b;
+    uint span=uint(hi.x-lo.x+1)*uint(hi.y-lo.y+1);
+    if(span>64)
+    {
+        uint index;
+        InterlockedAdd(_LongCount[0],1,index);
+        if(index<64)_LongIds[index]=id;
+        else fault(4);
+        return;
+    }
+    for(int y=lo.y;y<=hi.y;y++)for(int x=lo.x;x<=hi.x;x++)
+    {
+        uint previous;
+        InterlockedAdd(_BinCounts[y*int(_Width)+x],1,previous);
+    }
+}
+
+// One thread per 256-bin block avoids a cross-workgroup scan dependency.
+[numthreads(1,1,1)]
+void ScanBins(uint block:SV_DispatchThreadID)
+{
+    if(block>=_BlockCount)return;
+    uint sum=0;
+    for(uint i=block*256;i<min((block+1)*256,_BinCount);i++)
+    {
+        _BinStarts[i]=sum;
+        sum+=_BinCounts[i];
+    }
+    _BlockCounts[block]=sum;
+}
+
+[numthreads(1,1,1)]
+void ScanBlocks(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    uint sum=0;
+    for(uint block=0;block<_BlockCount;block++)
+    {
+        _BlockStarts[block]=sum;
+        sum+=_BlockCounts[block];
+    }
+    if(sum>_ReferenceCapacity)fault(8);
+}
+
+[numthreads(64,1,1)]
+void Scatter(uint id:SV_DispatchThreadID)
+{
+    if(id>=_PrimitiveCount)return;
+    Bounds b=_Bounds[id];
+    if(b.bins.x<0)return;
+    int4 r=b.bins;
+    if(uint(r.z-r.x+1)*uint(r.w-r.y+1)>64)return;
+    for(int y=r.y;y<=r.w;y++)for(int x=r.x;x<=r.z;x++)
+    {
+        uint bin=y*_Width+x,cursor;
+        InterlockedAdd(_BinCursors[bin],1,cursor);
+        uint slot=_BlockStarts[bin/256]+_BinStarts[bin]+cursor;
+        if(slot<_ReferenceCapacity)_References[slot]=id;
+        else fault(8);
+    }
+}
+
+bool overlap(uint a,uint b)
+{
+    Bounds x=_ReadBounds[a],y=_ReadBounds[b];
+    return all(x.minimum<=y.maximum) && all(y.minimum<=x.maximum);
+}
+void append(uint a,uint b)
+{
+    if(a>b){uint swap=a;a=b;b=swap;}
+    Primitive x=_Primitives[a],y=_Primitives[b];
+    if(x.endpoint==y.endpoint || (x.anchored!=0 && y.anchored!=0) || !overlap(a,b))return;
+    uint index;
+    InterlockedAdd(_PairCount[0],1,index);
+    if(index>=_PairCapacity){fault(16);return;}
+    _PairIndices[index]=uint2(a,b);
+}
+
+[numthreads(64,1,1)]
+void FindPairs(uint id:SV_DispatchThreadID)
+{
+    if(id>=_PrimitiveCount)return;
+    Bounds a=_ReadBounds[id];
+    if(a.bins.x<0)return;
+    int4 r=a.bins;
+    uint span=uint(r.z-r.x+1)*uint(r.w-r.y+1);
+    if(span<=64)
+    {
+        for(int y=r.y;y<=r.w;y++)for(int x=r.x;x<=r.z;x++)
+        {
+            uint bin=y*_Width+x;
+            uint begin=_ReadBlockStarts[bin/256]+_ReadBinStarts[bin];
+            uint count=_ReadBinCounts[bin];
+            for(uint k=0;k<count;k++)
+            {
+                uint slot=begin+k;
+                if(slot>=_ReferenceCapacity)continue;
+                uint other=_ReadReferences[slot];
+                if(other<=id)continue;
+                int4 q=_ReadBounds[other].bins;
+                // The first shared cell owns a short/short pair.
+                if(x!=max(r.x,q.x)||y!=max(r.y,q.y))continue;
+                append(id,other);
+            }
+        }
+        uint longCount=min(_ReadLongCount[0],64u);
+        for(uint k=0;k<longCount;k++)append(id,_ReadLongIds[k]);
+    }
+    else
+    {
+        uint longCount=min(_ReadLongCount[0],64u);
+        for(uint k=0;k<longCount;k++)
+        {
+            uint other=_ReadLongIds[k];
+            if(other>id)append(id,other);
+        }
+    }
+}
+
+bool endpointLess(uint first,uint second)
+{
+    if(!_HasIdentityBindings)return first<second;
+    Binding a=_EndpointBindings[first],b=_EndpointBindings[second];
+    if(a.kind!=b.kind)return a.kind<b.kind;
+    if(a.idHigh1!=b.idHigh1)return a.idHigh1<b.idHigh1;
+    if(a.idHigh0!=b.idHigh0)return a.idHigh0<b.idHigh0;
+    if(a.idLow1!=b.idLow1)return a.idLow1<b.idLow1;
+    if(a.idLow0!=b.idLow0)return a.idLow0<b.idLow0;
+    if(a.generation!=b.generation)return a.generation<b.generation;
+    if(a.slotGeneration!=b.slotGeneration)
+        return a.slotGeneration<b.slotGeneration;
+    if(a.revision!=b.revision)return a.revision<b.revision;
+    return first<second;
+}
+
+// Pair orientation remains the original primitive-index order for geometry.
+// Ordering uses full persistent endpoint identity when bindings are supplied,
+// then each endpoint's revision-local feature identity.
+bool pairLess(uint2 first,uint2 second)
+{
+    if(first.x==0xffffffffu)return false;
+    if(second.x==0xffffffffu)return true;
+    Primitive a=_Primitives[first.x],b=_Primitives[first.y];
+    Primitive c=_Primitives[second.x],d=_Primitives[second.y];
+    uint2 firstA=uint2(a.endpoint,a.featureId),firstB=uint2(b.endpoint,b.featureId);
+    uint2 secondA=uint2(c.endpoint,c.featureId),secondB=uint2(d.endpoint,d.featureId);
+    if(endpointLess(firstB.x,firstA.x))
+    {uint2 swap=firstA;firstA=firstB;firstB=swap;}
+    if(endpointLess(secondB.x,secondA.x))
+    {uint2 swap=secondA;secondA=secondB;secondB=swap;}
+    if(firstA.x!=secondA.x)return endpointLess(firstA.x,secondA.x);
+    if(firstA.y!=secondA.y)return firstA.y<secondA.y;
+    if(firstB.x!=secondB.x)return endpointLess(firstB.x,secondB.x);
+    return firstB.y<secondB.y;
+}
+
+[numthreads(1,1,1)]
+void PreparePairSort(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    uint count=_PairCount[0];
+    if(count>_PairCapacity)fault(16);
+    _PairSortArgs[0]=max(1u,(min(count,_PairCapacity)+63)/64);
+    _PairSortArgs[1]=1;_PairSortArgs[2]=1;
+}
+
+[numthreads(64,1,1)]
+void SortPairSegments(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
+{
+    uint count=min(_PairCount[0],_PairCapacity);
+    uint index=group.x*64+thread.x;
+    _SortPairs[thread.x]=index<count?_PairIndices[index]:uint2(0xffffffffu,0xffffffffu);
+    GroupMemoryBarrierWithGroupSync();
+    for(uint size=2;size<=64;size*=2)
+    {
+        for(uint stride=size/2;stride>0;stride/=2)
+        {
+            uint2 mine=_SortPairs[thread.x];
+            uint2 other=_SortPairs[thread.x^stride];
+            bool ascending=(thread.x&size)==0;
+            bool lower=(thread.x&stride)==0;
+            bool less=pairLess(mine,other);
+            uint2 next=(ascending==lower)?(less?mine:other):(less?other:mine);
+            GroupMemoryBarrierWithGroupSync();
+            _SortPairs[thread.x]=next;
+            GroupMemoryBarrierWithGroupSync();
+        }
+    }
+    if(index<count)_PairSortScratch[index]=_SortPairs[thread.x];
+}
+
+// Each item uses a binary-search rank in the opposite sorted run. Left-run
+// items precede right-run items on equal keys, so duplicate keys cannot race
+// for one output slot; the validation pass faults them afterward.
+[numthreads(64,1,1)]
+void MergePairRuns(uint id:SV_DispatchThreadID)
+{
+    uint count=min(_PairCount[0],_PairCapacity);
+    if(id>=count)return;
+    uint span=_MergeWidth*2;
+    uint start=(id/span)*span;
+    uint middle=min(start+_MergeWidth,count);
+    uint end=min(start+span,count);
+    uint2 value=_SortInput[id];
+    uint lo,hi,destination;
+    if(id<middle)
+    {
+        lo=middle;hi=end;
+        while(lo<hi)
+        {
+            uint mid=(lo+hi)/2;
+            if(pairLess(_SortInput[mid],value))lo=mid+1;
+            else hi=mid;
+        }
+        destination=id+(lo-middle);
+    }
+    else
+    {
+        lo=start;hi=middle;
+        while(lo<hi)
+        {
+            uint mid=(lo+hi)/2;
+            if(!pairLess(value,_SortInput[mid]))lo=mid+1;
+            else hi=mid;
+        }
+        destination=start+(id-middle)+(lo-start);
+    }
+    if(destination<count)_SortOutput[destination]=value;
+    else fault(64);
+}
+
+[numthreads(64,1,1)]
+void ValidateSortedPairs(uint id:SV_DispatchThreadID)
+{
+    uint count=min(_PairCount[0],_PairCapacity);
+    if(id>=count)return;
+    uint2 current=_PairIndices[id];
+    if(current.x>=_PrimitiveCount||current.y>=_PrimitiveCount)
+    {fault(64);return;}
+    if(id==0)return;
+    uint2 previous=_PairIndices[id-1];
+    if(previous.x>=_PrimitiveCount||previous.y>=_PrimitiveCount||
+       !pairLess(previous,current))fault(64);
+}

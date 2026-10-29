@@ -1,0 +1,134 @@
+#pragma kernel Prepare
+#pragma kernel ClearHeads
+#pragma kernel LinkPrevious
+#pragma kernel LinkCurrent
+#pragma kernel ValidatePrevious
+#pragma kernel MatchCurrent
+
+// The key is compared word for word. Hashes select buckets only; collisions
+// cannot turn one contact into another or retain an impulse across slot reuse.
+struct ContactKey
+{
+    uint endpoints,slotGenerationA,slotGenerationB;
+    uint revisionA,revisionB,featureA,featureB,contactPoint;
+};
+StructuredBuffer<ContactKey> _PreviousKeys,_CurrentKeys;
+StructuredBuffer<uint> _PreviousCount,_CurrentCount;
+RWStructuredBuffer<uint> _PreviousHeads,_CurrentHeads;
+RWStructuredBuffer<uint> _PreviousNext,_CurrentNext,_Matches;
+RWStructuredBuffer<uint> _Fault,_PreviousArgs,_CurrentArgs;
+uint _PreviousCapacity,_CurrentCapacity,_BucketCount;
+
+uint hashKey(ContactKey key)
+{
+    uint h=2166136261u;
+    h=(h^key.endpoints)*16777619u;
+    h=(h^key.slotGenerationA)*16777619u;
+    h=(h^key.slotGenerationB)*16777619u;
+    h=(h^key.revisionA)*16777619u;
+    h=(h^key.revisionB)*16777619u;
+    h=(h^key.featureA)*16777619u;
+    h=(h^key.featureB)*16777619u;
+    return (h^key.contactPoint)*16777619u;
+}
+bool equalKey(ContactKey a,ContactKey b)
+{
+    return a.endpoints==b.endpoints&&
+        a.slotGenerationA==b.slotGenerationA&&
+        a.slotGenerationB==b.slotGenerationB&&
+        a.revisionA==b.revisionA&&a.revisionB==b.revisionB&&
+        a.featureA==b.featureA&&a.featureB==b.featureB&&a.contactPoint==b.contactPoint;
+}
+void fault(uint bit){uint old;InterlockedOr(_Fault[0],bit,old);}
+
+[numthreads(1,1,1)]
+void Prepare(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    _Fault[0]=0;
+    uint previous=_PreviousCount[0],current=_CurrentCount[0];
+    if(previous>_PreviousCapacity||current>_CurrentCapacity)fault(1);
+    _PreviousArgs[0]=max(1u,(min(previous,_PreviousCapacity)+63)/64);
+    _PreviousArgs[1]=1;_PreviousArgs[2]=1;
+    _CurrentArgs[0]=max(1u,(min(current,_CurrentCapacity)+63)/64);
+    _CurrentArgs[1]=1;_CurrentArgs[2]=1;
+}
+
+[numthreads(64,1,1)]
+void ClearHeads(uint id:SV_DispatchThreadID)
+{
+    if(id>=_BucketCount)return;
+    _PreviousHeads[id]=0xffffffffu;
+    _CurrentHeads[id]=0xffffffffu;
+}
+
+[numthreads(64,1,1)]
+void LinkPrevious(uint id:SV_DispatchThreadID)
+{
+    if(id>=min(_PreviousCount[0],_PreviousCapacity))return;
+    uint bucket=hashKey(_PreviousKeys[id])&(_BucketCount-1);
+    uint prior;
+    InterlockedExchange(_PreviousHeads[bucket],id,prior);
+    _PreviousNext[id]=prior;
+}
+
+[numthreads(64,1,1)]
+void LinkCurrent(uint id:SV_DispatchThreadID)
+{
+    if(id>=min(_CurrentCount[0],_CurrentCapacity))return;
+    uint bucket=hashKey(_CurrentKeys[id])&(_BucketCount-1);
+    uint prior;
+    InterlockedExchange(_CurrentHeads[bucket],id,prior);
+    _CurrentNext[id]=prior;
+}
+
+[numthreads(64,1,1)]
+void ValidatePrevious(uint id:SV_DispatchThreadID)
+{
+    uint limit=min(_PreviousCount[0],_PreviousCapacity);
+    if(id>=limit)return;
+    ContactKey key=_PreviousKeys[id];
+    uint cursor=_PreviousHeads[hashKey(key)&(_BucketCount-1)];
+    for(uint visited=0;cursor!=0xffffffffu&&visited<limit;visited++)
+    {
+        if(cursor>=limit){fault(8);break;}
+        if(cursor!=id&&equalKey(key,_PreviousKeys[cursor]))fault(2);
+        cursor=_PreviousNext[cursor];
+    }
+    if(cursor!=0xffffffffu)fault(8);
+}
+
+[numthreads(64,1,1)]
+void MatchCurrent(uint id:SV_DispatchThreadID)
+{
+    if(id>=min(_CurrentCount[0],_CurrentCapacity))return;
+    ContactKey key=_CurrentKeys[id];
+    uint bucket=hashKey(key)&(_BucketCount-1);
+    uint found=0xffffffffu;
+    uint previousLimit=min(_PreviousCount[0],_PreviousCapacity);
+    uint currentLimit=min(_CurrentCount[0],_CurrentCapacity);
+    uint errors=0;
+    uint cursor=_PreviousHeads[bucket];
+    // Bounded traversal also faults a corrupt chain rather than hanging a GPU.
+    for(uint visited=0;cursor!=0xffffffffu&&visited<previousLimit;visited++)
+    {
+        if(cursor>=previousLimit){errors|=8u;break;}
+        if(equalKey(key,_PreviousKeys[cursor]))
+        {
+            if(found!=0xffffffffu)errors|=2u;
+            found=min(found,cursor);
+        }
+        cursor=_PreviousNext[cursor];
+    }
+    if(cursor!=0xffffffffu)errors|=8u;
+    cursor=_CurrentHeads[bucket];
+    for(uint currentVisited=0;cursor!=0xffffffffu&&currentVisited<currentLimit;currentVisited++)
+    {
+        if(cursor>=currentLimit){errors|=8u;break;}
+        if(cursor!=id&&equalKey(key,_CurrentKeys[cursor]))errors|=4u;
+        cursor=_CurrentNext[cursor];
+    }
+    if(cursor!=0xffffffffu)errors|=8u;
+    if(errors!=0)fault(errors);
+    _Matches[id]=found;
+}
