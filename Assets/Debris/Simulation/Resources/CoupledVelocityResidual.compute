@@ -1,0 +1,588 @@
+#pragma kernel ResetPositionInput
+#pragma kernel PrepareVelocityRows
+#pragma kernel EvaluateVelocityResidual
+#pragma kernel SnapshotVelocityBase
+#pragma kernel SnapshotVelocityDirection
+#pragma kernel EvaluateVelocityTrial
+#pragma kernel SnapshotFreeMotion
+#pragma kernel ClearFreeMotion
+#pragma kernel RestoreFreeMotion
+#pragma kernel StoreBaseMerit
+#pragma kernel StoreTrialOutcome
+#pragma kernel SelectVelocityTrial
+#pragma kernel ApplySelectedTrial
+#pragma kernel ApplyVelocityDerivative
+#pragma kernel FormLinearResidual
+#pragma kernel ReduceLinearResidualBlocks
+#pragma kernel FinalizeLinearResidual
+#pragma kernel ProjectVelocityImpulse
+#pragma kernel CopyProjectedToProduct
+#pragma kernel SelectVelocityProjection
+#pragma kernel InspectVelocityProjection
+#pragma kernel ResetVelocityProjection
+#pragma kernel ReduceResidualBlocks
+#pragma kernel FinalizeResidualMerit
+
+struct Row { uint a,b; float2 contactPoint,direction; float inverseRoot,gap; };
+struct Feature
+{
+    uint aPrimitive,bPrimitive,referenceFace,incidentFace,provenance,pointAxis;
+};
+struct Primitive
+{
+    float2 center,half;
+    float angle;
+    uint endpoint;
+    float2 sweep;
+    uint anchored,kind,faceIndex,unionIndex,contactClass,featureId;
+};
+StructuredBuffer<Feature> _Features;
+StructuredBuffer<Primitive> _Primitives;
+StructuredBuffer<Row> _Rows;
+StructuredBuffer<uint> _ActiveRowCount;
+StructuredBuffer<uint> _ProductGate;
+StructuredBuffer<float> _CurrentX,_CurrentY,_DirectionZ,_ProductBz;
+RWStructuredBuffer<float> _BaseX,_BaseY,_SearchZ,_SearchBz;
+RWStructuredBuffer<float4> _FreeMotion,_SavedFreeMotion;
+RWStructuredBuffer<float> _BaseMerit,_TrialMerits;
+RWStructuredBuffer<uint> _TrialValid,_TrialPhysical,_TrialSelection;
+RWStructuredBuffer<float> _Residual,_Derivative,_ProjectedX;
+RWStructuredBuffer<float> _LinearResidual,_LinearBlocks,_LinearResult;
+RWStructuredBuffer<float> _WritableProductInput;
+RWStructuredBuffer<float> _ResidualBlocks,_Merit;
+RWStructuredBuffer<uint> _Branches,_Facts,_PointArgs;
+RWStructuredBuffer<uint> _ProjectionGate,_ProjectionStatus;
+RWStructuredBuffer<uint> _MeritArgs;
+uint _RowCapacity;
+uint _BodyCount,_TrialIndex,_UseProductGate,_NormalOnly,_PrimitiveCount;
+float _StepDuration,_Friction,_PhysicalTolerance,_LinearShift;
+float _TrialAlpha;
+groupshared float _MeritScratch[256];
+bool maskedWork(){return _UseProductGate!=0&&_ProductGate[0]==0;}
+
+// Every geometry linearization is a new displacement problem. Only this
+// operator's scratch is cleared; physical endpoint velocity is never bound.
+[numthreads(64,1,1)]
+void ResetPositionInput(uint id:SV_DispatchThreadID)
+{
+    if(id<_RowCapacity)_WritableProductInput[id]=0;
+    if(id<_BodyCount)_FreeMotion[id]=float4(0,0,0,0);
+}
+
+// Facts 0/1: max normal/tangent physical residual as positive float bits;
+// 2/3: first invalid contactPoint and first row above physical tolerance;
+// 4..7: direct normal impulse, normal speed, complementarity and friction
+// bound violations, each as a positive float bit pattern.
+[numthreads(1,1,1)]
+void PrepareVelocityRows(uint id:SV_DispatchThreadID)
+{
+    if(maskedWork())return;
+    if(id!=0)return;
+    uint count=_ActiveRowCount[0];
+    _Facts[0]=0;_Facts[1]=0;
+    _Facts[2]=0xffffffffu;_Facts[3]=0xffffffffu;
+    _Facts[4]=0;_Facts[5]=0;_Facts[6]=0;_Facts[7]=0;
+    if(count>_RowCapacity||(_NormalOnly==0&&(count&1)!=0))_Facts[2]=0;
+    uint points=min(count,_RowCapacity)/(_NormalOnly!=0?1u:2u);
+    _PointArgs[0]=max(1u,(points+63)/64);
+    _PointArgs[1]=1;_PointArgs[2]=1;
+    _MeritArgs[0]=max(1u,(min(count,_RowCapacity)+255)/256);
+    _MeritArgs[1]=1;_MeritArgs[2]=1;
+}
+
+void invalidPoint(uint contactPoint)
+{
+    uint old;
+    InterlockedMin(_Facts[2],contactPoint,old);
+}
+
+[numthreads(64,1,1)]
+void SnapshotVelocityBase(uint contactPoint:SV_DispatchThreadID)
+{
+    if(maskedWork())return;
+    uint width=_NormalOnly!=0?1u:2u;
+    uint row=contactPoint*width;
+    if(row+width>min(_ActiveRowCount[0],_RowCapacity))return;
+    for(uint i=0;i<width;i++)
+    {_BaseX[row+i]=_CurrentX[row+i];_BaseY[row+i]=_CurrentY[row+i];}
+}
+
+[numthreads(64,1,1)]
+void SnapshotVelocityDirection(uint contactPoint:SV_DispatchThreadID)
+{
+    if(_UseProductGate!=0&&_ProductGate[0]==0)return;
+    uint width=_NormalOnly!=0?1u:2u;
+    uint row=contactPoint*width;
+    if(row+width>min(_ActiveRowCount[0],_RowCapacity))return;
+    for(uint i=0;i<width;i++)
+    {_SearchZ[row+i]=_DirectionZ[row+i];_SearchBz[row+i]=_ProductBz[row+i];}
+}
+
+[numthreads(64,1,1)]
+void SnapshotFreeMotion(uint body:SV_DispatchThreadID)
+{
+    if(maskedWork())return;
+    if(body<_BodyCount)_SavedFreeMotion[body]=_FreeMotion[body];
+}
+
+[numthreads(64,1,1)]
+void ClearFreeMotion(uint body:SV_DispatchThreadID)
+{if(body<_BodyCount)_FreeMotion[body]=float4(0,0,0,0);}
+
+[numthreads(64,1,1)]
+void RestoreFreeMotion(uint body:SV_DispatchThreadID)
+{if(body<_BodyCount)_FreeMotion[body]=_SavedFreeMotion[body];}
+
+void evaluatePoint(uint contactPoint,float xn,float xt,float rawWn,float wt)
+{
+    uint count=min(_ActiveRowCount[0],_RowCapacity);
+    uint normalIndex=contactPoint*2,tangentIndex=normalIndex+1;
+    if(tangentIndex>=count)return;
+    Row normal=_Rows[normalIndex],tangent=_Rows[tangentIndex];
+    if(normal.inverseRoot==0&&tangent.inverseRoot==0)
+    {
+        _Residual[normalIndex]=0;_Residual[tangentIndex]=0;
+        _Branches[contactPoint]=0;
+        return;
+    }
+    if(normal.inverseRoot<=0||tangent.inverseRoot<=0||
+       !isfinite(normal.inverseRoot)||!isfinite(tangent.inverseRoot)||
+       !isfinite(normal.gap)||!isfinite(tangent.gap)||
+       abs(normal.gap-tangent.gap)>1e-5||
+       normal.a!=tangent.a||normal.b!=tangent.b||
+       distance(normal.contactPoint,tangent.contactPoint)>1e-5||
+       abs(dot(normal.direction,tangent.direction))>1e-3||
+       !isfinite(xn)||!isfinite(xt)||
+       !isfinite(rawWn)||!isfinite(wt)||
+       !isfinite(_StepDuration)||_StepDuration<=0||
+       !isfinite(_Friction)||_Friction<0)
+    {
+        invalidPoint(contactPoint);
+        _Residual[normalIndex]=0;_Residual[tangentIndex]=0;
+        _Branches[contactPoint]=0;
+        return;
+    }
+    float wn=rawWn+max(normal.gap,0)/_StepDuration*
+        normal.inverseRoot;
+    float normalTrial=xn-wn;
+    float fn=xn-max(0,normalTrial);
+    uint branch=0;
+    if(normalTrial>0||(normalTrial==0&&wn<0))branch|=1u;
+    float gamma=normal.gap<=.0001&&_Friction>0?
+        _Friction*normal.inverseRoot/tangent.inverseRoot:0;
+    float bound=gamma*max(xn,0);
+    float tangentTrial=xt-wt;
+    float ft=xt-clamp(tangentTrial,-bound,bound);
+    if(bound>0)
+    {
+        if(tangentTrial>-bound&&tangentTrial<bound)branch|=2u;
+        else if(xn>0&&tangentTrial>=bound)branch|=4u;
+        else if(xn>0&&tangentTrial<=-bound)branch|=8u;
+    }
+    if(!isfinite(fn)||!isfinite(ft)||!isfinite(gamma)||
+       !isfinite(bound)||!isfinite(wn)||!isfinite(wt))
+    {
+        invalidPoint(contactPoint);
+        _Residual[normalIndex]=0;_Residual[tangentIndex]=0;
+        _Branches[contactPoint]=0;
+        return;
+    }
+    _Residual[normalIndex]=fn;_Residual[tangentIndex]=ft;
+    _Branches[contactPoint]=branch;
+    float normalError=abs(fn)/normal.inverseRoot;
+    float tangentError=abs(ft)/tangent.inverseRoot;
+    float lambdaN=xn*normal.inverseRoot;
+    float lambdaT=xt*tangent.inverseRoot;
+    float normalSpeed=wn/normal.inverseRoot;
+    float negativeImpulse=max(0,-lambdaN);
+    float approachingSpeed=max(0,-normalSpeed);
+    float complementarity=abs(lambdaN*normalSpeed);
+    float frictionLimit=normal.gap<=.0001?_Friction*max(lambdaN,0):0;
+    float frictionExcess=max(0,abs(lambdaT)-frictionLimit);
+    if(!isfinite(normalError)||!isfinite(tangentError)||
+       !isfinite(negativeImpulse)||!isfinite(approachingSpeed)||
+       !isfinite(complementarity)||!isfinite(frictionExcess))
+    {invalidPoint(contactPoint);return;}
+    uint old;
+    InterlockedMax(_Facts[0],asuint(normalError),old);
+    InterlockedMax(_Facts[1],asuint(tangentError),old);
+    InterlockedMax(_Facts[4],asuint(negativeImpulse),old);
+    InterlockedMax(_Facts[5],asuint(approachingSpeed),old);
+    InterlockedMax(_Facts[6],asuint(complementarity),old);
+    InterlockedMax(_Facts[7],asuint(frictionExcess),old);
+    if(normalError>_PhysicalTolerance)
+        InterlockedMin(_Facts[3],normalIndex,old);
+    if(tangentError>_PhysicalTolerance)
+        InterlockedMin(_Facts[3],tangentIndex,old);
+}
+
+// One classified normal row of a fresh minimum-displacement KKT system.
+// No velocity bias, friction or previous geometry multiplier enters this law.
+void evaluatePosition(uint row,float x,float product)
+{
+    Row normal=_Rows[row];Feature feature=_Features[row];
+    _Residual[row]=0;_Branches[row]=0;
+    if(feature.aPrimitive>=_PrimitiveCount||feature.bPrimitive>=_PrimitiveCount||
+       !isfinite(normal.inverseRoot)||normal.inverseRoot<=0||
+       !isfinite(normal.gap)||!isfinite(x)||!isfinite(product))
+    {invalidPoint(row);return;}
+    Primitive a=_Primitives[feature.aPrimitive],b=_Primitives[feature.bPrimitive];
+    if(a.contactClass==0||a.contactClass>2||b.contactClass==0||b.contactClass>2||
+       a.endpoint!=normal.a||b.endpoint!=normal.b)
+    {invalidPoint(row);return;}
+    float slop=a.contactClass==1&&b.contactClass==1?.002:.0001;
+    float w=product+(normal.gap+slop)*normal.inverseRoot;
+    float trial=x-w;
+    float f=x-max(0,trial);
+    float physical=abs(f)/normal.inverseRoot;
+    float multiplier=x*normal.inverseRoot;
+    float gap=w/normal.inverseRoot;
+    float negative=max(0,-multiplier),violation=max(0,-gap);
+    float complementarity=abs(multiplier*gap);
+    if(!isfinite(w)||!isfinite(f)||!isfinite(physical)||
+       !isfinite(negative)||!isfinite(violation)||!isfinite(complementarity))
+    {invalidPoint(row);return;}
+    _Residual[row]=f;
+    _Branches[row]=trial>0||(trial==0&&w<0)?1u:0u;
+    uint old;
+    InterlockedMax(_Facts[0],asuint(physical),old);
+    InterlockedMax(_Facts[4],asuint(negative),old);
+    InterlockedMax(_Facts[5],asuint(violation),old);
+    InterlockedMax(_Facts[6],asuint(complementarity),old);
+    if(physical>_PhysicalTolerance)InterlockedMin(_Facts[3],row,old);
+}
+
+[numthreads(64,1,1)]
+void EvaluateVelocityResidual(uint contactPoint:SV_DispatchThreadID)
+{
+    if(maskedWork())return;
+    if(_NormalOnly!=0)
+    {
+        if(contactPoint<min(_ActiveRowCount[0],_RowCapacity))
+            evaluatePosition(contactPoint,_CurrentX[contactPoint],_CurrentY[contactPoint]);
+        return;
+    }
+    uint normalIndex=contactPoint*2;
+    if(normalIndex+1>=min(_ActiveRowCount[0],_RowCapacity))return;
+    evaluatePoint(contactPoint,_CurrentX[normalIndex],_CurrentX[normalIndex+1],
+        _CurrentY[normalIndex],_CurrentY[normalIndex+1]);
+}
+
+// Frozen geometry makes w(x+alpha*z)=w(x)+alpha*(B*z). A trial cannot
+// alter either the base impulse or the operator's endpoint motion.
+[numthreads(64,1,1)]
+void EvaluateVelocityTrial(uint contactPoint:SV_DispatchThreadID)
+{
+    if(maskedWork())return;
+    if(_NormalOnly!=0)
+    {
+        if(contactPoint<min(_ActiveRowCount[0],_RowCapacity))
+            evaluatePosition(contactPoint,
+                _BaseX[contactPoint]+_TrialAlpha*_SearchZ[contactPoint],
+                _BaseY[contactPoint]+_TrialAlpha*_SearchBz[contactPoint]);
+        return;
+    }
+    uint normalIndex=contactPoint*2;
+    if(normalIndex+1>=min(_ActiveRowCount[0],_RowCapacity))return;
+    float xn=_BaseX[normalIndex]+_TrialAlpha*_SearchZ[normalIndex];
+    float xt=_BaseX[normalIndex+1]+_TrialAlpha*_SearchZ[normalIndex+1];
+    float wn=_BaseY[normalIndex]+_TrialAlpha*_SearchBz[normalIndex];
+    float wt=_BaseY[normalIndex+1]+_TrialAlpha*_SearchBz[normalIndex+1];
+    evaluatePoint(contactPoint,xn,xt,wn,wt);
+}
+
+[numthreads(1,1,1)]
+void StoreBaseMerit(uint id:SV_DispatchThreadID)
+{
+    if(maskedWork())return;
+    if(id==0)_BaseMerit[0]=_Facts[2]==0xffffffffu?_Merit[0]:-1;
+}
+
+[numthreads(1,1,1)]
+void StoreTrialOutcome(uint id:SV_DispatchThreadID)
+{
+    if(maskedWork())return;
+    if(id!=0||_TrialIndex>=8)return;
+    float merit=_Merit[0];
+    _TrialMerits[_TrialIndex]=merit;
+    _TrialValid[_TrialIndex]=_Facts[2]==0xffffffffu&&isfinite(merit)&&merit>=0;
+    _TrialPhysical[_TrialIndex]=_Facts[0]<=asuint(_PhysicalTolerance)&&
+        _Facts[1]<=asuint(_PhysicalTolerance)&&
+        (_NormalOnly!=0||(_Facts[4]<=asuint(_PhysicalTolerance)&&
+        _Facts[5]<=asuint(_PhysicalTolerance)&&
+        _Facts[6]<=asuint(_PhysicalTolerance)&&
+        _Facts[7]<=asuint(_PhysicalTolerance)));
+}
+
+// Selection is stable: the first accepted alpha has the smallest index.
+// Selection[0]=index or UINT_MAX; [1]=Armijo (1) or physical (2).
+[numthreads(1,1,1)]
+void SelectVelocityTrial(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    if(maskedWork())return;
+    _TrialSelection[0]=0xffffffffu;
+    _TrialSelection[1]=0;
+    float base=_BaseMerit[0];
+    if(!isfinite(base)||base<0)return;
+    for(uint i=0;i<8;i++)
+    {
+        if(_TrialValid[i]==0)continue;
+        float alpha=1.0/(1u<<i);
+        bool armijo=_TrialMerits[i]<=(1-1e-4*alpha)*base;
+        if(armijo||_TrialPhysical[i]!=0)
+        {
+            _TrialSelection[0]=i;
+            _TrialSelection[1]=armijo?1u:2u;
+            return;
+        }
+    }
+}
+
+[numthreads(64,1,1)]
+void ApplySelectedTrial(uint contactPoint:SV_DispatchThreadID)
+{
+    if(maskedWork())return;
+    uint width=_NormalOnly!=0?1u:2u;
+    uint row=contactPoint*width;
+    if(row+width>min(_ActiveRowCount[0],_RowCapacity))return;
+    uint selected=_TrialSelection[0];
+    float alpha=selected<8?1.0/(1u<<selected):0;
+    for(uint i=0;i<width;i++)
+        _WritableProductInput[row+i]=_BaseX[row+i]+alpha*_SearchZ[row+i];
+}
+
+// The operator computes B*z with zero free motion before this dispatch.
+[numthreads(64,1,1)]
+void ApplyVelocityDerivative(uint contactPoint:SV_DispatchThreadID)
+{
+    if(_UseProductGate!=0&&_ProductGate[0]==0)return;
+    uint count=min(_ActiveRowCount[0],_RowCapacity);
+    if(_NormalOnly!=0)
+    {
+        if(contactPoint>=count)return;
+        float z=_DirectionZ[contactPoint],bz=_ProductBz[contactPoint];
+        _Derivative[contactPoint]=(_Branches[contactPoint]&1u)!=0?bz:z;
+        if(!isfinite(z)||!isfinite(bz)||!isfinite(_Derivative[contactPoint]))
+            invalidPoint(contactPoint);
+        return;
+    }
+    uint n=contactPoint*2,t=n+1;
+    if(t>=count)return;
+    Row normal=_Rows[n],tangent=_Rows[t];
+    if(normal.inverseRoot==0&&tangent.inverseRoot==0)
+    {_Derivative[n]=0;_Derivative[t]=0;return;}
+    uint branch=_Branches[contactPoint];
+    float zn=_DirectionZ[n],zt=_DirectionZ[t];
+    _Derivative[n]=(branch&1u)!=0?_ProductBz[n]:zn;
+    float gamma=_Friction*normal.inverseRoot/tangent.inverseRoot;
+    _Derivative[t]=(branch&2u)!=0?_ProductBz[t]:
+        (branch&4u)!=0?zt-gamma*zn:
+        (branch&8u)!=0?zt+gamma*zn:zt;
+    if(!isfinite(_Derivative[n])||!isfinite(_Derivative[t]))invalidPoint(contactPoint);
+}
+
+// Verify the actual search equation (H+eta*I)*deltaX=-F. Eta is zero for
+// the original equation and never changes the nonlinear contact residual.
+[numthreads(64,1,1)]
+void FormLinearResidual(uint row:SV_DispatchThreadID)
+{
+    if(_UseProductGate!=0&&_ProductGate[0]==0)return;
+    if(row>=min(_ActiveRowCount[0],_RowCapacity))return;
+    float value=_Derivative[row]+_LinearShift*_SearchZ[row]+_Residual[row];
+    if(!isfinite(value)){invalidPoint(_NormalOnly!=0?row:row/2);value=0;}
+    _LinearResidual[row]=value;
+}
+
+[numthreads(256,1,1)]
+void ReduceLinearResidualBlocks(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
+{
+    if(_UseProductGate!=0&&_ProductGate[0]==0)return;
+    uint row=group.x*256+thread.x;
+    uint count=min(_ActiveRowCount[0],_RowCapacity);
+    float value=0;
+    if(row<count)
+    {
+        float residual=_LinearResidual[row];
+        value=residual*residual;
+        if(!isfinite(value)){invalidPoint(_NormalOnly!=0?row:row/2);value=0;}
+    }
+    _MeritScratch[thread.x]=value;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=128;width>0;width>>=1)
+    {
+        if(thread.x<width)_MeritScratch[thread.x]+=_MeritScratch[thread.x+width];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(thread.x==0)_LinearBlocks[group.x]=_MeritScratch[0];
+}
+
+[numthreads(256,1,1)]
+void FinalizeLinearResidual(uint3 thread:SV_GroupThreadID)
+{
+    if(_UseProductGate!=0&&_ProductGate[0]==0)return;
+    uint count=min(_ActiveRowCount[0],_RowCapacity);
+    uint blocks=(count+255)/256;
+    float sum=0;
+    for(uint block=thread.x;block<blocks;block+=256)
+        sum+=_LinearBlocks[block];
+    _MeritScratch[thread.x]=sum;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=128;width>0;width>>=1)
+    {
+        if(thread.x<width)_MeritScratch[thread.x]+=_MeritScratch[thread.x+width];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(thread.x==0)
+    {
+        float merit=.5*_MeritScratch[0];
+        float base=_BaseMerit[0];
+        bool valid=isfinite(merit)&&merit>=0&&isfinite(base)&&base>=0&&
+            _Facts[2]==0xffffffffu;
+        float relative=base>0?sqrt(merit/base):merit==0?0:3.402823466e38;
+        valid=valid&&isfinite(relative);
+        _LinearResult[0]=valid?merit:-1;
+        _LinearResult[1]=valid?relative:3.402823466e38;
+        _LinearResult[2]=valid?1:0;
+        _LinearResult[3]=valid&&relative<=.1?1:0;
+    }
+}
+
+// Projection is used only after a candidate meets the unprojected residual.
+// The caller must run the operator and true residual again before publication.
+bool physicalVelocityPass()
+{
+    if(_Facts[2]!=0xffffffffu||_Facts[3]!=0xffffffffu||
+       !isfinite(_BaseMerit[0])||_BaseMerit[0]<0)return false;
+    uint bound=asuint(_PhysicalTolerance);
+    // Position acceptance uses the specified cell-valued projected residual.
+    // Multiplier/gap diagnostic products have different units and cannot use
+    // the velocity law's direct-inequality tolerances.
+    return _Facts[0]<=bound&&_Facts[1]<=bound&&
+        (_NormalOnly!=0||(_Facts[4]<=bound&&_Facts[5]<=bound&&
+        _Facts[6]<=bound&&_Facts[7]<=bound));
+}
+
+// Status: 0=not yet physically eligible, 1=projection pending,
+// 2=true projected recheck passed, 3=projected recheck failed.
+[numthreads(1,1,1)]
+void ResetVelocityProjection(uint id:SV_DispatchThreadID)
+{
+    if(maskedWork())return;
+    if(id!=0)return;
+    _ProjectionGate[0]=0;
+    _ProjectionStatus[0]=0;
+    _TrialSelection[0]=0xffffffffu;
+    _TrialSelection[1]=0;
+}
+
+[numthreads(1,1,1)]
+void SelectVelocityProjection(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    if(_ProjectionStatus[0]==2||_ProjectionStatus[0]==3)
+    {_ProjectionGate[0]=0;return;}
+    _ProjectionGate[0]=physicalVelocityPass()?1u:0u;
+    _ProjectionStatus[0]=_ProjectionGate[0];
+}
+
+[numthreads(1,1,1)]
+void InspectVelocityProjection(uint id:SV_DispatchThreadID)
+{
+    if(id!=0||_ProjectionGate[0]==0)return;
+    bool accepted=physicalVelocityPass();
+    _ProjectionGate[0]=accepted?1u:0u;
+    _ProjectionStatus[0]=accepted?2u:3u;
+}
+
+[numthreads(64,1,1)]
+void ProjectVelocityImpulse(uint contactPoint:SV_DispatchThreadID)
+{
+    if(maskedWork())return;
+    uint count=min(_ActiveRowCount[0],_RowCapacity);
+    if(_NormalOnly!=0)
+    {
+        if(contactPoint>=count)return;
+        float x=_CurrentX[contactPoint];
+        if(!isfinite(x)){invalidPoint(contactPoint);x=0;}
+        _ProjectedX[contactPoint]=max(0,x);
+        return;
+    }
+    uint n=contactPoint*2,t=n+1;
+    if(t>=count)return;
+    Row normal=_Rows[n],tangent=_Rows[t];
+    if(normal.inverseRoot==0&&tangent.inverseRoot==0)
+    {_ProjectedX[n]=0;_ProjectedX[t]=0;return;}
+    float xn=max(0,_CurrentX[n]);
+    float gamma=normal.gap<=.0001&&_Friction>0?
+        _Friction*normal.inverseRoot/tangent.inverseRoot:0;
+    float bound=gamma*xn;
+    float xt=clamp(_CurrentX[t],-bound,bound);
+    if(!isfinite(xn)||!isfinite(xt))
+    {invalidPoint(contactPoint);xn=0;xt=0;}
+    _ProjectedX[n]=xn;_ProjectedX[t]=xt;
+}
+
+[numthreads(64,1,1)]
+void CopyProjectedToProduct(uint contactPoint:SV_DispatchThreadID)
+{
+    if(maskedWork())return;
+    uint count=min(_ActiveRowCount[0],_RowCapacity);
+    if(_NormalOnly!=0)
+    {
+        if(contactPoint<count)_WritableProductInput[contactPoint]=_ProjectedX[contactPoint];
+        return;
+    }
+    uint n=contactPoint*2,t=n+1;
+    if(t>=count)return;
+    _WritableProductInput[n]=_ProjectedX[n];
+    _WritableProductInput[t]=_ProjectedX[t];
+}
+
+// Fixed block/tree order gives a repeatable merit without float atomics.
+[numthreads(256,1,1)]
+void ReduceResidualBlocks(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
+{
+    if(maskedWork())return;
+    uint row=group.x*256+thread.x;
+    uint count=min(_ActiveRowCount[0],_RowCapacity);
+    float value=0;
+    if(row<count)
+    {
+        float residual=_Residual[row];
+        value=residual*residual;
+        if(!isfinite(value)){invalidPoint(_NormalOnly!=0?row:row/2);value=0;}
+    }
+    _MeritScratch[thread.x]=value;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=128;width>0;width>>=1)
+    {
+        if(thread.x<width)_MeritScratch[thread.x]+=_MeritScratch[thread.x+width];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(thread.x==0)_ResidualBlocks[group.x]=_MeritScratch[0];
+}
+
+[numthreads(256,1,1)]
+void FinalizeResidualMerit(uint3 thread:SV_GroupThreadID)
+{
+    if(maskedWork())return;
+    uint count=min(_ActiveRowCount[0],_RowCapacity);
+    uint blocks=(count+255)/256;
+    float sum=0;
+    for(uint block=thread.x;block<blocks;block+=256)
+        sum+=_ResidualBlocks[block];
+    _MeritScratch[thread.x]=sum;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=128;width>0;width>>=1)
+    {
+        if(thread.x<width)_MeritScratch[thread.x]+=_MeritScratch[thread.x+width];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(thread.x==0)
+    {
+        float merit=.5*_MeritScratch[0];
+        if(!isfinite(merit)){invalidPoint(0);merit=0;}
+        _Merit[0]=merit;
+    }
+}

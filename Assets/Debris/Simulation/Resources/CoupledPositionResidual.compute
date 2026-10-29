@@ -1,0 +1,157 @@
+#pragma kernel ResetPositionSystem
+#pragma kernel ResetPositionFacts
+#pragma kernel EvaluatePositionResidual
+#pragma kernel ReducePositionMerit
+#pragma kernel FinalizePositionMerit
+#pragma kernel ApplyPositionDerivative
+
+struct Row { uint a,b; float2 contactPoint,direction; float inverseRoot,gap; };
+struct Feature
+{
+    uint aPrimitive,bPrimitive,referenceFace,incidentFace,provenance,pointAxis;
+};
+struct Primitive
+{
+    float2 center,half;
+    float angle;
+    uint endpoint;
+    float2 sweep;
+    uint anchored,kind,faceIndex,unionIndex,contactClass,featureId;
+};
+StructuredBuffer<Row> _Rows;
+StructuredBuffer<Feature> _Features;
+StructuredBuffer<Primitive> _Primitives;
+StructuredBuffer<uint> _ActiveRowCount;
+StructuredBuffer<float> _ProductOutput;
+StructuredBuffer<float> _ProductInput;
+RWStructuredBuffer<float> _WritableProductInput;
+RWStructuredBuffer<float4> _FreeMotion;
+RWStructuredBuffer<float> _Residual,_Derivative,_MeritBlocks,_Merit;
+RWStructuredBuffer<uint> _Branches,_Facts;
+uint _RowCapacity,_BodyCount,_PrimitiveCount;
+float _PhysicalTolerance;
+groupshared float _Reduction[256];
+
+// Facts: maximum physical residual, first invalid row, maximum target
+// violation, first row above tolerance. Positive floats use ordered bits.
+[numthreads(64,1,1)]
+void ResetPositionSystem(uint id:SV_DispatchThreadID)
+{
+    if(id==0)
+    {
+        _Facts[0]=0;_Facts[1]=0xffffffffu;
+        _Facts[2]=0;_Facts[3]=0xffffffffu;
+        if(_ActiveRowCount[0]>_RowCapacity)_Facts[1]=0;
+    }
+    if(id<_BodyCount)_FreeMotion[id]=float4(0,0,0,0);
+    if(id<_RowCapacity)_WritableProductInput[id]=0;
+}
+
+[numthreads(1,1,1)]
+void ResetPositionFacts(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    _Facts[0]=0;_Facts[1]=0xffffffffu;
+    _Facts[2]=0;_Facts[3]=0xffffffffu;
+    if(_ActiveRowCount[0]>_RowCapacity)_Facts[1]=0;
+}
+
+[numthreads(64,1,1)]
+void EvaluatePositionResidual(uint id:SV_DispatchThreadID)
+{
+    if(id>=min(_ActiveRowCount[0],_RowCapacity))return;
+    Row row=_Rows[id];Feature feature=_Features[id];
+    if(feature.aPrimitive>=_PrimitiveCount||
+       feature.bPrimitive>=_PrimitiveCount||
+       row.inverseRoot<=0||!isfinite(row.inverseRoot)||
+       !isfinite(row.gap))
+    {
+        _Residual[id]=0;_Branches[id]=0;
+        uint old;InterlockedMin(_Facts[1],id,old);return;
+    }
+    Primitive a=_Primitives[feature.aPrimitive];
+    Primitive b=_Primitives[feature.bPrimitive];
+    if(a.contactClass==0||a.contactClass>2||
+       b.contactClass==0||b.contactClass>2||
+       a.endpoint!=row.a||b.endpoint!=row.b)
+    {
+        _Residual[id]=0;_Branches[id]=0;
+        uint old;InterlockedMin(_Facts[1],id,old);return;
+    }
+    float slop=(a.contactClass==1&&b.contactClass==1)?0.002:0.0001;
+    float x=_ProductInput[id];
+    float w=_ProductOutput[id]+(row.gap+slop)*row.inverseRoot;
+    if(!isfinite(x)||!isfinite(w))
+    {
+        _Residual[id]=0;_Branches[id]=0;
+        uint old;InterlockedMin(_Facts[1],id,old);return;
+    }
+    float trial=x-w;
+    float f=x-max(0,trial);
+    float physical=abs(f)/row.inverseRoot;
+    float violation=max(0,-row.gap-slop);
+    if(!isfinite(f)||!isfinite(physical)||!isfinite(violation))
+    {
+        _Residual[id]=0;_Branches[id]=0;
+        uint old;InterlockedMin(_Facts[1],id,old);return;
+    }
+    _Residual[id]=f;
+    // At a tie use the active branch only for a violated linearized gap.
+    _Branches[id]=(trial>0||(trial==0&&w<0))?1u:0u;
+    uint old;
+    InterlockedMax(_Facts[0],asuint(physical),old);
+    InterlockedMax(_Facts[2],asuint(violation),old);
+    if(physical>_PhysicalTolerance)
+        InterlockedMin(_Facts[3],id,old);
+}
+
+[numthreads(256,1,1)]
+void ReducePositionMerit(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
+{
+    uint id=group.x*256+thread.x;
+    float f=id<min(_ActiveRowCount[0],_RowCapacity)?_Residual[id]:0;
+    _Reduction[thread.x]=isfinite(f)?f*f:0;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=128;width>0;width>>=1)
+    {
+        if(thread.x<width)_Reduction[thread.x]+=_Reduction[thread.x+width];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(thread.x==0)_MeritBlocks[group.x]=_Reduction[0];
+}
+
+[numthreads(256,1,1)]
+void FinalizePositionMerit(uint3 thread:SV_GroupThreadID)
+{
+    uint blocks=(_RowCapacity+255)/256;
+    float sum=0;
+    for(uint block=thread.x;block<blocks;block+=256)
+        sum+=_MeritBlocks[block];
+    _Reduction[thread.x]=sum;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=128;width>0;width>>=1)
+    {
+        if(thread.x<width)_Reduction[thread.x]+=_Reduction[thread.x+width];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(thread.x==0)
+    {
+        _Merit[0]=.5*_Reduction[0];
+        if(!isfinite(_Merit[0]))
+        {uint old;InterlockedMin(_Facts[1],0u,old);}
+    }
+}
+
+// _ProductInput is a direction and _ProductOutput is its fresh B product.
+[numthreads(64,1,1)]
+void ApplyPositionDerivative(uint id:SV_DispatchThreadID)
+{
+    if(id>=min(_ActiveRowCount[0],_RowCapacity))return;
+    float z=_ProductInput[id],bz=_ProductOutput[id];
+    if(!isfinite(z)||!isfinite(bz))
+    {
+        _Derivative[id]=0;
+        uint old;InterlockedMin(_Facts[1],id,old);return;
+    }
+    _Derivative[id]=_Branches[id]!=0?bz:z;
+}

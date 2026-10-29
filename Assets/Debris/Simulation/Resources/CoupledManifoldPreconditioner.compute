@@ -1,0 +1,202 @@
+#pragma kernel ResetPreconditioner
+#pragma kernel FactorManifolds
+#pragma kernel ApplyManifoldFactors
+
+struct Body { float2 center; float inverseMass,inverseInertia; };
+struct Row { uint a,b; float2 contactPoint,direction; float inverseRoot,gap; };
+StructuredBuffer<Body> _Bodies;
+StructuredBuffer<Row> _Rows;
+StructuredBuffer<uint> _RowManifoldIds,_ActiveRowCount,_Branches;
+StructuredBuffer<uint> _WorkGate;
+StructuredBuffer<float> _VectorInput;
+RWStructuredBuffer<float> _VectorOutput;
+RWStructuredBuffer<float4> _Factors;
+RWStructuredBuffer<uint> _PivotCodes,_Fault;
+uint _RowCapacity,_BodyCount;
+uint _UseWorkGate,_NormalOnly;
+uint _InputOffset,_OutputOffset;
+float _Friction;
+
+float cross2(float2 a,float2 b){return a.x*b.y-a.y*b.x;}
+void fault(uint bit){uint old;InterlockedOr(_Fault[0],bit,old);}
+
+[numthreads(1,1,1)]
+void ResetPreconditioner(uint id:SV_DispatchThreadID)
+{
+    if(_UseWorkGate!=0&&_WorkGate[0]==0)return;
+    if(id==0){_Fault[0]=0;_Fault[1]=0;}
+}
+
+// One lane owns a whole contiguous manifold. The compact row builder emits
+// two/four velocity rows or one/two normal-only position rows.
+[numthreads(64,1,1)]
+void FactorManifolds(uint contactPoint:SV_DispatchThreadID)
+{
+    if(_UseWorkGate!=0&&_WorkGate[0]==0)return;
+    uint count=min(_ActiveRowCount[0],_RowCapacity);
+    uint width=_NormalOnly!=0?1u:2u;
+    uint first=width*contactPoint;
+    if(first+width>count)return;
+    uint group=_RowManifoldIds[first];
+    if(width==2&&_RowManifoldIds[first+1]!=group){fault(1);return;}
+    if(first>0&&_RowManifoldIds[first-1]==group)return;
+    uint dim=width;
+    if(first+2*width<=count&&_RowManifoldIds[first+width]==group)
+    {
+        if(width==2&&_RowManifoldIds[first+3]!=group){fault(1);return;}
+        dim=2*width;
+    }
+    if(first+dim<count&&_RowManifoldIds[first+dim]==group)
+    {fault(1);return;}
+    Row rows[4];
+    bool active[4];
+    for(uint i=0;i<dim;i++)rows[i]=_Rows[first+i];
+    if(rows[0].a>=_BodyCount||rows[0].b>=_BodyCount)
+    {fault(2);return;}
+    Body a=_Bodies[rows[0].a],b=_Bodies[rows[0].b];
+    for(uint i=0;i<dim;i++)
+    {
+        active[i]=rows[i].inverseRoot>0;
+        if(!isfinite(rows[i].inverseRoot)||
+           (active[i]&&(rows[i].a!=rows[0].a||rows[i].b!=rows[0].b||
+           !all(isfinite(rows[i].contactPoint))||
+           !all(isfinite(rows[i].direction)))))
+        {fault(2);return;}
+    }
+    if(_NormalOnly==0&&(active[0]!=active[1]||
+       (dim==4&&(active[2]!=active[3]||(!active[0]&&active[2])))))
+    {fault(2);return;}
+    float4 factorMatrix[4];
+    float diagonal[4];
+    uint permutation[4];
+    for(uint i=0;i<dim;i++)
+    {
+        factorMatrix[i]=float4(0,0,0,0);
+        permutation[i]=i;
+        float gamma=0;
+        if(_NormalOnly==0&&active[i]&&(i&1u)!=0&&rows[i].gap<=.0001&&_Friction>0)
+            gamma=_Friction*rows[i-1].inverseRoot/rows[i].inverseRoot;
+        uint branch=_Branches[_NormalOnly!=0?first+i:(first+i)/2];
+        for(uint j=0;j<dim;j++)
+        {
+            float Bij=0;
+            if(active[i]&&active[j])
+            {
+                float2 armAi=rows[i].contactPoint-a.center;
+                float2 armAj=rows[j].contactPoint-a.center;
+                float2 armBi=rows[i].contactPoint-b.center;
+                float2 armBj=rows[j].contactPoint-b.center;
+                float coupling=(a.inverseMass+b.inverseMass)*
+                    dot(rows[i].direction,rows[j].direction)+
+                    a.inverseInertia*cross2(armAi,rows[i].direction)*
+                        cross2(armAj,rows[j].direction)+
+                    b.inverseInertia*cross2(armBi,rows[i].direction)*
+                        cross2(armBj,rows[j].direction);
+                Bij=rows[i].inverseRoot*rows[j].inverseRoot*coupling;
+            }
+            float identity=i==j?1:0;
+            float Hij;
+            if(!active[i])Hij=identity;
+            else if(_NormalOnly!=0||(i&1u)==0)Hij=(branch&1u)!=0?Bij:identity;
+            else if((branch&2u)!=0)Hij=Bij;
+            else if((branch&4u)!=0)Hij=identity-(j==i-1?gamma:0);
+            else if((branch&8u)!=0)Hij=identity+(j==i-1?gamma:0);
+            else Hij=identity;
+            if(i==j)Hij+=.001;
+            if(!isfinite(Hij)){fault(2);return;}
+            factorMatrix[i][j]=Hij;
+        }
+        diagonal[i]=factorMatrix[i][i];
+    }
+    bool fallback=false;
+    for(uint k=0;k<dim;k++)
+    {
+        uint pivot=k;
+        float best=abs(factorMatrix[k][k]);
+        for(uint r=k+1;r<dim;r++)
+        {
+            float candidate=abs(factorMatrix[r][k]);
+            if(candidate>best){best=candidate;pivot=r;}
+        }
+        if(!isfinite(best)||best<1e-6){fallback=true;break;}
+        if(pivot!=k)
+        {
+            float4 swapRow=factorMatrix[k];factorMatrix[k]=factorMatrix[pivot];factorMatrix[pivot]=swapRow;
+            uint swapIndex=permutation[k];
+            permutation[k]=permutation[pivot];permutation[pivot]=swapIndex;
+        }
+        for(uint r=k+1;r<dim;r++)
+        {
+            factorMatrix[r][k]/=factorMatrix[k][k];
+            for(uint c=k+1;c<dim;c++)
+                factorMatrix[r][c]-=factorMatrix[r][k]*factorMatrix[k][c];
+        }
+    }
+    if(fallback)
+    {
+        uint old;InterlockedAdd(_Fault[1],1,old);
+        for(uint i=0;i<dim;i++)
+        {
+            if(!isfinite(diagonal[i])||abs(diagonal[i])<1e-6)
+            {fault(2);return;}
+            factorMatrix[i]=float4(diagonal[i],0,0,0);
+            permutation[i]=i;
+        }
+    }
+    uint pivotCode=fallback?256u:0u;
+    for(uint i=0;i<dim;i++)
+    {
+        _Factors[first+i]=factorMatrix[i];
+        pivotCode|=(permutation[i]&3u)<<(2*i);
+    }
+    _PivotCodes[contactPoint]=pivotCode;
+}
+
+[numthreads(64,1,1)]
+void ApplyManifoldFactors(uint contactPoint:SV_DispatchThreadID)
+{
+    if(_UseWorkGate!=0&&_WorkGate[0]==0)return;
+    uint count=min(_ActiveRowCount[0],_RowCapacity);
+    uint width=_NormalOnly!=0?1u:2u;
+    uint first=width*contactPoint;
+    if(first+width>count)return;
+    uint group=_RowManifoldIds[first];
+    if(first>0&&_RowManifoldIds[first-1]==group)return;
+    uint dim=first+2*width<=count&&_RowManifoldIds[first+width]==group?2*width:width;
+    float rhs[4],work[4],answer[4];
+    float4 lu[4];
+    uint pivotCode=_PivotCodes[contactPoint];
+    bool fallback=(pivotCode&256u)!=0;
+    for(uint i=0;i<dim;i++)
+    {
+        lu[i]=_Factors[first+i];
+        uint pivot=(pivotCode>>(2*i))&3u;
+        if(pivot>=dim){fault(2);return;}
+        rhs[i]=_VectorInput[_InputOffset+first+(fallback?i:pivot)];
+        if(!isfinite(rhs[i])){fault(2);return;}
+    }
+    if(fallback)
+    {
+        for(uint i=0;i<dim;i++)answer[i]=rhs[i]/lu[i].x;
+    }
+    else
+    {
+        for(uint i=0;i<dim;i++)
+        {
+            float value=rhs[i];
+            for(uint j=0;j<i;j++)value-=lu[i][j]*work[j];
+            work[i]=value;
+        }
+        for(int i=(int)dim-1;i>=0;i--)
+        {
+            float value=work[i];
+            for(uint j=(uint)i+1;j<dim;j++)value-=lu[i][j]*answer[j];
+            answer[i]=value/lu[i][i];
+        }
+    }
+    for(uint i=0;i<dim;i++)
+    {
+        if(!isfinite(answer[i])){fault(2);return;}
+        _VectorOutput[_OutputOffset+first+i]=answer[i];
+    }
+}

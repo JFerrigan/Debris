@@ -1,0 +1,420 @@
+#pragma kernel InitializeBasis
+#pragma kernel InitializeRotations
+#pragma kernel InitializeWorkControl
+#pragma kernel AdvanceWorkControl
+#pragma kernel PrepareTrueVerification
+#pragma kernel InspectTrueResidual
+#pragma kernel ResetCycleControl
+#pragma kernel BeginRegularizedRetry
+#pragma kernel ClearAccumulatedDirection
+#pragma kernel AccumulateDirection
+#pragma kernel CopyAccumulatedDirection
+#pragma kernel ResetStep
+#pragma kernel CopyPreconditionedDirection
+#pragma kernel CopyDerivativeToWork
+#pragma kernel AddSearchRegularization
+#pragma kernel DotBlocks
+#pragma kernel FinalizeDots
+#pragma kernel SubtractProjection
+#pragma kernel NormBlocks
+#pragma kernel FinalizeNorm
+#pragma kernel NormalizeNext
+#pragma kernel ApplyGivens
+#pragma kernel SolveUpper
+#pragma kernel BuildDirectionCombination
+
+StructuredBuffer<uint> _ActiveRowCount;
+StructuredBuffer<float> _CycleResidual,_CycleMerit,_Preconditioned,_Derivative;
+RWStructuredBuffer<float> _Basis,_Work,_ProductInput;
+RWStructuredBuffer<float> _AccumulatedDirection,_Correction;
+RWStructuredBuffer<float> _DotBlocks,_DotCoefficients,_NormBlocks;
+RWStructuredBuffer<float> _Hessenberg,_ColumnNorm;
+RWStructuredBuffer<uint> _StepStatus;
+RWStructuredBuffer<float> _RotCos,_RotSin,_RotRhs,_SmallY,_Estimate;
+RWStructuredBuffer<uint> _SolveStatus;
+RWStructuredBuffer<uint> _WorkControl;
+RWStructuredBuffer<uint> _VerificationGate;
+RWStructuredBuffer<uint> _AcceptedDirectionGate;
+StructuredBuffer<float> _TrueLinearResult;
+StructuredBuffer<uint> _TrialSelection;
+StructuredBuffer<uint> _ProjectionStatus;
+StructuredBuffer<uint> _InitialGate;
+uint _RowCapacity,_BlockCapacity,_Column,_Pass,_SolveColumns,
+    _UseControlColumns,_KrylovCap,_RetryStage,_RetryAfterLineSearch,
+    _UseInitialGate;
+float _RegularizationEta;
+groupshared float _Reduce[256];
+bool activeWork(){return _WorkControl[0]!=0;}
+uint solveColumns(){return _UseControlColumns!=0?_WorkControl[2]:_SolveColumns;}
+
+// Control: gate, counted Krylov products, active columns, reason, cap,
+// highest regularization stage attempted (0, 1e-5, 1e-3).
+// Reason: 0=running, 1=estimate, 2=breakdown, 3=invalid,
+// 4=budget, 5=true pass, 6=regularized retry required, 7=inactive.
+[numthreads(1,1,1)]
+void InitializeWorkControl(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    float merit=_CycleMerit[0];
+    bool enabled=_UseInitialGate==0||_InitialGate[0]!=0;
+    _WorkControl[0]=enabled&&isfinite(merit)&&merit>0?1u:0u;
+    _WorkControl[1]=0;
+    _WorkControl[2]=0;
+    _WorkControl[3]=!enabled?7u:
+        !isfinite(merit)||merit<0?3u:merit==0?5u:0u;
+    _WorkControl[4]=_KrylovCap;
+    _WorkControl[5]=0;
+    _VerificationGate[0]=0;
+    _AcceptedDirectionGate[0]=0;
+}
+
+[numthreads(1,1,1)]
+void AdvanceWorkControl(uint id:SV_DispatchThreadID)
+{
+    if(id!=0||!activeWork())return;
+    _WorkControl[1]++;
+    _WorkControl[2]++;
+    uint status=_StepStatus[_Column];
+    if((status&2u)!=0){_WorkControl[0]=0;_WorkControl[3]=3;}
+    else if((status&4u)!=0){_WorkControl[0]=0;_WorkControl[3]=2;}
+    else if(!isfinite(_Estimate[0]))
+    {_WorkControl[0]=0;_WorkControl[3]=3;}
+    else if(_Estimate[0]<=.1)
+    {_WorkControl[0]=0;_WorkControl[3]=1;}
+    else if((status&1u)!=0){_WorkControl[0]=0;_WorkControl[3]=2;}
+    else if(_WorkControl[1]>=_WorkControl[4]-1)
+    {_WorkControl[0]=0;_WorkControl[3]=4;}
+}
+
+[numthreads(1,1,1)]
+void PrepareTrueVerification(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    _VerificationGate[0]=_SolveStatus[0]==0&&
+        _WorkControl[2]>0&&_WorkControl[3]!=3&&
+        _WorkControl[1]<_WorkControl[4]?1u:0u;
+}
+
+[numthreads(1,1,1)]
+void InspectTrueResidual(uint id:SV_DispatchThreadID)
+{
+    if(id!=0||_VerificationGate[0]==0)return;
+    if(_WorkControl[1]>=_WorkControl[4])
+    {_VerificationGate[0]=0;_WorkControl[0]=0;_WorkControl[3]=4;return;}
+    _WorkControl[1]++;
+    float relative=_TrueLinearResult[1];
+    if(_SolveStatus[0]!=0||_TrueLinearResult[2]!=1||!isfinite(relative))
+    {_VerificationGate[0]=0;_WorkControl[0]=0;_WorkControl[3]=3;return;}
+    if(relative<=.1)
+    {
+        _AcceptedDirectionGate[0]=1;
+        _WorkControl[0]=0;_WorkControl[3]=5;return;
+    }
+    _VerificationGate[0]=0;
+    if(_WorkControl[1]>=_WorkControl[4]-1)
+    {_WorkControl[0]=0;_WorkControl[3]=4;return;}
+    if(_WorkControl[3]==2)
+    {_WorkControl[0]=0;_WorkControl[3]=6;return;}
+    _WorkControl[0]=1;_WorkControl[3]=0;
+}
+
+[numthreads(1,1,1)]
+void ResetCycleControl(uint id:SV_DispatchThreadID)
+{
+    if(id==0&&activeWork())
+    {_WorkControl[2]=0;_WorkControl[3]=0;_VerificationGate[0]=0;}
+}
+
+// Recorded retry slots are conditional on a GPU linear failure or eight
+// rejected line-search trials. They preserve the product count and cap.
+[numthreads(1,1,1)]
+void BeginRegularizedRetry(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    bool linearFailed=_WorkControl[3]==2||_WorkControl[3]==3||
+        _WorkControl[3]==6;
+    bool searchFailed=_WorkControl[3]==5&&
+        _TrialSelection[0]==0xffffffffu;
+    bool failed=_RetryAfterLineSearch==0?linearFailed:
+        _RetryAfterLineSearch==1?searchFailed:
+        linearFailed||searchFailed;
+    if(_RetryAfterLineSearch==2)
+        failed=failed&&_ProjectionStatus[0]!=2&&
+            _ProjectionStatus[0]!=3;
+    bool ordered=_RetryStage>=1&&_RetryStage<=2&&
+        _RetryStage==_WorkControl[5]+1;
+    bool budget=_WorkControl[1]+2<=_WorkControl[4];
+    _WorkControl[0]=failed&&ordered&&budget?1u:0u;
+    _WorkControl[2]=0;
+    if(_WorkControl[0]!=0)
+    {_WorkControl[3]=0;_WorkControl[5]=_RetryStage;}
+    else if(failed&&ordered&&!budget)_WorkControl[3]=4;
+    _VerificationGate[0]=0;
+    _AcceptedDirectionGate[0]=0;
+}
+
+[numthreads(1,1,1)]
+void ResetStep(uint id:SV_DispatchThreadID)
+{if(id==0&&activeWork()&&_Column<16)_StepStatus[_Column]=0;}
+
+[numthreads(256,1,1)]
+void InitializeBasis(uint row:SV_DispatchThreadID)
+{
+    if(!activeWork())return;
+    if(row>=min(_ActiveRowCount[0],_RowCapacity))return;
+    float beta=sqrt(2*_CycleMerit[0]);
+    _Basis[row]=beta>0&&isfinite(beta)?-_CycleResidual[row]/beta:0;
+}
+
+[numthreads(256,1,1)]
+void ClearAccumulatedDirection(uint row:SV_DispatchThreadID)
+{
+    if(!activeWork())return;
+    if(row<min(_ActiveRowCount[0],_RowCapacity))_AccumulatedDirection[row]=0;
+}
+
+[numthreads(256,1,1)]
+void AccumulateDirection(uint row:SV_DispatchThreadID)
+{
+    if(_VerificationGate[0]==0)return;
+    if(row>=min(_ActiveRowCount[0],_RowCapacity))return;
+    _AccumulatedDirection[row]+=_Correction[row];
+}
+
+[numthreads(256,1,1)]
+void CopyAccumulatedDirection(uint row:SV_DispatchThreadID)
+{
+    if(_VerificationGate[0]==0)return;
+    if(row>=min(_ActiveRowCount[0],_RowCapacity))return;
+    _ProductInput[row]=_AccumulatedDirection[row];
+}
+
+[numthreads(1,1,1)]
+void InitializeRotations(uint id:SV_DispatchThreadID)
+{
+    if(id!=0||!activeWork())return;
+    float beta=sqrt(2*_CycleMerit[0]);
+    for(uint i=0;i<16;i++)
+    {_RotCos[i]=0;_RotSin[i]=0;_SmallY[i]=0;}
+    for(uint rhsIndex=0;rhsIndex<17;rhsIndex++)_RotRhs[rhsIndex]=0;
+    _RotRhs[0]=isfinite(beta)&&beta>=0?beta:0;
+    _Estimate[0]=beta>0?1:0;
+    _SolveStatus[0]=0;
+}
+
+[numthreads(256,1,1)]
+void CopyPreconditionedDirection(uint row:SV_DispatchThreadID)
+{
+    if(!activeWork())return;
+    if(row>=min(_ActiveRowCount[0],_RowCapacity))return;
+    _ProductInput[row]=_Preconditioned[row];
+}
+
+[numthreads(256,1,1)]
+void CopyDerivativeToWork(uint row:SV_DispatchThreadID)
+{
+    if(!activeWork())return;
+    if(row>=min(_ActiveRowCount[0],_RowCapacity))return;
+    _Work[row]=_Derivative[row];
+}
+
+// Regularizes the search equation only. The residual/line-search kernels
+// continue to evaluate the original unshifted contact law.
+[numthreads(256,1,1)]
+void AddSearchRegularization(uint row:SV_DispatchThreadID)
+{
+    if(!activeWork())return;
+    if(row>=min(_ActiveRowCount[0],_RowCapacity))return;
+    _Work[row]+=_RegularizationEta*_Preconditioned[row];
+}
+
+// Each basis dot product has its own group-Y lane. All i<=column are
+// reduced in parallel for each of the two classical GS passes.
+[numthreads(256,1,1)]
+void DotBlocks(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
+{
+    uint basisIndex=group.y;
+    bool enabled=activeWork()&&basisIndex<=_Column&&basisIndex<17;
+    uint row=group.x*256+thread.x;
+    uint count=min(_ActiveRowCount[0],_RowCapacity);
+    float value=enabled&&row<count?
+        _Work[row]*_Basis[basisIndex*_RowCapacity+row]:0;
+    if(!isfinite(value)){uint old;InterlockedOr(_StepStatus[_Column],2,old);value=0;}
+    _Reduce[thread.x]=value;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=128;width>0;width>>=1)
+    {
+        if(thread.x<width)_Reduce[thread.x]+=_Reduce[thread.x+width];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(thread.x==0&&enabled)
+        _DotBlocks[basisIndex*_BlockCapacity+group.x]=_Reduce[0];
+}
+
+[numthreads(256,1,1)]
+void FinalizeDots(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
+{
+    uint basisIndex=group.x;
+    bool enabled=activeWork()&&basisIndex<=_Column&&basisIndex<17;
+    uint blocks=(min(_ActiveRowCount[0],_RowCapacity)+255)/256;
+    float sum=0;
+    for(uint b=thread.x;enabled&&b<blocks;b+=256)
+        sum+=_DotBlocks[basisIndex*_BlockCapacity+b];
+    _Reduce[thread.x]=sum;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=128;width>0;width>>=1)
+    {
+        if(thread.x<width)_Reduce[thread.x]+=_Reduce[thread.x+width];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(thread.x==0&&enabled)
+    {
+        float coefficient=_Reduce[0];
+        _DotCoefficients[basisIndex]=coefficient;
+        uint location=basisIndex*16+_Column;
+        if(_Pass==0)_Hessenberg[location]=coefficient;
+        else _Hessenberg[location]+=coefficient;
+        if(!isfinite(coefficient))
+        {uint old;InterlockedOr(_StepStatus[_Column],2,old);}
+    }
+}
+
+[numthreads(256,1,1)]
+void SubtractProjection(uint row:SV_DispatchThreadID)
+{
+    if(!activeWork())return;
+    if(row>=min(_ActiveRowCount[0],_RowCapacity))return;
+    float projection=0;
+    for(uint i=0;i<=_Column;i++)
+        projection+=_DotCoefficients[i]*_Basis[i*_RowCapacity+row];
+    float value=_Work[row]-projection;
+    if(!isfinite(value))
+    {uint old;InterlockedOr(_StepStatus[_Column],2,old);value=0;}
+    _Work[row]=value;
+}
+
+[numthreads(256,1,1)]
+void NormBlocks(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
+{
+    bool enabled=activeWork();
+    uint row=group.x*256+thread.x;
+    uint count=min(_ActiveRowCount[0],_RowCapacity);
+    float value=enabled&&row<count?_Work[row]*_Work[row]:0;
+    if(!isfinite(value)){uint old;InterlockedOr(_StepStatus[_Column],2,old);value=0;}
+    _Reduce[thread.x]=value;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=128;width>0;width>>=1)
+    {
+        if(thread.x<width)_Reduce[thread.x]+=_Reduce[thread.x+width];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(thread.x==0&&enabled)_NormBlocks[group.x]=_Reduce[0];
+}
+
+[numthreads(256,1,1)]
+void FinalizeNorm(uint3 thread:SV_GroupThreadID)
+{
+    bool enabled=activeWork();
+    uint blocks=(min(_ActiveRowCount[0],_RowCapacity)+255)/256;
+    float sum=0;
+    for(uint b=thread.x;enabled&&b<blocks;b+=256)sum+=_NormBlocks[b];
+    _Reduce[thread.x]=sum;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=128;width>0;width>>=1)
+    {
+        if(thread.x<width)_Reduce[thread.x]+=_Reduce[thread.x+width];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(thread.x==0&&enabled)
+    {
+        float norm=sqrt(_Reduce[0]);
+        _ColumnNorm[_Column]=norm;
+        _Hessenberg[(_Column+1)*16+_Column]=norm;
+        if(!isfinite(norm))
+        {uint old;InterlockedOr(_StepStatus[_Column],2,old);}
+        else if(norm<=1e-7&&_StepStatus[_Column]==0)_StepStatus[_Column]=1;
+    }
+}
+
+[numthreads(256,1,1)]
+void NormalizeNext(uint row:SV_DispatchThreadID)
+{
+    if(!activeWork())return;
+    if(row>=min(_ActiveRowCount[0],_RowCapacity))return;
+    float norm=_ColumnNorm[_Column];
+    _Basis[(_Column+1)*_RowCapacity+row]=_StepStatus[_Column]==0?
+        _Work[row]/norm:0;
+}
+
+// Sequential only over the 17x16 scalar Hessenberg data. This does not
+// read back a convergence estimate to the CPU.
+[numthreads(1,1,1)]
+void ApplyGivens(uint id:SV_DispatchThreadID)
+{
+    if(id!=0||!activeWork()||_Column>=16)return;
+    if((_StepStatus[_Column]&2u)!=0)
+    {_Estimate[0]=3.402823466e38;return;}
+    for(uint k=0;k<_Column;k++)
+    {
+        float upper=_Hessenberg[k*16+_Column];
+        float lower=_Hessenberg[(k+1)*16+_Column];
+        _Hessenberg[k*16+_Column]=_RotCos[k]*upper+_RotSin[k]*lower;
+        _Hessenberg[(k+1)*16+_Column]=
+            -_RotSin[k]*upper+_RotCos[k]*lower;
+    }
+    float upper=_Hessenberg[_Column*16+_Column];
+    float lower=_Hessenberg[(_Column+1)*16+_Column];
+    float radius=length(float2(upper,lower));
+    if(!isfinite(radius)||radius<1e-8)
+    {_StepStatus[_Column]|=4u;_Estimate[0]=3.402823466e38;return;}
+    float cosine=upper/radius,sine=lower/radius;
+    _RotCos[_Column]=cosine;_RotSin[_Column]=sine;
+    _Hessenberg[_Column*16+_Column]=radius;
+    _Hessenberg[(_Column+1)*16+_Column]=0;
+    float rhs=_RotRhs[_Column];
+    _RotRhs[_Column]=cosine*rhs;
+    _RotRhs[_Column+1]=-sine*rhs;
+    float beta=sqrt(2*_CycleMerit[0]);
+    float relative=beta>0?abs(_RotRhs[_Column+1])/beta:0;
+    if(!isfinite(relative))
+    {_StepStatus[_Column]|=2u;relative=3.402823466e38;}
+    _Estimate[0]=relative;
+}
+
+// The small upper triangular solve reconstructs y only. The row-vector
+// combination and one fixed M^-1 application construct the actual direction.
+[numthreads(1,1,1)]
+void SolveUpper(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    uint columns=solveColumns();
+    _SolveStatus[0]=0;
+    if(columns==0||columns>16)
+    {_SolveStatus[0]=1;return;}
+    for(uint i=0;i<columns;i++)
+        if((_StepStatus[i]&6u)!=0){_SolveStatus[0]=1;return;}
+    for(int backIndex=(int)columns-1;backIndex>=0;backIndex--)
+    {
+        float value=_RotRhs[backIndex];
+        for(uint j=(uint)backIndex+1;j<columns;j++)
+            value-=_Hessenberg[backIndex*16+j]*_SmallY[j];
+        float pivot=_Hessenberg[backIndex*16+backIndex];
+        if(!isfinite(value)||!isfinite(pivot)||abs(pivot)<1e-8)
+        {_SolveStatus[0]=2;return;}
+        _SmallY[backIndex]=value/pivot;
+        if(!isfinite(_SmallY[backIndex])){_SolveStatus[0]=2;return;}
+    }
+}
+
+[numthreads(256,1,1)]
+void BuildDirectionCombination(uint row:SV_DispatchThreadID)
+{
+    if(row>=min(_ActiveRowCount[0],_RowCapacity))return;
+    float result=0;
+    if(_SolveStatus[0]==0)
+        for(uint i=0;i<solveColumns();i++)
+            result+=_SmallY[i]*_Basis[i*_RowCapacity+row];
+    _Work[row]=isfinite(result)?result:0;
+    if(!isfinite(result))
+    {uint old;InterlockedOr(_SolveStatus[0],4,old);}
+}

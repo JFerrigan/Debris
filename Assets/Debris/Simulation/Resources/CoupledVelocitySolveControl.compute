@@ -1,0 +1,45 @@
+#pragma kernel BeginVelocitySolve
+#pragma kernel AdvanceVelocitySolve
+
+RWStructuredBuffer<uint> _Control;
+StructuredBuffer<uint> _ProjectionStatus,_TrialSelection,_WorkControl,_Facts;
+uint _MaxUpdates;
+
+// Control: active, accepted, updates, fault, cap, Krylov products,
+// last selected trial, last Arnoldi stop reason.
+// Fault: 0=none, 1=Newton exhaustion, 2=linear/search failure,
+// 3=projected-state failure, 4=invalid source state.
+[numthreads(1,1,1)]
+void BeginVelocitySolve(uint id:SV_DispatchThreadID)
+{
+    if(id!=0)return;
+    _Control[0]=1;
+    _Control[1]=0;
+    _Control[2]=0;
+    _Control[3]=0;
+    _Control[4]=_MaxUpdates;
+    _Control[5]=0;
+    _Control[6]=0xffffffffu;
+    _Control[7]=0;
+}
+
+[numthreads(1,1,1)]
+void AdvanceVelocitySolve(uint id:SV_DispatchThreadID)
+{
+    if(id!=0||_Control[0]==0)return;
+    _Control[2]++;
+    _Control[5]+=_WorkControl[1];
+    _Control[6]=_TrialSelection[0];
+    _Control[7]=_WorkControl[3];
+    uint projection=_ProjectionStatus[0];
+    if(projection==2)
+    {_Control[0]=0;_Control[1]=1;return;}
+    if(projection==3)
+    {_Control[0]=0;_Control[3]=3;return;}
+    if(projection!=0||_Facts[2]!=0xffffffffu)
+    {_Control[0]=0;_Control[3]=4;return;}
+    if(_TrialSelection[0]==0xffffffffu)
+    {_Control[0]=0;_Control[3]=2;return;}
+    if(_Control[2]>=_Control[4])
+    {_Control[0]=0;_Control[3]=1;}
+}
