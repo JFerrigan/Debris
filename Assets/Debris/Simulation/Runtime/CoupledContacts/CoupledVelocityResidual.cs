@@ -124,6 +124,7 @@ namespace Debris.Simulation.CoupledContacts
                 shader.SetInt("_NormalOnly",positionSystem?1:0);
                 shader.SetInt("_PrimitiveCount",op.SourcePrimitiveCount);
                 shader.SetFloat("_StepDuration",substepDuration);
+                shader.SetInt("_UseStepClock",0);
                 shader.SetFloat("_Friction",friction);
                 shader.SetFloat("_PhysicalTolerance",physicalTolerance);
                 resetPosition=shader.FindKernel("ResetPositionInput");
@@ -164,7 +165,7 @@ namespace Debris.Simulation.CoupledContacts
                 var features=positionSystem?op.RowFeatures:Buffer(1,24);
                 var primitives=positionSystem?op.SourcePrimitives:Buffer(1,56);
                 foreach(int kernel in new[]{evaluate,evaluateTrial})
-                    Bind(kernel,("_Features",features),("_Primitives",primitives));
+                    Bind(kernel,("_Features",features),("_Primitives",primitives),("_StepClock",alwaysGate));
                 Bind(snapshotBase,("_ActiveRowCount",op.ActiveRowCounter),
                     ("_CurrentX",op.ProductInput),("_CurrentY",op.ProductOutput),
                     ("_BaseX",baseX),("_BaseY",baseY));
@@ -259,6 +260,14 @@ namespace Debris.Simulation.CoupledContacts
         }
         void Bind(int kernel,params (string Name,GraphicsBuffer Buffer)[] entries)
         {foreach(var entry in entries)shader.SetBuffer(kernel,entry.Name,entry.Buffer);}
+
+        internal void RecordStepClock(CommandBuffer target,GraphicsBuffer clock)
+        {
+            if(clock==null||clock.stride!=4||clock.count<2)throw new ArgumentException("Invalid GPU step clock");
+            target.SetComputeIntParam(shader,"_UseStepClock",1);
+            foreach(int kernel in new[]{evaluate,evaluateTrial})
+                target.SetComputeBufferParam(shader,kernel,"_StepClock",clock);
+        }
 
         internal void RecordPositionInitialize(CommandBuffer target,GraphicsBuffer gate=null)
         {

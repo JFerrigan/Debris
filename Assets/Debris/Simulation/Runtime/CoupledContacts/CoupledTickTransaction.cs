@@ -109,29 +109,44 @@ namespace Debris.Simulation.CoupledContacts
             lastSubmitted=tick;expectedGeneration++;expectedCache++;recording=true;recordingTarget=target;
             return ticket;
         }
-        void RecordStage(CommandBuffer target,CoupledTickStage expected,GraphicsBuffer result,int passWord,int faultWord)
+        void RecordStage(CommandBuffer target,CoupledTickStage expected,GraphicsBuffer result,int passWord,int faultWord,GraphicsBuffer gate=null)
         {
             Check(target,true);
             if(result==null||result==control||result==failure||result==completions||
                result.stride!=4||result.count<=Math.Max(passWord,faultWord))
                 throw new ArgumentException("A distinct stage result with accepted/fault words is required",nameof(result));
+            if(gate!=null&&(gate.stride!=4||gate.count<1))throw new ArgumentException("Invalid stage activity gate");
+            target.SetComputeIntParam(shader,"_UseStageGate",gate==null?0:1);
+            target.SetComputeBufferParam(shader,stage,"_StageGate",gate??control);
             UInt(target,"_Stage",(uint)expected);UInt(target,"_PassWord",(uint)passWord);UInt(target,"_FaultWord",(uint)faultWord);
             target.SetComputeBufferParam(shader,stage,"_StageResult",result);
             target.DispatchCompute(shader,stage,1,1,1);
         }
-        public void RecordVelocityResult(CommandBuffer target,GraphicsBuffer solveControl)
-        {RecordStage(target,CoupledTickStage.Velocity,solveControl,1,3);}
-        public void RecordPredictionResult(CommandBuffer target,GraphicsBuffer verdict)
-        {RecordStage(target,CoupledTickStage.Prediction,verdict,0,1);}
+        public void RecordVelocityResult(CommandBuffer target,GraphicsBuffer solveControl,GraphicsBuffer gate=null)
+        {RecordStage(target,CoupledTickStage.Velocity,solveControl,1,3,gate);}
+        public void RecordPredictionResult(CommandBuffer target,GraphicsBuffer verdict,GraphicsBuffer gate=null)
+        {RecordStage(target,CoupledTickStage.Prediction,verdict,0,1,gate);}
         public void RecordPositionResult(CommandBuffer target,CoupledPositionCorrection correction)
         {
             if(correction==null)throw new ArgumentNullException(nameof(correction));
             RecordPositionResult(target,correction.Decision);
         }
-        public void RecordPositionResult(CommandBuffer target,GraphicsBuffer verdict)
-        {RecordStage(target,CoupledTickStage.Position,verdict,0,1);}
-        public void RecordSubstep(CommandBuffer target)
-        {Check(target,true);target.DispatchCompute(shader,substep,1,1,1);}
+        public void RecordPositionResult(CommandBuffer target,GraphicsBuffer verdict,GraphicsBuffer gate=null)
+        {RecordStage(target,CoupledTickStage.Position,verdict,0,1,gate);}
+        public void RecordSubstep(CommandBuffer target,GraphicsBuffer gate=null)
+        {
+            Check(target,true);
+            if(gate!=null&&(gate.stride!=4||gate.count<1))throw new ArgumentException("Invalid substep activity gate");
+            target.SetComputeIntParam(shader,"_UseStageGate",gate==null?0:1);
+            target.SetComputeBufferParam(shader,substep,"_StageGate",gate??control);
+            target.DispatchCompute(shader,substep,1,1,1);
+        }
+        internal CoupledTickTicket RecordBeginSelected(CommandBuffer target,ulong tick)
+        {
+            var ticket=RecordBegin(target,tick,16);
+            reservedSubsteps[ticket.Slot]=0; // GPU selects 4..16; CPU never reads it to steer a stage.
+            return ticket;
+        }
         // The future step owner supplies conservation/count/envelope facts.
         // Publication requires this verdict after all declared substeps.
         public void RecordFinalFacts(CommandBuffer target,GraphicsBuffer verdict)
@@ -189,7 +204,8 @@ namespace Debris.Simulation.CoupledContacts
                tickets[ticket.Slot].Tick!=ticket.Tick||tickets[ticket.Slot].ExpectedGeneration!=ticket.ExpectedGeneration||
                completion.Version!=1||completion.AttemptedTick!=ticket.Tick||
                completion.ExpectedPreviousTick!=ticket.Tick-1||completion.Status<1||completion.Status>3||
-               completion.Substeps!=reservedSubsteps[ticket.Slot]||
+               (reservedSubsteps[ticket.Slot]==0?(completion.Substeps<4||completion.Substeps>16):
+                   completion.Substeps!=reservedSubsteps[ticket.Slot])||
                completion.PassedSubsteps>completion.Substeps||
                completion.TopologyRevision!=state.InitialHeader.TopologyRevision||
                completion.IdentityRevision!=state.InitialHeader.IdentityRevision||

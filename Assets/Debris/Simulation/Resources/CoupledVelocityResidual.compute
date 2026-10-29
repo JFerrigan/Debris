@@ -56,6 +56,8 @@ RWStructuredBuffer<uint> _ProjectionGate,_ProjectionStatus;
 RWStructuredBuffer<uint> _MeritArgs;
 uint _RowCapacity;
 uint _BodyCount,_TrialIndex,_UseProductGate,_NormalOnly,_PrimitiveCount;
+StructuredBuffer<uint> _StepClock;
+uint _UseStepClock;
 float _StepDuration,_Friction,_PhysicalTolerance,_LinearShift;
 float _TrialAlpha;
 groupshared float _MeritScratch[256];
@@ -141,6 +143,7 @@ void evaluatePoint(uint contactPoint,float xn,float xt,float rawWn,float wt)
     uint normalIndex=contactPoint*2,tangentIndex=normalIndex+1;
     if(tangentIndex>=count)return;
     Row normal=_Rows[normalIndex],tangent=_Rows[tangentIndex];
+    float h=_UseStepClock!=0?asfloat(_StepClock[1]):_StepDuration;
     if(normal.inverseRoot==0&&tangent.inverseRoot==0)
     {
         _Residual[normalIndex]=0;_Residual[tangentIndex]=0;
@@ -156,7 +159,7 @@ void evaluatePoint(uint contactPoint,float xn,float xt,float rawWn,float wt)
        abs(dot(normal.direction,tangent.direction))>1e-3||
        !isfinite(xn)||!isfinite(xt)||
        !isfinite(rawWn)||!isfinite(wt)||
-       !isfinite(_StepDuration)||_StepDuration<=0||
+       !isfinite(h)||h<=0||
        !isfinite(_Friction)||_Friction<0)
     {
         invalidPoint(contactPoint);
@@ -164,7 +167,7 @@ void evaluatePoint(uint contactPoint,float xn,float xt,float rawWn,float wt)
         _Branches[contactPoint]=0;
         return;
     }
-    float wn=rawWn+max(normal.gap,0)/_StepDuration*
+    float wn=rawWn+max(normal.gap,0)/h*
         normal.inverseRoot;
     float normalTrial=xn-wn;
     float fn=xn-max(0,normalTrial);

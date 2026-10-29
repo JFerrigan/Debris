@@ -39,7 +39,7 @@ namespace Debris.Simulation.CoupledContacts
     public enum CoupledTickStage : uint
     { Input=1,Velocity=2,Prediction=3,Position=4,Substep=5,Final=6,Publication=7 }
     public enum CoupledTickFault : uint
-    { None=0,Dependency=1,StageOrder=2,StageRejected=3,InvalidState=4,ImmutableState=5,Generation=6 }
+    { None=0,Dependency=1,StageOrder=2,StageRejected=3,InvalidState=4,ImmutableState=5,Generation=6,Speed=7 }
 
     // Fixed topology for a physics transaction. Inventory/fuel words are an
     // opaque owner-supplied payload; this does not implement transfers or burn.

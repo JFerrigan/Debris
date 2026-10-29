@@ -21,14 +21,19 @@ namespace Debris.Simulation.CoupledContacts
         readonly ComputeShader shader;
         readonly List<GraphicsBuffer> owned=new List<GraphicsBuffer>();
         readonly GraphicsBuffer bindPoses,templatePrimitives,templateGroups,bodies,primitives,groups,
-            zeroForces,stageFacts,velocityVerdict;
+            zeroForces,stageFacts,velocityVerdict,clock,slotGate,radii,predicted,predictionVerdict;
         readonly int reset,free,clear,geometryBodies,geometryPrimitives,geometryGroups,
-            inspectMotion,finishVelocity,applyVelocity;
+            inspectMotion,finishVelocity,applyVelocity,resetRadii,buildRadii,selectSchedule,beginSlot,
+            predict,finishPrediction,applyPrediction;
         readonly int groupCount;
         readonly float duration;
-        bool initialized,disposed;
+        bool initialized,disposed,selectedSchedule;
+        GraphicsBuffer selectedForces;
+        int nextSlot;
         public long BufferBytes { get; private set; }
         public GraphicsBuffer VelocityDecision=>velocityVerdict;
+        public GraphicsBuffer PredictionDecision=>predictionVerdict;
+        public GraphicsBuffer StepClock=>clock;
 
         public CoupledTickStepper(CoupledTickState state,CoupledTickTransaction transaction,
             CoupledContactOperator op,float substepDuration,float friction=.3f)
@@ -56,6 +61,10 @@ namespace Debris.Simulation.CoupledContacts
                 groups=Buffer(owner,Math.Max(1,groupCount),32);
                 zeroForces=Buffer(owner,state.EndpointCount,16);zeroForces.SetData(new Vector4[state.EndpointCount]);
                 stageFacts=Buffer(owner,8,4);velocityVerdict=Buffer(owner,4,4);
+                clock=Buffer(owner,4,4);slotGate=Buffer(owner,1,4);
+                clock.SetData(new uint[]{0,0,0,0});slotGate.SetData(new uint[]{1});
+                radii=Buffer(owner,state.EndpointCount,4);predicted=Buffer(owner,state.EndpointCount,32);
+                predictionVerdict=Buffer(owner,2,4);
                 velocity=new CoupledVelocityResidual(op,duration,friction);
                 preconditioner=new CoupledManifoldPreconditioner(op,velocity);
                 arnoldi=new CoupledArnoldiWorkspace(op,velocity,preconditioner);
@@ -68,6 +77,18 @@ namespace Debris.Simulation.CoupledContacts
                 geometryBodies=Kernel("GeometryBodies");geometryPrimitives=Kernel("GeometryPrimitives");
                 geometryGroups=Kernel("GeometryGroups");inspectMotion=Kernel("InspectVelocity");
                 finishVelocity=Kernel("FinishVelocity");applyVelocity=Kernel("ApplyVelocity");
+                resetRadii=Kernel("ResetRadii");buildRadii=Kernel("BuildRadii");selectSchedule=Kernel("SelectSchedule");
+                beginSlot=Kernel("BeginSlot");predict=Kernel("Predict");finishPrediction=Kernel("FinishPrediction");
+                applyPrediction=Kernel("ApplyPrediction");
+                Bind(resetRadii,("_Radii",radii));
+                Bind(buildRadii,("_Radii",radii),("_BindPoses",bindPoses),("_TemplatePrimitives",templatePrimitives));
+                Bind(selectSchedule,("_Radii",radii),("_Endpoints",state.WorkingEndpoints),
+                    ("_Parameters",state.WorkingParameters),("_TickControl",transaction.Control));
+                Bind(beginSlot,("_TickControl",transaction.Control));
+                Bind(predict,("_Endpoints",state.WorkingEndpoints),("_Parameters",state.WorkingParameters),
+                    ("_Radii",radii),("_Predicted",predicted));
+                Bind(finishPrediction,("_PredictionVerdict",predictionVerdict));
+                Bind(applyPrediction,("_Endpoints",state.WorkingEndpoints),("_Predicted",predicted));
                 Bind(free,("_Parameters",state.WorkingParameters),("_Endpoints",state.WorkingEndpoints),
                     ("_FreeMotion",op.FreeMotionInput),("_Forces",zeroForces));
                 Bind(clear,("_Impulse",op.ProductInput));
@@ -94,6 +115,7 @@ namespace Debris.Simulation.CoupledContacts
         {
             int k=shader.FindKernel(name);
             shader.SetBuffer(k,"_Activity",transaction.ActivityGate);shader.SetBuffer(k,"_Facts",stageFacts);
+            shader.SetBuffer(k,"_Clock",clock);shader.SetBuffer(k,"_SlotGate",slotGate);
             return k;
         }
         void Bind(int kernel,params (string Name,GraphicsBuffer Buffer)[] entries)
@@ -104,7 +126,7 @@ namespace Debris.Simulation.CoupledContacts
             if(disposed)throw new ObjectDisposedException(nameof(CoupledTickStepper));
             transaction.CheckRecording(target);
         }
-        void RecordGeometry(CommandBuffer target)
+        void RecordTemplates(CommandBuffer target)
         {
             if(!initialized)
             {
@@ -112,6 +134,10 @@ namespace Debris.Simulation.CoupledContacts
                 if(groupCount>0)target.CopyBuffer(op.Manifolds.UnionGroupsBuffer,templateGroups);
                 initialized=true;
             }
+        }
+        void RecordGeometry(CommandBuffer target)
+        {
+            RecordTemplates(target);
             target.DispatchCompute(shader,geometryBodies,Groups(state.EndpointCount),1,1);
             target.DispatchCompute(shader,geometryPrimitives,Groups(op.SourcePrimitiveCount),1,1);
             if(groupCount>0)target.DispatchCompute(shader,geometryGroups,Groups(groupCount),1,1);
@@ -124,6 +150,8 @@ namespace Debris.Simulation.CoupledContacts
         public void RecordVelocity(CommandBuffer target,CoupledSolveProfile profile,GraphicsBuffer forces=null)
         {
             Check(target);
+            if(!selectedSchedule||nextSlot==0)throw new InvalidOperationException("Begin a selected tick and substep first");
+            if(forces!=selectedForces)throw new ArgumentException("Use the same force buffer used for schedule selection");
             if(profile<CoupledSolveProfile.C1||profile>CoupledSolveProfile.C3)
                 throw new ArgumentOutOfRangeException(nameof(profile));
             if(forces!=null&&(forces.stride!=16||forces.count!=state.EndpointCount))
@@ -133,12 +161,47 @@ namespace Debris.Simulation.CoupledContacts
             target.DispatchCompute(shader,free,Groups(state.EndpointCount),1,1);
             target.DispatchCompute(shader,clear,Groups(op.RowCount),1,1);
             RecordGeometry(target);
-            velocitySolve.Record(target,profile,transaction.ActivityGate);
+            velocity.RecordStepClock(target,clock);
+            velocitySolve.Record(target,profile,slotGate);
             target.DispatchCompute(shader,inspectMotion,Groups(state.EndpointCount),1,1);
             target.DispatchCompute(shader,finishVelocity,1,1,1);
-            transaction.RecordVelocityResult(target,velocityVerdict);
+            transaction.RecordVelocityResult(target,velocityVerdict,slotGate);
             target.DispatchCompute(shader,applyVelocity,Groups(state.EndpointCount),1,1);
         }
+        // Select h and the 4..16 active slots entirely on GPU, including
+        // maximum submitted acceleration. More than 16 rejects, never clamps.
+        public CoupledTickTicket RecordBegin(CommandBuffer target,ulong tick,GraphicsBuffer forces=null)
+        {
+            if(disposed)throw new ObjectDisposedException(nameof(CoupledTickStepper));
+            if(forces!=null&&(forces.stride!=16||forces.count!=state.EndpointCount))
+                throw new ArgumentException("One force/torque vector per endpoint is required",nameof(forces));
+            var ticket=transaction.RecordBeginSelected(target,tick);
+            RecordTemplates(target);
+            target.DispatchCompute(shader,resetRadii,Groups(state.EndpointCount),1,1);
+            target.DispatchCompute(shader,buildRadii,Groups(op.SourcePrimitiveCount),1,1);
+            target.SetComputeBufferParam(shader,selectSchedule,"_Forces",forces??zeroForces);
+            target.DispatchCompute(shader,selectSchedule,1,1,1);
+            selectedSchedule=true;selectedForces=forces;nextSlot=0;
+            return ticket;
+        }
+        public void RecordBeginSubstep(CommandBuffer target,int slot)
+        {
+            Check(target);
+            if(!selectedSchedule||slot!=nextSlot||slot<0||slot>=16)throw new ArgumentOutOfRangeException(nameof(slot));
+            target.SetComputeIntParam(shader,"_Slot",slot);
+            target.DispatchCompute(shader,beginSlot,1,1,1);
+            nextSlot++;
+        }
+        public void RecordPrediction(CommandBuffer target)
+        {
+            Check(target);
+            target.DispatchCompute(shader,reset,1,1,1);
+            target.DispatchCompute(shader,predict,Groups(state.EndpointCount),1,1);
+            target.DispatchCompute(shader,finishPrediction,1,1,1);
+            transaction.RecordPredictionResult(target,predictionVerdict,slotGate);
+            target.DispatchCompute(shader,applyPrediction,Groups(state.EndpointCount),1,1);
+        }
+
         public void Dispose()
         {
             if(disposed)return;disposed=true;

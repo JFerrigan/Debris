@@ -1,3 +1,10 @@
+#pragma kernel ResetRadii
+#pragma kernel BuildRadii
+#pragma kernel SelectSchedule
+#pragma kernel BeginSlot
+#pragma kernel Predict
+#pragma kernel FinishPrediction
+#pragma kernel ApplyPrediction
 #pragma kernel ResetStage
 #pragma kernel IntegrateFreeMotion
 #pragma kernel ClearImpulse
@@ -29,7 +36,11 @@ RWStructuredBuffer<Primitive> _Primitives;
 RWStructuredBuffer<Group> _Groups;
 RWStructuredBuffer<float4> _FreeMotion;
 RWStructuredBuffer<float> _Impulse;
-RWStructuredBuffer<uint> _Facts,_Verdict;
+RWStructuredBuffer<uint> _Facts,_Verdict,_Clock,_SlotGate,_TickControl,_Radii,_PredictionVerdict;
+RWStructuredBuffer<Endpoint> _Predicted;
+uint _Slot;
+float stepDuration(){return asfloat(_Clock[1]);}
+bool active(){return _Activity[0]!=0&&_SlotGate[0]!=0;}
 uint _BodyCount,_PrimitiveCount,_GroupCount,_RowCapacity;
 float _H;
 float2 rotate2(float2 p,float a)
@@ -41,15 +52,15 @@ void ResetStage(uint id:SV_DispatchThreadID)
 [numthreads(64,1,1)]
 void IntegrateFreeMotion(uint id:SV_DispatchThreadID)
 {
-    if(id>=_BodyCount||_Activity[0]==0)return;
+    if(id>=_BodyCount||!active())return;
     Endpoint e=_Endpoints[id];Parameters p=_Parameters[id];float4 f=_Forces[id];
-    float4 u=p.mobility==0?0:float4(e.velocity+_H*p.im*f.xy,e.spin+_H*p.ii*f.z,0);
+    float4 u=p.mobility==0?0:float4(e.velocity+stepDuration()*p.im*f.xy,e.spin+stepDuration()*p.ii*f.z,0);
     if(!all(isfinite(f))||!all(isfinite(u)))fault(1);
     _FreeMotion[id]=u;
 }
 [numthreads(64,1,1)]
 void ClearImpulse(uint id:SV_DispatchThreadID)
-{if(id<_RowCapacity&&_Activity[0]!=0)_Impulse[id]=0;}
+{if(id<_RowCapacity&&active())_Impulse[id]=0;}
 [numthreads(64,1,1)]
 void GeometryBodies(uint id:SV_DispatchThreadID)
 {
@@ -81,20 +92,77 @@ void GeometryGroups(uint id:SV_DispatchThreadID)
 }
 [numthreads(64,1,1)]
 void InspectVelocity(uint id:SV_DispatchThreadID)
-{if(id<_BodyCount&&_Activity[0]!=0&&!all(isfinite(_Motion[id])))fault(4);}
+{if(id<_BodyCount&&active()&&!all(isfinite(_Motion[id])))fault(4);}
 [numthreads(1,1,1)]
 void FinishVelocity(uint id:SV_DispatchThreadID)
 {
     uint f=_Facts[0];
     if(_RowFault[0]!=0||_BroadFault[0]!=0||_CompactFault[0]!=0)f|=8;
     if(_SolveControl[1]!=1||_SolveControl[3]!=0)f|=16;
-    _Verdict[0]=0;_Verdict[1]=_Activity[0]!=0&&f==0?1u:0u;
+    _Verdict[0]=0;_Verdict[1]=active()&&f==0?1u:0u;
     _Verdict[2]=0;_Verdict[3]=f;
 }
 [numthreads(64,1,1)]
 void ApplyVelocity(uint id:SV_DispatchThreadID)
 {
-    if(id>=_BodyCount||_Activity[0]==0||_Parameters[id].mobility==0)return;
+    if(id>=_BodyCount||!active()||_Parameters[id].mobility==0)return;
     Endpoint e=_Endpoints[id];float4 u=_Motion[id];
     e.velocity=u.xy;e.spin=u.z;_Endpoints[id]=e;
 }
+
+[numthreads(64,1,1)]
+void ResetRadii(uint id:SV_DispatchThreadID)
+{if(id<_BodyCount)_Radii[id]=0;}
+[numthreads(64,1,1)]
+void BuildRadii(uint id:SV_DispatchThreadID)
+{
+    if(id>=_PrimitiveCount)return;
+    Primitive p=_TemplatePrimitives[id];
+    if(p.endpoint>=_BodyCount)return;
+    float radius=length(p.center-_BindPoses[p.endpoint].center)+length(p.half);
+    uint old;InterlockedMax(_Radii[p.endpoint],asuint(radius),old);
+}
+[numthreads(1,1,1)]
+void SelectSchedule(uint id:SV_DispatchThreadID)
+{
+    float dt=1.0/60.0,maximum=0;uint invalid=0;
+    for(uint i=0;i<_BodyCount;i++)
+    {
+        Endpoint e=_Endpoints[i];Parameters p=_Parameters[i];float4 f=_Forces[i];
+        float r=asfloat(_Radii[i]);
+        float speed=p.mobility==0?0:length(e.velocity)+abs(e.spin)*r+
+            dt*(p.im*length(f.xy)+p.ii*abs(f.z)*r);
+        if(!all(isfinite(f))||!isfinite(speed)||!isfinite(r)||r<0)invalid=1;
+        maximum=max(maximum,speed);
+    }
+    float needed=max(4.0,ceil(2*maximum*dt/.25-1e-5));
+    bool valid=invalid==0&&needed<=16;
+    uint count=valid?(uint)needed:16u;
+    _Clock[0]=count;_Clock[1]=asuint(dt/count);_Clock[2]=valid?0u:1u;_Clock[3]=asuint(maximum);
+    if(_TickControl[0]==0)return;
+    _TickControl[13]=count;
+    if(!valid)
+    {_TickControl[0]=0;_TickControl[2]=7;_TickControl[3]=1;_TickControl[20]=1;}
+}
+[numthreads(1,1,1)]
+void BeginSlot(uint id:SV_DispatchThreadID)
+{_SlotGate[0]=_TickControl[0]!=0&&_Slot<_Clock[0]?1u:0u;}
+[numthreads(64,1,1)]
+void Predict(uint id:SV_DispatchThreadID)
+{
+    if(id>=_BodyCount||!active())return;
+    Endpoint e=_Endpoints[id];Parameters p=_Parameters[id];Endpoint result=e;
+    float h=stepDuration(),r=asfloat(_Radii[id]);
+    float travel=h*(length(e.velocity)+abs(e.spin)*r);
+    if(!isfinite(travel)||travel>.125+1e-6){fault(32);return;}
+    if(p.mobility!=0){result.center+=h*e.velocity;result.angle+=h*e.spin;}
+    if(!all(isfinite(result.center))||!isfinite(result.angle)){fault(64);return;}
+    _Predicted[id]=result;
+    uint old;InterlockedMax(_Facts[1],asuint(travel),old);
+}
+[numthreads(1,1,1)]
+void FinishPrediction(uint id:SV_DispatchThreadID)
+{_PredictionVerdict[0]=active()&&_Facts[0]==0?1u:0u;_PredictionVerdict[1]=_Facts[0];}
+[numthreads(64,1,1)]
+void ApplyPrediction(uint id:SV_DispatchThreadID)
+{if(id<_BodyCount&&active())_Endpoints[id]=_Predicted[id];}

@@ -9,3 +9,11 @@ Accepted projected velocity output now updates transaction working endpoints; ex
 Next: Implement bounded prediction and surface-speed checks (step 2).
 
 No compilation, tests, Unity, build or player run. All physical, resource and performance gates remain open.
+
+## Step 2
+
+GPU selects 4–16 substeps from surface speed and full-frame external acceleration; residual and integration share the selected GPU clock; prediction rejects nonfinite or greater-than-.125-cell surface motion; inactive fixed slots do not advance transaction stages.
+
+Next: Connect position correction to predicted working poses (step 3).
+
+No compilation, tests, Unity, build or player run. All physical, resource and performance gates remain open.

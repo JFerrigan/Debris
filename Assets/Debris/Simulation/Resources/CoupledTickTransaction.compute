@@ -31,7 +31,8 @@ struct Completion
 RWStructuredBuffer<uint> _Control,_Failure;
 RWStructuredBuffer<Header> _Header,_WorkingHeader;
 RWStructuredBuffer<Completion> _Completions;
-StructuredBuffer<uint> _StageResult;
+StructuredBuffer<uint> _StageResult,_StageGate;
+uint _UseStageGate;
 StructuredBuffer<Endpoint> _EndpointSource;
 RWStructuredBuffer<Endpoint> _EndpointDestination;
 StructuredBuffer<Grain> _GrainSource;
@@ -102,7 +103,7 @@ void BeginTick(uint id:SV_DispatchThreadID)
 [numthreads(1,1,1)]
 void ValidateStage(uint id:SV_DispatchThreadID)
 {
-    if(_Control[ACTIVE]==0)return;
+    if(_Control[ACTIVE]==0||(_UseStageGate!=0&&_StageGate[0]==0))return;
     _Control[STAGE_CALLS]++;
     if(_Control[NEXT_STAGE]!=_Stage){fail(2,_Stage,0);return;}
     if(_StageResult[_PassWord]!=1||_StageResult[_FaultWord]!=0)
@@ -113,7 +114,7 @@ void ValidateStage(uint id:SV_DispatchThreadID)
 [numthreads(1,1,1)]
 void AcceptSubstep(uint id:SV_DispatchThreadID)
 {
-    if(_Control[ACTIVE]==0)return;
+    if(_Control[ACTIVE]==0||(_UseStageGate!=0&&_StageGate[0]==0))return;
     if(_Control[NEXT_STAGE]!=5||_Control[PASSED_SUBSTEPS]>=_Control[SUBSTEPS])
     {fail(2,5,0);return;}
     _Control[PASSED_SUBSTEPS]++;
