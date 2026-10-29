@@ -298,6 +298,7 @@ namespace Debris.Simulation.CoupledContacts
             directionReady=false;
             projectedReady=false;
             gatedProjectionReady=false;
+            if(op.Manifolds!=null)op.RecordRowMode(target,PositionSystem);
             op.RecordGraph(target);
         }
 

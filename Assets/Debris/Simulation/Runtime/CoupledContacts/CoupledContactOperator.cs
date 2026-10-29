@@ -60,7 +60,7 @@ namespace Debris.Simulation.CoupledContacts
         int allocationIndex;
         readonly GraphicsBuffer bodyBuffer,rowBuffer,rowManifoldIds,xBuffer,freeBuffer,adjacencyBuffer,
             sortedAdjacencyBuffer,
-            segmentBuffer,segmentStartBuffer,sideBuffer,partialBuffer,motionBuffer,yBuffer,
+            segmentBuffer,segmentStartBuffer,sideBuffer,partialBuffer,motionBuffer,reactionBuffer,yBuffer,
             degreeBuffer,cursorBuffer,adjLocalBuffer,segmentLocalBuffer,adjBlockSums,
             segmentBlockSums,adjBlockStarts,segmentBlockStarts,segmentArgs,rowArgs,
             singleRowArgs,singleSegmentArgs,singleBodyArgs,
@@ -89,6 +89,7 @@ namespace Debris.Simulation.CoupledContacts
         internal GraphicsBuffer FreeMotionInput=>freeBuffer;
         internal GraphicsBuffer ProductOutput=>yBuffer;
         internal GraphicsBuffer EndpointOutput=>motionBuffer;
+        internal GraphicsBuffer EndpointReactionOutput=>reactionBuffer;
         internal GraphicsBuffer ActiveRowCounter=>actualRowCountBuffer;
         internal GraphicsBuffer EndpointIdentities=>identityBuffer;
         internal bool NormalOnlyRows=>normalOnlyRows;
@@ -252,7 +253,7 @@ namespace Debris.Simulation.CoupledContacts
             singleBodyArgs=Buffer(4,4,indirect);
             sideBuffer=Buffer(Math.Max(1,rowCount*2),16);
             partialBuffer=Buffer(Math.Max(1,bodyCount+(rowCount*2+63)/64),16);
-            motionBuffer=Buffer(bodyCount,16);yBuffer=Buffer(Math.Max(1,rowCount),4);
+            motionBuffer=Buffer(bodyCount,16);reactionBuffer=Buffer(bodyCount,16);yBuffer=Buffer(Math.Max(1,rowCount),4);
             bodyBuffer.SetData(bodies);
             if(!gpuPairs&&!gpuGeneratedRows&&rowCount>0)rowBuffer.SetData(rows);
             shader.SetInt("_BodyCount",bodyCount);shader.SetInt("_RowCount",rowCount);
@@ -302,7 +303,7 @@ namespace Debris.Simulation.CoupledContacts
             Bind(reduce,("_Adjacency",sortedAdjacencyBuffer),("_Segments",segmentBuffer),
                 ("_SideReactions",sideBuffer),("_SegmentReactions",partialBuffer),("_SegmentArgs",segmentArgs));
             Bind(applyBodies,("_Bodies",bodyBuffer),("_BodySegmentStarts",segmentStartBuffer),
-                ("_SegmentReactions",partialBuffer),("_FreeMotion",freeBuffer),("_Motion",motionBuffer));
+                ("_SegmentReactions",partialBuffer),("_FreeMotion",freeBuffer),("_Motion",motionBuffer),("_EndpointReactions",reactionBuffer));
             Bind(applyRows,("_Rows",rowBuffer),("_ActualRowCount",actualRowCountBuffer),
                 ("_Bodies",bodyBuffer),("_Motion",motionBuffer),("_Y",yBuffer));
             if(this.arena.UsedBytes-initialArenaBytes!=BufferBytes)

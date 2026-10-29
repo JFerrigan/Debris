@@ -32,7 +32,8 @@ RWStructuredBuffer<uint> _Control,_Failure;
 RWStructuredBuffer<Header> _Header,_WorkingHeader;
 RWStructuredBuffer<Completion> _Completions;
 StructuredBuffer<uint> _StageResult,_StageGate;
-uint _UseStageGate;
+StructuredBuffer<uint> _SubstepFacts;
+uint _UseStageGate,_UseSubstepFacts;
 StructuredBuffer<Endpoint> _EndpointSource;
 RWStructuredBuffer<Endpoint> _EndpointDestination;
 StructuredBuffer<Grain> _GrainSource;
@@ -117,6 +118,8 @@ void AcceptSubstep(uint id:SV_DispatchThreadID)
     if(_Control[ACTIVE]==0||(_UseStageGate!=0&&_StageGate[0]==0))return;
     if(_Control[NEXT_STAGE]!=5||_Control[PASSED_SUBSTEPS]>=_Control[SUBSTEPS])
     {fail(2,5,0);return;}
+    if(_UseSubstepFacts!=0&&(_SubstepFacts[0]!=1||_SubstepFacts[1]!=0))
+    {fail(3,5,_SubstepFacts[1]);return;}
     _Control[PASSED_SUBSTEPS]++;
     _Control[NEXT_STAGE]=_Control[PASSED_SUBSTEPS]==_Control[SUBSTEPS]?6u:2u;
 }
@@ -215,7 +218,7 @@ void CompleteTick(uint id:SV_DispatchThreadID)
     else if(_Failure[0]==0)
     {
         _Failure[0]=1;_Failure[1]=_Control[TICK_LOW];_Failure[2]=_Control[TICK_HIGH];
-        _Failure[3]=_Control[FAULT];_Failure[4]=_Control[FAULT_STAGE];
+        _Failure[3]=_Control[FAULT];_Failure[4]=_Control[FAULT_STAGE];_Failure[5]=_Control[SOURCE_FAULT];
     }
     _WorkingHeader[0]=h;
     Completion c;

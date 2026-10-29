@@ -41,6 +41,20 @@ namespace Debris.Simulation.CoupledContacts
     public enum CoupledTickFault : uint
     { None=0,Dependency=1,StageOrder=2,StageRejected=3,InvalidState=4,ImmutableState=5,Generation=6,Speed=7 }
 
+    [Flags]
+    public enum CoupledTickPhysicalFault : uint
+    {
+        None=0,Nonfinite=1,SurfaceEnvelope=2,GrainPage=4,LinearMomentum=8,
+        AngularMomentum=16,Energy=32,Counts=64,Inventory=128,Geometry=256,
+        Schedule=512,CacheRecord=1024,CacheIdentity=2048,CacheCapacity=4096
+    }
+    public enum CoupledTickDiagnosticWord
+    {
+        Fault=0,CheckedSubsteps=1,MaximumNormalizedLinearError=2,
+        MaximumNormalizedAngularError=3,MaximumEnergyGrowth=4,
+        MaximumSurfaceTravel=5,MaximumCorrectionCOMTravel=6
+    }
+
     // Fixed topology for a physics transaction. Inventory/fuel words are an
     // opaque owner-supplied payload; this does not implement transfers or burn.
     public sealed class CoupledTickInitialState

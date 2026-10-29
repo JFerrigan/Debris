@@ -1,3 +1,17 @@
+#pragma kernel BeginAccounting
+#pragma kernel AccountVelocity
+#pragma kernel PhysicalFacts
+#pragma kernel FinalFacts
+#pragma kernel InventoryFacts
+#pragma kernel PrepareDraft
+#pragma kernel ClearCacheHeads
+#pragma kernel BuildDraft
+#pragma kernel ValidateDraft
+#pragma kernel ResetCacheEligibility
+#pragma kernel QualifyCache
+#pragma kernel ScanCache
+#pragma kernel ScanCacheBlocks
+#pragma kernel PublishCache
 #pragma kernel InspectPosition
 #pragma kernel FinishPosition
 #pragma kernel ApplyPosition
@@ -45,10 +59,10 @@ RWStructuredBuffer<float> _Impulse;
 RWStructuredBuffer<uint> _Facts,_Verdict,_Clock,_SlotGate,_TickControl,_Radii,_PredictionVerdict;
 RWStructuredBuffer<Endpoint> _Predicted;
 uint _Slot;
-float stepDuration(){return asfloat(_Clock[1]);}
-bool active(){return _Activity[0]!=0&&_SlotGate[0]!=0;}
+StructuredBuffer<uint> _ReadClock,_ReadSlotGate;
+float stepDuration(){return asfloat(_ReadClock[1]);}
+bool active(){return _Activity[0]!=0&&_ReadSlotGate[0]!=0;}
 uint _BodyCount,_PrimitiveCount,_GroupCount,_RowCapacity;
-float _H;
 float2 rotate2(float2 p,float a)
 {float s,c;sincos(a,s,c);return float2(c*p.x-s*p.y,s*p.x+c*p.y);}
 void fault(uint code){uint old;InterlockedOr(_Facts[0],code,old);}
@@ -196,4 +210,277 @@ void ApplyPosition(uint id:SV_DispatchThreadID)
     e.angle=_Predicted[id].angle+_AngularCorrection[id];
     // Velocity/spin remain the accepted physical values, never displacement/h.
     _Endpoints[id]=e;
+}
+
+struct Row { uint a,b; float2 point,direction; float inverseRoot,gap; };
+struct Feature { uint aPrimitive,bPrimitive,referenceFace,incidentFace,provenance,pointAxis; };
+struct Binding { uint kind,low0,low1,high0,high1,generation,slotGeneration,revision,bound; };
+struct Key { uint4 lo,hi; };
+// world impulse xy, world normal zw; local surface anchors A.xy / B.zw.
+struct Cache { Key key; float4 impulseNormal,anchors; };
+struct Header { uint2 tick; uint generation,topology,cache,identity,version,count; };
+StructuredBuffer<Endpoint> _StartEndpoints;
+StructuredBuffer<float4> _Reactions;
+StructuredBuffer<Row> _Rows;
+StructuredBuffer<Feature> _Features;
+StructuredBuffer<Primitive> _SourcePrimitives;
+StructuredBuffer<Binding> _Bindings;
+StructuredBuffer<uint> _RowCount,_FinalGeometry,_CommittedInventory,_WorkingInventory;
+StructuredBuffer<uint> _ReadDraftCount,_ReadCacheHeads,_ReadCacheNext;
+RWStructuredBuffer<float4> _Baseline,_Accounting;
+RWStructuredBuffer<uint> _TickDiagnostics,_PhysicalVerdict;
+RWStructuredBuffer<Cache> _DraftCache,_WorkingCache;
+RWStructuredBuffer<uint> _DraftCount,_CacheHeads,_CacheNext,_CacheEligible,_CacheMatches;
+RWStructuredBuffer<uint> _CacheOffsets,_CacheBlockSums,_CacheBlockStarts;
+RWStructuredBuffer<Header> _WorkingHeader;
+uint _GrainCount,_CacheCapacity,_CacheBlocks,_InventoryCount,_FinishIsTick;
+float _Friction;
+static const uint Empty=0xffffffffu;
+float cross2(float2 a,float2 b){return a.x*b.y-a.y*b.x;}
+void tickFault(uint bit){uint old;InterlockedOr(_TickDiagnostics[0],bit,old);}
+void add4(inout float4 sum,inout float4 compensation,float4 value)
+{float4 corrected=value-compensation,next=sum+corrected;compensation=(next-sum)-corrected;sum=next;}
+
+// Baseline: P.xy,L,E; fixed initial COM.xy,linear/angular normalizers;
+// total dynamic mass, dynamic endpoints, total endpoints, physical grains.
+// Accounting: accumulated known external-minus-anchor impulse/torque/work;
+// separate accumulated anchor impulse and torque. Fixed-order compensated sums.
+[numthreads(1,1,1)]
+void BeginAccounting(uint id:SV_DispatchThreadID)
+{
+    for(uint j=0;j<16;j++)_TickDiagnostics[j]=0;
+    _Accounting[0]=0;_Accounting[1]=0;
+    float4 weighted=0,c=0;uint dynamicCount=0;
+    for(uint i=0;i<_BodyCount;i++)
+    {
+        Parameters p=_Parameters[i];Endpoint e=_Endpoints[i];
+        if(p.mobility==0)continue;
+        if(!(p.im>0)||!isfinite(p.im)){tickFault(1);continue;}
+        float m=1/p.im;add4(weighted,c,float4(m*e.center,m,0));dynamicCount++;
+    }
+    float2 origin=weighted.z>0?weighted.xy/weighted.z:0;
+    float4 total=0,tc=0;float4 norms=0,nc=0;
+    for(uint i=0;i<_BodyCount;i++)
+    {
+        Parameters p=_Parameters[i];Endpoint e=_Endpoints[i];if(p.mobility==0)continue;
+        float m=1/p.im,I=p.ii>0?1/p.ii:0;
+        if(p.ii==0&&e.spin!=0)tickFault(1);
+        float2 momentum=m*e.velocity;
+        float orbital=cross2(e.center-origin,momentum),spin=I*e.spin;
+        float energy=.5*(m*dot(e.velocity,e.velocity)+I*e.spin*e.spin);
+        add4(total,tc,float4(momentum,orbital+spin,energy));
+        add4(norms,nc,float4(m*length(e.velocity),abs(orbital)+abs(spin),0,0));
+    }
+    if(!all(isfinite(total))||!all(isfinite(weighted))||!all(isfinite(norms)))tickFault(1);
+    _Baseline[0]=total;_Baseline[1]=float4(origin,max(1,norms.x),max(1,norms.y));
+    _Baseline[2]=float4(weighted.z,dynamicCount,_BodyCount,_GrainCount);
+}
+[numthreads(1,1,1)]
+void AccountVelocity(uint id:SV_DispatchThreadID)
+{
+    if(!active())return;
+    float2 origin=_Baseline[1].xy;
+    float4 delta=0,dc=0,anchor=0,ac=0;
+    for(uint i=0;i<_BodyCount;i++)
+    {
+        Endpoint e=_Endpoints[i];Parameters p=_Parameters[i];
+        if(p.mobility==0)
+        {
+            float4 r=_Reactions[i];
+            add4(anchor,ac,float4(r.xy,r.z+cross2(e.center-origin,r.xy),0));continue;
+        }
+        float m=1/p.im,I=p.ii>0?1/p.ii:0;float4 u=_FreeMotion[i];
+        float2 impulse=m*(u.xy-e.velocity);float torque=I*(u.z-e.spin);
+        float work=.5*(m*(dot(u.xy,u.xy)-dot(e.velocity,e.velocity))+I*(u.z*u.z-e.spin*e.spin));
+        add4(delta,dc,float4(impulse,cross2(e.center-origin,impulse)+torque,work));
+    }
+    _Accounting[0]+=delta-anchor;_Accounting[1]+=anchor;
+    if(!all(isfinite(_Accounting[0]))||!all(isfinite(_Accounting[1])))tickFault(1);
+}
+[numthreads(1,1,1)]
+void PhysicalFacts(uint id:SV_DispatchThreadID)
+{
+    if(!active())return;
+    float2 origin=_Baseline[1].xy;
+    float4 total=0,tc=0,correction=0,cc=0;uint dynamicCount=0;
+    for(uint i=0;i<_BodyCount;i++)
+    {
+        Endpoint e=_Endpoints[i],start=_StartEndpoints[i],predicted=_Predicted[i];Parameters p=_Parameters[i];
+        float travel=length(e.center-start.center)+abs(e.angle-start.angle)*asfloat(_Radii[i]);
+        if(!all(isfinite(e.center))||!all(isfinite(e.velocity))||!isfinite(e.angle)||
+            !isfinite(e.spin)||!isfinite(travel))tickFault(1);
+        if(travel>.375+2e-6)tickFault(2);
+        _TickDiagnostics[5]=max(_TickDiagnostics[5],asuint(travel));
+        if(i<_GrainCount&&(any(e.center<float2(-512,-512))||any(e.center>=float2(512,512))))tickFault(4);
+        if(p.mobility==0)continue;
+        dynamicCount++;
+        float m=1/p.im,I=p.ii>0?1/p.ii:0;float2 momentum=m*e.velocity;
+        add4(total,tc,float4(momentum,cross2(e.center-origin,momentum)+I*e.spin,
+            .5*(m*dot(e.velocity,e.velocity)+I*e.spin*e.spin)));
+        add4(correction,cc,float4(m*(e.center-predicted.center),0,0));
+    }
+    float4 expected=_Baseline[0]+_Accounting[0];
+    float linear=length(total.xy-expected.xy)/_Baseline[1].z;
+    float angular=abs(total.z-expected.z)/_Baseline[1].w;
+    float energyGrowth=total.w-expected.w;
+    if(!all(isfinite(total))||!isfinite(linear)||!isfinite(angular)||!isfinite(energyGrowth))tickFault(1);
+    if(linear>1e-4)tickFault(8);
+    if(angular>1e-3)tickFault(16);
+    if(energyGrowth>max(.001*_Baseline[0].w,.0001))tickFault(32);
+    if(dynamicCount!=(uint)_Baseline[2].y||_BodyCount!=(uint)_Baseline[2].z||_GrainCount!=(uint)_Baseline[2].w)tickFault(64);
+    _TickDiagnostics[1]++;
+    _TickDiagnostics[2]=max(_TickDiagnostics[2],asuint(linear));
+    _TickDiagnostics[3]=max(_TickDiagnostics[3],asuint(angular));
+    _TickDiagnostics[4]=max(_TickDiagnostics[4],asuint(max(0,energyGrowth)));
+    float com=_Baseline[2].x>0?length(correction.xy)/_Baseline[2].x:0;
+    _TickDiagnostics[6]=max(_TickDiagnostics[6],asuint(com));
+}
+[numthreads(64,1,1)]
+void InventoryFacts(uint id:SV_DispatchThreadID)
+{
+    if(id<_InventoryCount&&_Activity[0]!=0&&_CommittedInventory[id]!=_WorkingInventory[id])tickFault(128);
+}
+[numthreads(1,1,1)]
+void FinalFacts(uint id:SV_DispatchThreadID)
+{
+    // Unselected slots must preserve the last accepted substep facts.
+    if(_FinishIsTick==0&&!active()){_PhysicalVerdict[0]=0;_PhysicalVerdict[1]=0;return;}
+    uint f=_TickDiagnostics[0];
+    if(_FinalGeometry[0]!=1||_FinalGeometry[1]!=0)f|=256;
+    if(_FinishIsTick!=0&&(_TickControl[13]!=_ReadClock[0]||_TickControl[14]!=_ReadClock[0]||
+       _TickControl[10]!=6||_TickDiagnostics[1]!=_ReadClock[0]))f|=512;
+    _TickDiagnostics[0]=f;
+    _PhysicalVerdict[0]=_Activity[0]!=0&&f==0?1u:0u;_PhysicalVerdict[1]=f;
+}
+
+uint hashKey(Key k)
+{
+    uint h=2166136261u;
+    for(uint i=0;i<4;i++)h=(h^k.lo[i])*16777619u;
+    for(uint i=0;i<4;i++)h=(h^k.hi[i])*16777619u;
+    return h&262143u;
+}
+bool equalKey(Key a,Key b){return all(a.lo==b.lo)&&all(a.hi==b.hi);}
+bool pointData(uint rowIndex,out Key key,out float4 anchors)
+{
+    key.lo=0;key.hi=0;anchors=0;
+    Row r=_Rows[rowIndex];Feature f=_Features[rowIndex];
+    if(r.a>=_BodyCount||r.b>=_BodyCount||r.a==r.b||f.aPrimitive>=_PrimitiveCount||f.bPrimitive>=_PrimitiveCount||
+       f.referenceFace>=4096||f.incidentFace>=4096||f.provenance>=4||f.pointAxis>=4||(f.pointAxis&1)!=0)
+    {tickFault(1024);return false;}
+    Primitive a=_SourcePrimitives[f.aPrimitive],b=_SourcePrimitives[f.bPrimitive];
+    Binding ba=_Bindings[r.a],bb=_Bindings[r.b];
+    if(a.endpoint!=r.a||b.endpoint!=r.b||ba.bound!=1||bb.bound!=1||ba.slotGeneration==0||bb.slotGeneration==0)
+    {tickFault(1024);return false;}
+    key.lo=uint4(r.a|(r.b<<14),ba.slotGeneration,bb.slotGeneration,ba.revision);
+    key.hi=uint4(bb.revision,a.featureId,b.featureId,
+        f.referenceFace|(f.incidentFace<<12)|(f.provenance<<24)|(f.pointAxis<<26));
+    Endpoint ea=_Endpoints[r.a],eb=_Endpoints[r.b];
+    anchors=float4(rotate2(r.point-.5*r.gap*r.direction-ea.center,-ea.angle),
+        rotate2(r.point+.5*r.gap*r.direction-eb.center,-eb.angle));
+    if(!all(isfinite(anchors))||!all(isfinite(r.direction))||abs(dot(r.direction,r.direction)-1)>1e-3||
+       !isfinite(r.gap)||!(r.inverseRoot>0))
+    {tickFault(1024);return false;}
+    return true;
+}
+[numthreads(1,1,1)]
+void PrepareDraft(uint id:SV_DispatchThreadID)
+{
+    if(!active())return;
+    if(_RowCount[0]>_RowCapacity||(_RowCount[0]&1)!=0)tickFault(1024);
+    // Cache capacity limits an optional optimization, never physical matter.
+    // Keep a deterministic prefix; dropped entries start cold next time.
+    _DraftCount[0]=min(_CacheCapacity,_RowCount[0]/2);
+}
+[numthreads(64,1,1)]
+void ClearCacheHeads(uint id:SV_DispatchThreadID)
+{if(id<262144&&active())_CacheHeads[id]=Empty;}
+[numthreads(64,1,1)]
+void BuildDraft(uint id:SV_DispatchThreadID)
+{
+    if(id>=_ReadDraftCount[0]||!active())return;
+    uint row=2*id;Key key;float4 anchors;
+    if(!pointData(row,key,anchors))return;
+    Row n=_Rows[row],t=_Rows[row+1];
+    float normal=_Impulse[row]*n.inverseRoot,tangent=_Impulse[row+1]*t.inverseRoot;
+    float2 impulse=normal*n.direction+tangent*t.direction;
+    if(!all(isfinite(impulse))||normal<0||abs(tangent)>_Friction*normal+1e-5)
+    {tickFault(1024);return;}
+    Cache cache;cache.key=key;cache.anchors=anchors;cache.impulseNormal=float4(impulse,n.direction);
+    _DraftCache[id]=cache;
+    uint old;InterlockedExchange(_CacheHeads[hashKey(key)],id,old);_CacheNext[id]=old;
+}
+[numthreads(64,1,1)]
+void ValidateDraft(uint id:SV_DispatchThreadID)
+{
+    if(id>=_ReadDraftCount[0]||!active()||_TickDiagnostics[0]!=0)return;
+    Key key=_DraftCache[id].key;uint node=_ReadCacheHeads[hashKey(key)],matches=0,visits=0;
+    while(node!=Empty&&visits++<_ReadDraftCount[0])
+    {
+        if(node>=_ReadDraftCount[0]){tickFault(2048);return;}
+        if(equalKey(key,_DraftCache[node].key))matches++;
+        node=_ReadCacheNext[node];
+    }
+    if(node!=Empty||matches!=1)tickFault(2048);
+}
+[numthreads(64,1,1)]
+void ResetCacheEligibility(uint id:SV_DispatchThreadID)
+{if(id<_CacheCapacity&&active()){_CacheEligible[id]=0;_CacheMatches[id]=0;}}
+[numthreads(64,1,1)]
+void QualifyCache(uint id:SV_DispatchThreadID)
+{
+    if(id>=min(_RowCount[0],_RowCapacity)||!active()||_TickDiagnostics[0]!=0)return;
+    Key key;float4 anchors;if(!pointData(id,key,anchors))return;
+    uint node=_ReadCacheHeads[hashKey(key)],found=Empty,visits=0;
+    while(node!=Empty&&visits++<_ReadDraftCount[0])
+    {
+        if(node>=_ReadDraftCount[0]){tickFault(2048);return;}
+        if(equalKey(key,_DraftCache[node].key))
+        {if(found!=Empty){tickFault(2048);return;}found=node;}
+        node=_ReadCacheNext[node];
+    }
+    if(node!=Empty){tickFault(2048);return;}
+    if(found==Empty)return;
+    uint previous;InterlockedAdd(_CacheMatches[found],1,previous);
+    if(previous!=0){tickFault(2048);return;}
+    Cache cache=_DraftCache[found];Row row=_Rows[id];
+    if(dot(cache.impulseNormal.zw,row.direction)<.98||row.gap>.005||
+        distance(cache.anchors.xy,anchors.xy)>.01||distance(cache.anchors.zw,anchors.zw)>.01)return;
+    float2 normal=row.direction,tangent=float2(-normal.y,normal.x);
+    float n=max(0,dot(cache.impulseNormal.xy,normal));
+    float t=row.gap<=.0001?clamp(dot(cache.impulseNormal.xy,tangent),-_Friction*n,_Friction*n):0;
+    cache.impulseNormal=float4(n*normal+t*tangent,normal);cache.anchors=anchors;
+    _DraftCache[found]=cache;_CacheEligible[found]=1;
+}
+groupshared uint _CacheScan[256];
+[numthreads(256,1,1)]
+void ScanCache(uint3 group:SV_GroupID,uint3 lane:SV_GroupThreadID)
+{
+    if(!active())return;
+    uint id=group.x*256+lane.x,v=id<_CacheCapacity?_CacheEligible[id]:0;
+    _CacheScan[lane.x]=v;GroupMemoryBarrierWithGroupSync();
+    for(uint stride=1;stride<256;stride<<=1)
+    {
+        uint value=lane.x>=stride?_CacheScan[lane.x-stride]:0;
+        GroupMemoryBarrierWithGroupSync();_CacheScan[lane.x]+=value;GroupMemoryBarrierWithGroupSync();
+    }
+    if(id<_CacheCapacity)_CacheOffsets[id]=_CacheScan[lane.x]-v;
+    if(lane.x==255)_CacheBlockSums[group.x]=_CacheScan[255];
+}
+[numthreads(1,1,1)]
+void ScanCacheBlocks(uint id:SV_DispatchThreadID)
+{
+    if(!active())return;
+    uint count=0;
+    for(uint i=0;i<_CacheBlocks;i++){_CacheBlockStarts[i]=count;count+=_CacheBlockSums[i];}
+    if(count>_CacheCapacity){tickFault(4096);return;}
+    Header h=_WorkingHeader[0];h.count=count;_WorkingHeader[0]=h;
+}
+[numthreads(64,1,1)]
+void PublishCache(uint id:SV_DispatchThreadID)
+{
+    if(id>=_CacheCapacity||!active()||_CacheEligible[id]==0||_TickDiagnostics[0]!=0)return;
+    uint output=_CacheBlockStarts[id/256]+_CacheOffsets[id];
+    if(output>=_CacheCapacity){tickFault(4096);return;}
+    _WorkingCache[output]=_DraftCache[id];
 }

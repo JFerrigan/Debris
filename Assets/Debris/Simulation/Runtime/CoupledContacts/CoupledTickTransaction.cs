@@ -24,16 +24,19 @@ namespace Debris.Simulation.CoupledContacts
         readonly int[] reservedSubsteps=new int[CompletionCapacity];
         ulong lastSubmitted;
         uint expectedGeneration,expectedCache;
-        bool disposed,recording;
+        bool disposed,recording,stepperClaimed;
         CommandBuffer recordingTarget;
         internal CoupledTickState State=>state;
+        internal void CheckStepperAvailable()
+        {if(disposed||stepperClaimed)throw new InvalidOperationException("Transaction already has a stepper or is disposed");}
+        internal void ClaimStepper(){CheckStepperAvailable();stepperClaimed=true;}
         internal void CheckRecording(CommandBuffer target)=>Check(target,true);
         public GraphicsBuffer ActivityGate=>control;
         public GraphicsBuffer Control=>control;
-        // failed, attempted tick low/high, original fault, original stage.
+        // failed, attempted tick low/high, original fault, original stage, source facts.
         public GraphicsBuffer FirstFailure=>failure;
         public GraphicsBuffer Completions=>completions;
-        public long BufferBytes=>256+20+CompletionCapacity*64;
+        public long BufferBytes=>256+24+CompletionCapacity*64;
 
         public CoupledTickTransaction(CoupledTickState state)
         {
@@ -49,7 +52,7 @@ namespace Debris.Simulation.CoupledContacts
                 shader=UnityEngine.Object.Instantiate(asset);
                 control=arena.Allocate(owner+"/control",64,4);
                 control.SetData(new uint[64]);
-                failure=arena.Allocate(owner+"/failure",5,4);failure.SetData(new uint[5]);
+                failure=arena.Allocate(owner+"/failure",6,4);failure.SetData(new uint[6]);
                 completions=arena.Allocate(owner+"/completions",CompletionCapacity,64);
                 completions.SetData(new CoupledTickCompletion[CompletionCapacity]);
                 begin=Kernel("BeginTick");stage=Kernel("ValidateStage");substep=Kernel("AcceptSubstep");
@@ -133,10 +136,13 @@ namespace Debris.Simulation.CoupledContacts
         }
         public void RecordPositionResult(CommandBuffer target,GraphicsBuffer verdict,GraphicsBuffer gate=null)
         {RecordStage(target,CoupledTickStage.Position,verdict,0,1,gate);}
-        public void RecordSubstep(CommandBuffer target,GraphicsBuffer gate=null)
+        public void RecordSubstep(CommandBuffer target,GraphicsBuffer gate=null,GraphicsBuffer verdict=null)
         {
             Check(target,true);
             if(gate!=null&&(gate.stride!=4||gate.count<1))throw new ArgumentException("Invalid substep activity gate");
+            if(verdict!=null&&(verdict.stride!=4||verdict.count<2))throw new ArgumentException("Invalid substep verdict");
+            target.SetComputeIntParam(shader,"_UseSubstepFacts",verdict==null?0:1);
+            target.SetComputeBufferParam(shader,substep,"_SubstepFacts",verdict??control);
             target.SetComputeIntParam(shader,"_UseStageGate",gate==null?0:1);
             target.SetComputeBufferParam(shader,substep,"_StageGate",gate??control);
             target.DispatchCompute(shader,substep,1,1,1);
@@ -147,7 +153,7 @@ namespace Debris.Simulation.CoupledContacts
             reservedSubsteps[ticket.Slot]=0; // GPU selects 4..16; CPU never reads it to steer a stage.
             return ticket;
         }
-        // The future step owner supplies conservation/count/envelope facts.
+        // The physical stepper supplies reduced conservation/count/envelope facts.
         // Publication requires this verdict after all declared substeps.
         public void RecordFinalFacts(CommandBuffer target,GraphicsBuffer verdict)
         {RecordStage(target,CoupledTickStage.Final,verdict,0,1);}

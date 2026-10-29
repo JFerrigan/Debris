@@ -1,6 +1,6 @@
 # V2-2 GPU solve source handoff
 
-Current checkpoint: bounded position stage plus separate whole-tick transaction/publication source; no integrated physical solver tick or V2-2 gate pass. The latest user direction is to write code without launching Unity or the game. Prior focused GPU evidence remains in [STATUS](../STATUS.md); it does not cover the new position path.
+Current checkpoint: integrated whole-tick recorder source for velocity, bounded prediction, pose-only correction, derived final facts and accepted cache publication. No runtime-qualified complete tick or V2-2 gate pass. See [four-step implementation handoff](B3R-v2-tick-integration.md).
 
 ## Position behavior added on 2026-10-29 UTC
 
@@ -73,3 +73,5 @@ Regression source defines stage rejection after earlier movement, dependent tick
 Follow-up direct Roslyn C# compilation against pinned Unity reference/engine assemblies passes for all contact runtime sources, `ProofRecords.cs` and seven regression fixtures. One compile found the old `CoupledTickHeader.Reserved` check after byte 28 became `ActiveCacheCount`; it was corrected to a capacity check, and the offset is now asserted explicitly. The accepted header publishes active cache count alongside its generation; rejected ticks restore the working header. Transaction control offsets now have named C#/HLSL counterparts, including the version word.
 
 No tests, Unity/game launch, shader compilation, build or player run occurred. This remains source/compile evidence only. The transaction still needs production solver-stage wiring, physical prediction/speed/envelope and conservation/count facts, converged-only cache construction and warm-start eligibility, topology lifecycle integration and measured schedule/resource qualification. All V2 gates and B.GATE remain open.
+
+The later [four-step integration source](B3R-v2-tick-integration.md) connects the transaction to the physical stages and supersedes the earlier unwired-source limitations above. Compilation and all runtime acceptance remain unperformed for that assignment.

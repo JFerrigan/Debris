@@ -47,7 +47,7 @@ StructuredBuffer<uint> _StageGates;
 RWStructuredBuffer<uint> _StageArgs;
 RWStructuredBuffer<float4> _SideReactions;
 RWStructuredBuffer<float4> _SegmentReactions;
-RWStructuredBuffer<float4> _Motion;
+RWStructuredBuffer<float4> _Motion,_EndpointReactions;
 RWStructuredBuffer<float> _Y;
 uint _RowCount,_BodyCount,_BlockCount;
 uint _ProductSlotCount;
@@ -345,6 +345,7 @@ void ApplyBodies(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID)
     {
         Body body=_Bodies[id];
         reaction=_Reduction[0];
+        _EndpointReactions[id]=reaction;
         _Motion[id]=_FreeMotion[id]+float4(reaction.xy*body.inverseMass,
             reaction.z*body.inverseInertia,0);
     }
