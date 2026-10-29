@@ -26,6 +26,8 @@ namespace Debris.Simulation.CoupledContacts
         uint expectedGeneration,expectedCache;
         bool disposed,recording;
         CommandBuffer recordingTarget;
+        internal CoupledTickState State=>state;
+        internal void CheckRecording(CommandBuffer target)=>Check(target,true);
         public GraphicsBuffer ActivityGate=>control;
         public GraphicsBuffer Control=>control;
         // failed, attempted tick low/high, original fault, original stage.

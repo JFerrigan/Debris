@@ -10,6 +10,8 @@ Historical startup investigation (2026-09-18 UTC): the single permitted candidat
 
 Current B.3R.R2 checkpoint (2026-09-21 UTC): limited [candidate drilling](CANDIDATE_DRILLING_PLAN.md), effective door collision, GPU cavity classification/capacity admission and mounted suction are accepted under `-debrisParallelGameplay`: terrain ownership, local boundary-run cache, compact oriented-square placement checks, one ordered terrain/cache/grain publication and topology fencing passed. Door opening replaces the ship cache after the fence; closing takes one command-time snapshot and stays open for an oriented-square obstruction. Cavity classification updates flags only for whole oriented squares and publishes per-material count and rejected-admission facts without a normal full snapshot. Suction derives force from current GPU body pose and acts only through the exterior mouth strip. Legacy remains the default. Damage/fuel transfers, persistence and travel remain separate R2-R3 work.
 
+Current four-step implementation checkpoint: step 1 source complete — Accepted projected velocity output now updates transaction working endpoints; external force/torque integration; cold impulses; per-substep geometry rebasing; graph/finiteness rejection before motion application. Next: Implement bounded prediction and surface-speed checks (step 2). Runtime qualification and B.GATE remain open; no compilation or execution in this assignment.
+
 ## Locked design interpretations
 
 - Physical commodity cargo is simulated cells. Fuel-tank and capacity-limited misc-storage inventories are explicit menu exceptions.

@@ -1,0 +1,100 @@
+#pragma kernel ResetStage
+#pragma kernel IntegrateFreeMotion
+#pragma kernel ClearImpulse
+#pragma kernel GeometryBodies
+#pragma kernel GeometryPrimitives
+#pragma kernel GeometryGroups
+#pragma kernel InspectVelocity
+#pragma kernel FinishVelocity
+#pragma kernel ApplyVelocity
+
+struct Endpoint { float2 center,velocity; float angle,spin; uint r0,r1; };
+struct Parameters { float im,ii; float2 com; uint first,count,mobility,revision; };
+struct Body { float2 center; float im,ii; };
+struct Primitive
+{
+    float2 center,half; float angle; uint endpoint; float2 sweep;
+    uint anchored,kind,faceIndex,unionIndex,contactClass,featureId;
+};
+struct Group { float2 center; float angle; uint first,count,firstQuery,queryCount,endpoint; };
+RWStructuredBuffer<Endpoint> _Endpoints;
+StructuredBuffer<Endpoint> _BindPoses;
+StructuredBuffer<Parameters> _Parameters;
+StructuredBuffer<Primitive> _TemplatePrimitives;
+StructuredBuffer<Group> _TemplateGroups;
+StructuredBuffer<float4> _Forces,_Motion;
+StructuredBuffer<uint> _Activity,_SolveControl,_RowFault,_BroadFault,_CompactFault;
+RWStructuredBuffer<Body> _Bodies;
+RWStructuredBuffer<Primitive> _Primitives;
+RWStructuredBuffer<Group> _Groups;
+RWStructuredBuffer<float4> _FreeMotion;
+RWStructuredBuffer<float> _Impulse;
+RWStructuredBuffer<uint> _Facts,_Verdict;
+uint _BodyCount,_PrimitiveCount,_GroupCount,_RowCapacity;
+float _H;
+float2 rotate2(float2 p,float a)
+{float s,c;sincos(a,s,c);return float2(c*p.x-s*p.y,s*p.x+c*p.y);}
+void fault(uint code){uint old;InterlockedOr(_Facts[0],code,old);}
+[numthreads(1,1,1)]
+void ResetStage(uint id:SV_DispatchThreadID)
+{for(uint i=0;i<8;i++)_Facts[i]=0;}
+[numthreads(64,1,1)]
+void IntegrateFreeMotion(uint id:SV_DispatchThreadID)
+{
+    if(id>=_BodyCount||_Activity[0]==0)return;
+    Endpoint e=_Endpoints[id];Parameters p=_Parameters[id];float4 f=_Forces[id];
+    float4 u=p.mobility==0?0:float4(e.velocity+_H*p.im*f.xy,e.spin+_H*p.ii*f.z,0);
+    if(!all(isfinite(f))||!all(isfinite(u)))fault(1);
+    _FreeMotion[id]=u;
+}
+[numthreads(64,1,1)]
+void ClearImpulse(uint id:SV_DispatchThreadID)
+{if(id<_RowCapacity&&_Activity[0]!=0)_Impulse[id]=0;}
+[numthreads(64,1,1)]
+void GeometryBodies(uint id:SV_DispatchThreadID)
+{
+    if(id>=_BodyCount)return;
+    Endpoint e=_Endpoints[id];Parameters p=_Parameters[id];Body b;
+    b.center=e.center;b.im=p.im;b.ii=p.ii;_Bodies[id]=b;
+}
+[numthreads(64,1,1)]
+void GeometryPrimitives(uint id:SV_DispatchThreadID)
+{
+    if(id>=_PrimitiveCount)return;
+    Primitive p=_TemplatePrimitives[id];
+    if(p.endpoint>=_BodyCount){fault(2);_Primitives[id]=p;return;}
+    Endpoint origin=_BindPoses[p.endpoint],e=_Endpoints[p.endpoint];
+    float angle=e.angle-origin.angle;
+    p.center=e.center+rotate2(p.center-origin.center,angle);p.angle+=angle;
+    // Conservative motion plus correction allowance; refreshed per substep.
+    p.sweep=float2(.375,.375);_Primitives[id]=p;
+}
+[numthreads(64,1,1)]
+void GeometryGroups(uint id:SV_DispatchThreadID)
+{
+    if(id>=_GroupCount)return;
+    Group g=_TemplateGroups[id];
+    if(g.endpoint>=_BodyCount){fault(2);_Groups[id]=g;return;}
+    Endpoint origin=_BindPoses[g.endpoint],e=_Endpoints[g.endpoint];
+    g.center=e.center+rotate2(g.center-origin.center,e.angle-origin.angle);
+    g.angle+=e.angle-origin.angle;_Groups[id]=g;
+}
+[numthreads(64,1,1)]
+void InspectVelocity(uint id:SV_DispatchThreadID)
+{if(id<_BodyCount&&_Activity[0]!=0&&!all(isfinite(_Motion[id])))fault(4);}
+[numthreads(1,1,1)]
+void FinishVelocity(uint id:SV_DispatchThreadID)
+{
+    uint f=_Facts[0];
+    if(_RowFault[0]!=0||_BroadFault[0]!=0||_CompactFault[0]!=0)f|=8;
+    if(_SolveControl[1]!=1||_SolveControl[3]!=0)f|=16;
+    _Verdict[0]=0;_Verdict[1]=_Activity[0]!=0&&f==0?1u:0u;
+    _Verdict[2]=0;_Verdict[3]=f;
+}
+[numthreads(64,1,1)]
+void ApplyVelocity(uint id:SV_DispatchThreadID)
+{
+    if(id>=_BodyCount||_Activity[0]==0||_Parameters[id].mobility==0)return;
+    Endpoint e=_Endpoints[id];float4 u=_Motion[id];
+    e.velocity=u.xy;e.spin=u.z;_Endpoints[id]=e;
+}

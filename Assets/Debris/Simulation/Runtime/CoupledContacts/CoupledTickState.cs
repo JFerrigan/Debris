@@ -33,6 +33,7 @@ namespace Debris.Simulation.CoupledContacts
         internal void ClaimTransaction()
         {CheckTransactionAvailable();transactionClaimed=true;}
         internal CoupledTickHeader InitialHeader { get; }
+        internal BodyState[] BindPoseEndpoints { get; }
         internal GraphicsBuffer HeaderBuffer { get; private set; }
         public GraphicsBuffer WorkingHeader { get; private set; }
         bool disposed;
@@ -66,6 +67,7 @@ namespace Debris.Simulation.CoupledContacts
             if(initial==null)throw new ArgumentNullException(nameof(initial));
             this.arena=arena??throw new ArgumentNullException(nameof(arena));
             Validate(initial);
+            BindPoseEndpoints=(BodyState[])initial.Endpoints.Clone();
             InitialHeader=initial.Header;EndpointCount=initial.Endpoints.Length;GrainCount=initial.Grains.Length;
             long required=64+2*(32L*initial.Endpoints.Length+48L*Math.Max(1,initial.Grains.Length)+
                 32L*initial.Parameters.Length+36L*initial.Bindings.Length+64L*Math.Max(1,initial.Cache.Length)+
