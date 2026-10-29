@@ -22,13 +22,13 @@ namespace Debris.Simulation.CoupledContacts
         public long BufferBytes=>32;
 
         public CoupledVelocitySolve(CoupledContactOperator op,
-            CoupledVelocityResidual velocity,CoupledArnoldiWorkspace arnoldi)
+            CoupledVelocityResidual velocity,CoupledArnoldiWorkspace arnoldi,bool? positionMode=null)
         {
             if(op==null)throw new ArgumentNullException(nameof(op));
             if(velocity==null)throw new ArgumentNullException(nameof(velocity));
             if(arnoldi==null)throw new ArgumentNullException(nameof(arnoldi));
             update=new CoupledVelocityNewtonUpdate(op,velocity,arnoldi);
-            positionSystem=velocity.PositionSystem;
+            positionSystem=positionMode??velocity.PositionSystem;
             arena=op.Arena;
             string owner=arena.NewOwner("VelocitySolveControl");
             try

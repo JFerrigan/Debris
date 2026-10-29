@@ -5,6 +5,8 @@
 RWStructuredBuffer<uint> _Control,_Decision;
 StructuredBuffer<uint> _SolveControl,_SearchControl,_FinalDecision;
 StructuredBuffer<uint> _RowFault,_BroadFault,_CompactFault;
+StructuredBuffer<uint> _InitialGate;
+uint _UseInitialGate;
 uint _GeometryCap;
 
 // Control: active, accepted, geometry attempts, fault, cap, target reached,
@@ -18,6 +20,7 @@ void BeginCorrection(uint id:SV_DispatchThreadID)
     for(uint i=0;i<12;i++)_Control[i]=0;
     for(uint i=0;i<8;i++)_Decision[i]=0;
     _Control[4]=_GeometryCap;
+    if(_UseInitialGate!=0&&_InitialGate[0]==0){_Control[3]=7;return;}
     bool valid=_RowFault[0]==0&&_BroadFault[0]==0&&_CompactFault[0]==0;
     _Control[0]=valid?1u:0u;_Control[3]=valid?0u:1u;
 }

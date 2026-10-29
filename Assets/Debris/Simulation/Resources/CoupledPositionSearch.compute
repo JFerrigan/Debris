@@ -46,6 +46,7 @@ RWStructuredBuffer<Body> _WorkingBodies,_OriginBodies,_TrialBodies;
 RWStructuredBuffer<Primitive> _WorkingPrimitives,_OriginPrimitives,_TrialPrimitives;
 RWStructuredBuffer<Group> _WorkingGroups,_OriginGroups,_TrialGroups;
 RWStructuredBuffer<float4> _Displacement;
+RWStructuredBuffer<float> _AngularDisplacement,_TrialAngularDisplacement;
 StructuredBuffer<Manifold> _Manifolds;
 StructuredBuffer<uint2> _Indices;
 StructuredBuffer<uint> _Count,_BroadFault,_CompactFault,_ValidationFacts,_RowFault;
@@ -87,7 +88,7 @@ void BeginSubstep(uint id:SV_DispatchThreadID)
 void SnapshotSubstep(uint id:SV_DispatchThreadID)
 {
     if(id<_BodyCount)
-    {_WorkingBodies[id]=_SourceBodies[id];_OriginBodies[id]=_SourceBodies[id];}
+    {_WorkingBodies[id]=_SourceBodies[id];_OriginBodies[id]=_SourceBodies[id];_AngularDisplacement[id]=0;_TrialAngularDisplacement[id]=0;}
     if(id<_PrimitiveCount)
     {_WorkingPrimitives[id]=_SourcePrimitives[id];_OriginPrimitives[id]=_SourcePrimitives[id];}
     if(id<_GroupCount)
@@ -134,6 +135,10 @@ void BuildTrialBodies(uint id:SV_DispatchThreadID)
     if(alpha>0)b.center+=alpha*d.xy;
     if(!all(isfinite(b.center)))latchFault(4);
     else if(alpha>0&&length(b.center-_OriginBodies[id].center)>.25)latchFault(3);
+    float angular=_AngularDisplacement[id];
+    if(alpha>0)angular+=alpha*d.z;
+    if(!isfinite(angular))latchFault(4);
+    _TrialAngularDisplacement[id]=angular;
     _TrialBodies[id]=b;
 }
 [numthreads(64,1,1)]
@@ -316,7 +321,8 @@ void CheckRefreshedGraph(uint id:SV_DispatchThreadID)
 }
 [numthreads(64,1,1)]
 void PublishWorkingBodies(uint id:SV_DispatchThreadID)
-{if(_Control[1]!=0&&_Control[3]==0&&id<_BodyCount)_WorkingBodies[id]=_TrialBodies[id];}
+{if(_Control[1]!=0&&_Control[3]==0&&id<_BodyCount)
+    {_WorkingBodies[id]=_TrialBodies[id];_AngularDisplacement[id]=_TrialAngularDisplacement[id];}}
 [numthreads(64,1,1)]
 void PublishWorkingPrimitives(uint id:SV_DispatchThreadID)
 {if(_Control[1]!=0&&_Control[3]==0&&id<_PrimitiveCount)_WorkingPrimitives[id]=_TrialPrimitives[id];}
@@ -336,7 +342,8 @@ void RollbackSearchState(uint id:SV_DispatchThreadID)
 }
 [numthreads(64,1,1)]
 void RollbackBodies(uint id:SV_DispatchThreadID)
-{if(_RollbackDecision[0]==0&&id<_BodyCount)_WorkingBodies[id]=_OriginBodies[id];}
+{if(_RollbackDecision[0]==0&&id<_BodyCount)
+    {_WorkingBodies[id]=_OriginBodies[id];_AngularDisplacement[id]=0;}}
 [numthreads(64,1,1)]
 void RollbackPrimitives(uint id:SV_DispatchThreadID)
 {if(_RollbackDecision[0]==0&&id<_PrimitiveCount)_WorkingPrimitives[id]=_OriginPrimitives[id];}

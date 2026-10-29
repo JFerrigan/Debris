@@ -322,6 +322,13 @@ namespace Debris.Simulation.CoupledContacts
 
         // Build the frozen contact graph once per geometry generation. A
         // Krylov solve records products against these buffers without a scan.
+        internal void RecordRowMode(CommandBuffer target,bool normalOnly)
+        {
+            if(disposed)throw new ObjectDisposedException(nameof(CoupledContactOperator));
+            if(generatedRows==null)throw new InvalidOperationException("Row mode switching requires generated geometry");
+            generatedRows.RecordRowMode(target,normalOnly);
+        }
+
         internal void RecordGraph(CommandBuffer target)
         {
             if(disposed)throw new ObjectDisposedException(nameof(CoupledContactOperator));

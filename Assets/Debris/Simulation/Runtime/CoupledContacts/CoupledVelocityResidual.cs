@@ -41,7 +41,8 @@ namespace Debris.Simulation.CoupledContacts
         internal CoupledContactOperator Operator=>op;
         internal bool BaseReady=>prepared;
         internal float Friction=>friction;
-        internal bool PositionSystem=>op.NormalOnlyRows;
+        bool positionSystem;
+        internal bool PositionSystem=>positionSystem;
         public GraphicsBuffer Merit=>merit;
         public GraphicsBuffer Derivative=>derivative;
         // [0]=true half-squared linear residual, [1]=relative L2 norm,
@@ -69,7 +70,7 @@ namespace Debris.Simulation.CoupledContacts
             bool positionSystem)
         {
             this.op=op??throw new ArgumentNullException(nameof(op));
-            this.friction=friction;
+            this.friction=friction;this.positionSystem=positionSystem;
             arena=op.Arena;
             arenaOwner=arena.NewOwner("VelocityResidual");
             try
@@ -78,7 +79,7 @@ namespace Debris.Simulation.CoupledContacts
                    !Finite(friction)||friction<0||
                    !Finite(physicalTolerance)||physicalTolerance<=0||
                    op.RowCount>CoupledContactRowBatch.MaxRows||
-                   op.NormalOnlyRows!=positionSystem||
+                   (!positionSystem&&op.NormalOnlyRows)||
                    (!positionSystem&&(op.RowCount&1)!=0)||
                    (positionSystem&&(op.RowFeatures==null||
                        op.SourcePrimitives==null||op.SourcePrimitiveCount<=0)))
@@ -88,7 +89,7 @@ namespace Debris.Simulation.CoupledContacts
                     "Missing CoupledVelocityResidual compute resource");
                 shader=UnityEngine.Object.Instantiate(asset);
                 int rowCapacity=Math.Max(1,op.RowCount);
-                int pointCapacity=Math.Max(1,positionSystem?rowCapacity:rowCapacity/2);
+                int pointCapacity=Math.Max(1,op.Manifolds!=null?rowCapacity:rowCapacity/2);
                 residual=Buffer(rowCapacity,4);
                 derivative=Buffer(rowCapacity,4);
                 projected=Buffer(rowCapacity,4);
@@ -162,8 +163,8 @@ namespace Debris.Simulation.CoupledContacts
                     ("_Residual",residual),("_Branches",branches),("_Facts",facts));
                 // Both shader modes need valid resource bindings on Metal.
                 // Velocity never reads these one-element fallback records.
-                var features=positionSystem?op.RowFeatures:Buffer(1,24);
-                var primitives=positionSystem?op.SourcePrimitives:Buffer(1,56);
+                var features=op.RowFeatures??Buffer(1,24);
+                var primitives=op.SourcePrimitives??Buffer(1,56);
                 foreach(int kernel in new[]{evaluate,evaluateTrial})
                     Bind(kernel,("_Features",features),("_Primitives",primitives),("_StepClock",alwaysGate));
                 Bind(snapshotBase,("_ActiveRowCount",op.ActiveRowCounter),
@@ -260,6 +261,14 @@ namespace Debris.Simulation.CoupledContacts
         }
         void Bind(int kernel,params (string Name,GraphicsBuffer Buffer)[] entries)
         {foreach(var entry in entries)shader.SetBuffer(kernel,entry.Name,entry.Buffer);}
+
+        internal void RecordSystemMode(CommandBuffer target,bool position)
+        {
+            if(position&&op.Manifolds==null)throw new InvalidOperationException("Position requires generated geometry");
+            positionSystem=position;
+            target.SetComputeIntParam(shader,"_NormalOnly",position?1:0);
+            prepared=false;directionReady=false;projectedReady=false;gatedProjectionReady=false;
+        }
 
         internal void RecordStepClock(CommandBuffer target,GraphicsBuffer clock)
         {

@@ -23,20 +23,24 @@ namespace Debris.Simulation.CoupledContacts
         // maximum grain/solid penetration float bits, independent fault bits.
         public GraphicsBuffer Decision=>decision;
         public GraphicsBuffer WorkingBodies=>search.WorkingBodies;
+        public GraphicsBuffer AngularDisplacement=>search.AngularDisplacement;
         public GraphicsBuffer WorkingPrimitives=>search.WorkingPrimitives;
         public GraphicsBuffer WorkingUnionGroups=>search.WorkingUnionGroups;
         public long BufferBytes=>80+solve.BufferBytes+search.BufferBytes+final.BufferBytes;
 
-        public CoupledPositionCorrection(CoupledContactOperator op)
+        public CoupledPositionCorrection(CoupledContactOperator op):this(op,null,null,null){}
+
+        internal CoupledPositionCorrection(CoupledContactOperator op,CoupledVelocityResidual residual,
+            CoupledManifoldPreconditioner preconditioner,CoupledArnoldiWorkspace arnoldi)
         {
             this.op=op??throw new ArgumentNullException(nameof(op));
-            if(!op.NormalOnlyRows||op.Manifolds==null)
+            if(op.Manifolds==null)
                 throw new ArgumentException("Position correction requires generated normal geometry",nameof(op));
             arena=op.Arena;
             string owner=arena.NewOwner("PositionCorrection");
             try
             {
-                solve=new CoupledPositionSolve(op);
+                solve=residual==null?new CoupledPositionSolve(op):new CoupledPositionSolve(op,residual,preconditioner,arnoldi);
                 search=new CoupledPositionSearch(op,solve);
                 final=new CoupledFinalGeometryGate(op.Manifolds);
                 var asset=Resources.Load<ComputeShader>("CoupledPositionCorrection");
@@ -48,7 +52,7 @@ namespace Debris.Simulation.CoupledContacts
                 advance=shader.FindKernel("AdvanceCorrection");
                 finish=shader.FindKernel("FinishCorrection");
                 foreach(int kernel in new[]{begin,advance,finish})shader.SetBuffer(kernel,"_Control",control);
-                Bind(begin,("_Decision",decision),("_RowFault",op.RowFault),
+                Bind(begin,("_InitialGate",control),("_Decision",decision),("_RowFault",op.RowFault),
                     ("_BroadFault",op.Manifolds.BroadFaultBuffer),("_CompactFault",op.Manifolds.CompactFaultBuffer));
                 Bind(advance,("_SolveControl",solve.Control),("_SearchControl",search.Control));
                 Bind(finish,("_FinalDecision",final.Decision),("_Decision",decision));
@@ -61,7 +65,7 @@ namespace Debris.Simulation.CoupledContacts
         // Inputs are this operator's current predicted body/primitive/union
         // poses. No forces, physical velocity, spin or inventories are bound.
         // RecordBeginSubstep takes exactly one correction-envelope snapshot.
-        public void Record(CommandBuffer target,CoupledSolveProfile profile)
+        public void Record(CommandBuffer target,CoupledSolveProfile profile,GraphicsBuffer activityGate=null)
         {
             if(disposed)throw new ObjectDisposedException(nameof(CoupledPositionCorrection));
             if(target==null)throw new ArgumentNullException(nameof(target));
@@ -73,9 +77,14 @@ namespace Debris.Simulation.CoupledContacts
                 case CoupledSolveProfile.C3:cap=4;break;
                 default:throw new ArgumentOutOfRangeException(nameof(profile));
             }
+            if(activityGate!=null&&(activityGate.stride!=4||activityGate.count<1))
+                throw new ArgumentException("Invalid position activity gate");
+            op.RecordRowMode(target,true);
             op.RecordGraph(target);
             search.RecordBeginSubstep(target);
             target.SetComputeIntParam(shader,"_GeometryCap",cap);
+            target.SetComputeIntParam(shader,"_UseInitialGate",activityGate==null?0:1);
+            target.SetComputeBufferParam(shader,begin,"_InitialGate",activityGate??control);
             target.DispatchCompute(shader,begin,1,1,1);
             for(int geometry=0;geometry<cap;geometry++)
             {

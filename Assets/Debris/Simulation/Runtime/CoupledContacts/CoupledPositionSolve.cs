@@ -16,6 +16,7 @@ namespace Debris.Simulation.CoupledContacts
         readonly CoupledArnoldiWorkspace arnoldi;
         readonly CoupledVelocitySolve solve;
         bool disposed;
+        readonly bool ownsWorkspace=true;
 
         // Same control layout as CoupledVelocitySolve: accepted is word 1,
         // fault is word 3. Acceptance here covers the frozen equations only.
@@ -27,13 +28,13 @@ namespace Debris.Simulation.CoupledContacts
         // The final projected residual product already reconstructed it, so
         // exposing this buffer adds no uncounted operator product.
         public GraphicsBuffer Displacement=>op.EndpointOutput;
-        public long BufferBytes=>residual.BufferBytes+preconditioner.BufferBytes+
-            arnoldi.BufferBytes+solve.BufferBytes;
+        public long BufferBytes=>(ownsWorkspace?residual.BufferBytes+preconditioner.BufferBytes+
+            arnoldi.BufferBytes:0)+solve.BufferBytes;
 
         public CoupledPositionSolve(CoupledContactOperator op)
         {
             this.op=op??throw new ArgumentNullException(nameof(op));
-            if(!op.NormalOnlyRows)
+            if(op.Manifolds==null)
                 throw new ArgumentException("Position solve requires normal-only geometry",nameof(op));
             try
             {
@@ -43,6 +44,18 @@ namespace Debris.Simulation.CoupledContacts
                 solve=new CoupledVelocitySolve(op,residual,arnoldi);
             }
             catch { Dispose();throw; }
+        }
+
+        // Velocity and position do not overlap on the ordered queue. Reuse
+        // the same residual/factor/Krylov storage rather than a second basis.
+        internal CoupledPositionSolve(CoupledContactOperator op,CoupledVelocityResidual residual,
+            CoupledManifoldPreconditioner preconditioner,CoupledArnoldiWorkspace arnoldi)
+        {
+            this.op=op;this.residual=residual;this.preconditioner=preconditioner;this.arnoldi=arnoldi;
+            ownsWorkspace=false;
+            if(op.Manifolds==null||residual.Operator!=op||preconditioner.Velocity!=residual||arnoldi.Velocity!=residual)
+                throw new ArgumentException("Position needs the same generated graph and reusable workspace");
+            solve=new CoupledVelocitySolve(op,residual,arnoldi,true);
         }
 
         // Call after this operator's graph (or refreshed graph) is recorded.
@@ -59,6 +72,7 @@ namespace Debris.Simulation.CoupledContacts
                 throw new ArgumentOutOfRangeException(nameof(profile));
             if(activityGate!=null&&(activityGate.stride!=4||activityGate.count<1))
                 throw new ArgumentException("A GPU uint activity gate is required",nameof(activityGate));
+            residual.RecordSystemMode(target,true);
             residual.RecordPositionInitialize(target,activityGate);
             solve.Record(target,profile,activityGate);
         }
@@ -67,7 +81,8 @@ namespace Debris.Simulation.CoupledContacts
         {
             if(disposed)return;
             disposed=true;
-            solve?.Dispose();arnoldi?.Dispose();preconditioner?.Dispose();residual?.Dispose();
+            solve?.Dispose();
+            if(ownsWorkspace){arnoldi?.Dispose();preconditioner?.Dispose();residual?.Dispose();}
         }
     }
 }

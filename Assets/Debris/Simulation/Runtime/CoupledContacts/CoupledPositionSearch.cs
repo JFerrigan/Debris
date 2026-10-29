@@ -19,7 +19,7 @@ namespace Debris.Simulation.CoupledContacts
         readonly List<GraphicsBuffer> owned=new List<GraphicsBuffer>();
         readonly GraphicsBuffer control,facts,workingBodies,originBodies,workingPrimitives,
             workingGroups,originGroups,originPrimitives,trialBodies,trialPrimitives,trialGroups,
-            displacement,heads,nodes,metricBlocks,metric,baseMetric;
+            displacement,angularDisplacement,trialAngularDisplacement,heads,nodes,metricBlocks,metric,baseMetric;
         readonly int beginSubstep,snapshotSubstep,beginSearch,snapshotDirection,
             resetBaseline,buildBodies,buildPrimitives,buildGroups,resetFacts,
             evaluate,finalize,storeBaseline,select,checkGraph,publishBodies,
@@ -33,6 +33,7 @@ namespace Debris.Simulation.CoupledContacts
         // maximum conservative surface travel (float bits), initialized.
         public GraphicsBuffer Control=>control;
         public GraphicsBuffer WorkingBodies=>workingBodies;
+        public GraphicsBuffer AngularDisplacement=>angularDisplacement;
         public GraphicsBuffer WorkingPrimitives=>workingPrimitives;
         public GraphicsBuffer WorkingUnionGroups=>hasUnion?workingGroups:null;
 
@@ -41,7 +42,7 @@ namespace Debris.Simulation.CoupledContacts
             this.op=op??throw new ArgumentNullException(nameof(op));
             this.solve=solve??throw new ArgumentNullException(nameof(solve));
             manifolds=op.Manifolds;
-            if(solve.Operator!=op||!op.NormalOnlyRows||manifolds==null)
+            if(solve.Operator!=op||manifolds==null)
                 throw new ArgumentException("Position search requires one generated normal graph");
             groupCount=manifolds.UnionGroupCount;
             hasUnion=manifolds.HasUnion;
@@ -65,6 +66,7 @@ namespace Debris.Simulation.CoupledContacts
                 trialPrimitives=Buffer(owner,Math.Max(1,op.SourcePrimitiveCount),56);
                 trialGroups=Buffer(owner,Math.Max(1,groupCount),32);
                 displacement=Buffer(owner,op.BodyCount,16);
+                angularDisplacement=Buffer(owner,op.BodyCount,4);trialAngularDisplacement=Buffer(owner,op.BodyCount,4);
                 heads=Buffer(owner,ManifoldCapacity,4);
                 nodes=Buffer(owner,2*ManifoldCapacity,16);
                 metricBlocks=Buffer(owner,ManifoldCapacity/256,8);
@@ -126,6 +128,8 @@ namespace Debris.Simulation.CoupledContacts
                 Bind(publishGroups,("_TrialGroups",trialGroups),("_WorkingGroups",workingGroups));
                 Bind(rollbackBodies,("_WorkingBodies",workingBodies),("_OriginBodies",originBodies));
                 Bind(rollbackPrimitives,("_WorkingPrimitives",workingPrimitives),("_OriginPrimitives",originPrimitives));
+                foreach(int kernel in new[]{snapshotSubstep,buildBodies,publishBodies,rollbackBodies})
+                    Bind(kernel,("_AngularDisplacement",angularDisplacement),("_TrialAngularDisplacement",trialAngularDisplacement));
                 Bind(rollbackGroups,("_WorkingGroups",workingGroups),("_OriginGroups",originGroups));
             }
             catch { Dispose();throw; }

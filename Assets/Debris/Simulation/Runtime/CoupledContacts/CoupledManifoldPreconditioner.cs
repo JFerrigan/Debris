@@ -42,13 +42,13 @@ namespace Debris.Simulation.CoupledContacts
                 shader=UnityEngine.Object.Instantiate(asset);
                 int rows=Math.Max(1,op.RowCount);
                 factors=Buffer(rows,16);
-                pivotCodes=Buffer(Math.Max(1,op.NormalOnlyRows?rows:rows/2),4);
+                pivotCodes=Buffer(Math.Max(1,op.Manifolds!=null?rows:rows/2),4);
                 fault=Buffer(2,4);
                 alwaysGate=Buffer(1,4);
                 alwaysGate.SetData(new uint[]{1});
                 shader.SetInt("_RowCapacity",op.RowCount);
                 shader.SetInt("_BodyCount",op.BodyCount);
-                shader.SetInt("_NormalOnly",op.NormalOnlyRows?1:0);
+                shader.SetInt("_NormalOnly",velocity.PositionSystem?1:0);
                 shader.SetFloat("_Friction",velocity.Friction);
                 reset=shader.FindKernel("ResetPreconditioner");
                 build=shader.FindKernel("FactorManifolds");
@@ -91,6 +91,7 @@ namespace Debris.Simulation.CoupledContacts
             if(gate!=null&&(gate.stride!=4||gate.count<1))
                 throw new ArgumentException("A GPU uint work gate is required",
                     nameof(gate));
+            target.SetComputeIntParam(shader,"_NormalOnly",velocity.PositionSystem?1:0);
             target.SetComputeIntParam(shader,"_UseWorkGate",gate==null?0:1);
             target.SetComputeBufferParam(shader,reset,"_WorkGate",
                 gate??alwaysGate);
@@ -118,6 +119,7 @@ namespace Debris.Simulation.CoupledContacts
                 throw new ArgumentException("Distinct full-row float vectors are required");
             if(gate!=null&&(gate.stride!=4||gate.count<1))
                 throw new ArgumentException("A GPU uint work gate is required",nameof(gate));
+            target.SetComputeIntParam(shader,"_NormalOnly",velocity.PositionSystem?1:0);
             target.SetComputeIntParam(shader,"_UseWorkGate",gate==null?0:1);
             target.SetComputeBufferParam(shader,apply,"_WorkGate",gate??alwaysGate);
             target.SetComputeIntParam(shader,"_InputOffset",inputOffset);

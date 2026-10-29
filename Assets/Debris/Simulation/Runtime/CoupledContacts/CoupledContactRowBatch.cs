@@ -227,6 +227,9 @@ namespace Debris.Simulation.CoupledContacts
         // The output belongs to the caller's arena. Full identity remains in
         // the session table; slot generation makes these exact words safe from
         // compact-slot reuse during that session.
+        internal void RecordRowMode(CommandBuffer target,bool normalOnly)
+        {target.SetComputeIntParam(shader,"_NormalOnly",normalOnly?1:0);}
+
         internal void RecordKeys(CommandBuffer target,GraphicsBuffer bindings,
             GraphicsBuffer output)
         {

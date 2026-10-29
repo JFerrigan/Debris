@@ -18,13 +18,14 @@ namespace Debris.Simulation.CoupledContacts
         readonly CoupledManifoldPreconditioner preconditioner;
         readonly CoupledArnoldiWorkspace arnoldi;
         readonly CoupledVelocitySolve velocitySolve;
+        readonly CoupledPositionCorrection position;
         readonly ComputeShader shader;
         readonly List<GraphicsBuffer> owned=new List<GraphicsBuffer>();
         readonly GraphicsBuffer bindPoses,templatePrimitives,templateGroups,bodies,primitives,groups,
-            zeroForces,stageFacts,velocityVerdict,clock,slotGate,radii,predicted,predictionVerdict;
+            zeroForces,stageFacts,velocityVerdict,clock,slotGate,radii,predicted,predictionVerdict,positionVerdict;
         readonly int reset,free,clear,geometryBodies,geometryPrimitives,geometryGroups,
             inspectMotion,finishVelocity,applyVelocity,resetRadii,buildRadii,selectSchedule,beginSlot,
-            predict,finishPrediction,applyPrediction;
+            predict,finishPrediction,applyPrediction,inspectPosition,finishPosition,applyPosition;
         readonly int groupCount;
         readonly float duration;
         bool initialized,disposed,selectedSchedule;
@@ -64,11 +65,13 @@ namespace Debris.Simulation.CoupledContacts
                 clock=Buffer(owner,4,4);slotGate=Buffer(owner,1,4);
                 clock.SetData(new uint[]{0,0,0,0});slotGate.SetData(new uint[]{1});
                 radii=Buffer(owner,state.EndpointCount,4);predicted=Buffer(owner,state.EndpointCount,32);
-                predictionVerdict=Buffer(owner,2,4);
+                predictionVerdict=Buffer(owner,2,4);positionVerdict=Buffer(owner,2,4);
                 velocity=new CoupledVelocityResidual(op,duration,friction);
                 preconditioner=new CoupledManifoldPreconditioner(op,velocity);
                 arnoldi=new CoupledArnoldiWorkspace(op,velocity,preconditioner);
                 velocitySolve=new CoupledVelocitySolve(op,velocity,arnoldi);
+                position=new CoupledPositionCorrection(op,velocity,preconditioner,arnoldi);
+                BufferBytes+=position.BufferBytes;
                 BufferBytes+=velocity.BufferBytes+preconditioner.BufferBytes+arnoldi.BufferBytes+velocitySolve.BufferBytes;
                 shader.SetInt("_BodyCount",state.EndpointCount);
                 shader.SetInt("_PrimitiveCount",op.SourcePrimitiveCount);shader.SetInt("_GroupCount",groupCount);
@@ -80,6 +83,12 @@ namespace Debris.Simulation.CoupledContacts
                 resetRadii=Kernel("ResetRadii");buildRadii=Kernel("BuildRadii");selectSchedule=Kernel("SelectSchedule");
                 beginSlot=Kernel("BeginSlot");predict=Kernel("Predict");finishPrediction=Kernel("FinishPrediction");
                 applyPrediction=Kernel("ApplyPrediction");
+                inspectPosition=Kernel("InspectPosition");finishPosition=Kernel("FinishPosition");applyPosition=Kernel("ApplyPosition");
+                Bind(inspectPosition,("_CorrectedBodies",position.WorkingBodies),("_AngularCorrection",position.AngularDisplacement),
+                    ("_Predicted",predicted),("_Radii",radii));
+                Bind(finishPosition,("_PositionDecision",position.Decision),("_PredictionVerdict",positionVerdict));
+                Bind(applyPosition,("_CorrectedBodies",position.WorkingBodies),("_AngularCorrection",position.AngularDisplacement),
+                    ("_Predicted",predicted),("_Endpoints",state.WorkingEndpoints));
                 Bind(resetRadii,("_Radii",radii));
                 Bind(buildRadii,("_Radii",radii),("_BindPoses",bindPoses),("_TemplatePrimitives",templatePrimitives));
                 Bind(selectSchedule,("_Radii",radii),("_Endpoints",state.WorkingEndpoints),
@@ -141,6 +150,7 @@ namespace Debris.Simulation.CoupledContacts
             target.DispatchCompute(shader,geometryBodies,Groups(state.EndpointCount),1,1);
             target.DispatchCompute(shader,geometryPrimitives,Groups(op.SourcePrimitiveCount),1,1);
             if(groupCount>0)target.DispatchCompute(shader,geometryGroups,Groups(groupCount),1,1);
+            op.RecordRowMode(target,false);
             op.RecordRequeryGraph(target,primitives,bodies,groupCount>0?groups:null);
         }
 
@@ -161,6 +171,7 @@ namespace Debris.Simulation.CoupledContacts
             target.DispatchCompute(shader,free,Groups(state.EndpointCount),1,1);
             target.DispatchCompute(shader,clear,Groups(op.RowCount),1,1);
             RecordGeometry(target);
+            velocity.RecordSystemMode(target,false);
             velocity.RecordStepClock(target,clock);
             velocitySolve.Record(target,profile,slotGate);
             target.DispatchCompute(shader,inspectMotion,Groups(state.EndpointCount),1,1);
@@ -202,10 +213,23 @@ namespace Debris.Simulation.CoupledContacts
             target.DispatchCompute(shader,applyPrediction,Groups(state.EndpointCount),1,1);
         }
 
+        public void RecordPosition(CommandBuffer target,CoupledSolveProfile profile)
+        {
+            Check(target);
+            target.DispatchCompute(shader,reset,1,1,1);
+            RecordGeometry(target);
+            position.Record(target,profile,slotGate);
+            target.DispatchCompute(shader,inspectPosition,Groups(state.EndpointCount),1,1);
+            target.DispatchCompute(shader,finishPosition,1,1,1);
+            transaction.RecordPositionResult(target,positionVerdict,slotGate);
+            target.DispatchCompute(shader,applyPosition,Groups(state.EndpointCount),1,1);
+            transaction.RecordSubstep(target,slotGate);
+        }
+
         public void Dispose()
         {
             if(disposed)return;disposed=true;
-            velocitySolve?.Dispose();arnoldi?.Dispose();preconditioner?.Dispose();velocity?.Dispose();
+            position?.Dispose();velocitySolve?.Dispose();arnoldi?.Dispose();preconditioner?.Dispose();velocity?.Dispose();
             foreach(var b in owned)arena.Release(b);
             if(shader!=null)
             {if(Application.isPlaying)UnityEngine.Object.Destroy(shader);else UnityEngine.Object.DestroyImmediate(shader);}

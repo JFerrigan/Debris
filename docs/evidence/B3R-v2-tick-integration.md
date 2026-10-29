@@ -17,3 +17,11 @@ GPU selects 4–16 substeps from surface speed and full-frame external accelerat
 Next: Connect position correction to predicted working poses (step 3).
 
 No compilation, tests, Unity, build or player run. All physical, resource and performance gates remain open.
+
+## Step 3
+
+Predicted geometry feeds bounded position correction on shared graph/residual/factor/GMRES storage; explicit cumulative angular displacement reaches working pose; surface-envelope and position verdicts gate application; physical velocity and spin stay intact.
+
+Next: Implement derived final conservation/count/geometry facts and accepted velocity-cache publication; wire the complete tick schedule (step 4).
+
+No compilation, tests, Unity, build or player run. All physical, resource and performance gates remain open.
