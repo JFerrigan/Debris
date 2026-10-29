@@ -69,6 +69,7 @@ uint _Stage,_PassWord,_FaultWord,_Count,_CopyMode,_CacheCapacity;
 #define SOURCE_FAULT 20
 #define INVALID_COUNT 21
 #define IMMUTABLE_COUNT 22
+#define VERSION 63
 
 void fail(uint code,uint stage,uint source)
 {
@@ -88,7 +89,7 @@ void BeginTick(uint id:SV_DispatchThreadID)
     _Control[GENERATION]=_ExpectedGeneration;_Control[TOPOLOGY]=_Topology;
     _Control[CACHE_GENERATION]=_ExpectedCache;_Control[IDENTITY_REVISION]=_Identity;
     _Control[SLOT]=_Slot;_Control[SUBSTEPS]=_Substeps;_Control[NEXT_STAGE]=2;
-    _Control[63]=1;
+    _Control[VERSION]=1;
     Header h=_Header[0];
     if(_Failure[0]!=0||any(h.completedTick!=uint2(_PreviousLow,_PreviousHigh))||
        h.generation!=_ExpectedGeneration||h.cache!=_ExpectedCache)

@@ -110,6 +110,7 @@ namespace Debris.Simulation.CoupledContacts
                Marshal.OffsetOf<CoupledCachePoint>(nameof(CoupledCachePoint.LocalAnchors)).ToInt32()!=48||
                Marshal.OffsetOf<CoupledTickHeader>(nameof(CoupledTickHeader.Generation)).ToInt32()!=8||
                Marshal.OffsetOf<CoupledTickHeader>(nameof(CoupledTickHeader.Version)).ToInt32()!=24||
+               Marshal.OffsetOf<CoupledTickHeader>(nameof(CoupledTickHeader.ActiveCacheCount)).ToInt32()!=28||
                Marshal.OffsetOf<CoupledTickCompletion>(nameof(CoupledTickCompletion.ExpectedPreviousTick)).ToInt32()!=8||
                Marshal.OffsetOf<CoupledTickCompletion>(nameof(CoupledTickCompletion.CompletedTick)).ToInt32()!=16||
                Marshal.OffsetOf<CoupledTickCompletion>(nameof(CoupledTickCompletion.Generation)).ToInt32()!=24||
@@ -123,7 +124,7 @@ namespace Debris.Simulation.CoupledContacts
                s.Bindings.Length!=s.Endpoints.Length||s.Cache.Length>131072||
                s.Header.Version!=1||s.Header.Generation==0||s.Header.Generation==uint.MaxValue||
                s.Header.CacheGeneration==0||s.Header.CacheGeneration==uint.MaxValue||
-               s.Header.IdentityRevision==0||s.Header.TopologyRevision==0||s.Header.Reserved!=0||
+               s.Header.IdentityRevision==0||s.Header.TopologyRevision==0||s.Header.ActiveCacheCount>s.Cache.Length||
                s.Header.CompletedTick==ulong.MaxValue)
                 throw new ArgumentException("Invalid fixed-topology coupled tick state");
             var identities=new HashSet<CoupledPersistentIdentity>();
