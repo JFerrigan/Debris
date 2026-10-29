@@ -19,6 +19,7 @@ namespace Debris.Simulation.CoupledContacts
 
         // Same control layout as CoupledVelocitySolve: accepted is word 1,
         // fault is word 3. Acceptance here covers the frozen equations only.
+        internal CoupledContactOperator Operator=>op;
         public GraphicsBuffer Control=>solve.Control;
         public GraphicsBuffer Facts=>residual.Facts;
         public GraphicsBuffer Multipliers=>residual.ImpulseInput;

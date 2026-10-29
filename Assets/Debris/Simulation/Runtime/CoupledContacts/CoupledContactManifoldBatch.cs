@@ -42,8 +42,12 @@ namespace Debris.Simulation.CoupledContacts
         readonly int clearUnion,countUnion,buildUnion,resolveUnion,validateUnion,
             resetContainment,copyUnionPoses,buildUnionBounds;
         readonly bool validateContainment;
+        readonly int unionGroupCount;
         bool disposed;
         public long BufferBytes { get; private set; }
+        internal GraphicsBuffer UnionGroupsBuffer=>unionGroups;
+        internal int UnionGroupCount=>unionGroupCount;
+        internal bool HasUnion=>unionShader!=null;
         internal GraphicsBuffer CompactPairs=>compactPairs;
         internal GraphicsBuffer CompactIndices=>compactIndices;
         internal GraphicsBuffer CompactManifolds=>compactManifolds;
@@ -87,6 +91,7 @@ namespace Debris.Simulation.CoupledContacts
             CoupledEndpointBinding[] endpointBindings=null,
             CoupledContactArena arena=null)
         {
+            unionGroupCount=union?.Groups.Length??0;
             this.arena=arena??new CoupledContactArena();
             arenaOwner=this.arena.NewOwner("Manifolds");
             try

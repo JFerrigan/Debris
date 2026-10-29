@@ -1,0 +1,317 @@
+#pragma kernel BeginSubstep
+#pragma kernel SnapshotSubstep
+#pragma kernel BeginSearch
+#pragma kernel SnapshotDirection
+#pragma kernel ResetBaseline
+#pragma kernel BuildTrialBodies
+#pragma kernel BuildTrialPrimitives
+#pragma kernel BuildTrialGroups
+#pragma kernel ResetTrialFacts
+#pragma kernel EvaluateGeometry
+#pragma kernel FinalizeMetric
+#pragma kernel StoreBaseline
+#pragma kernel SelectTrial
+#pragma kernel CheckRefreshedGraph
+#pragma kernel PublishWorkingBodies
+#pragma kernel PublishWorkingPrimitives
+#pragma kernel PublishWorkingGroups
+
+struct Body { float2 center; float inverseMass,inverseInertia; };
+struct Primitive
+{
+    float2 center,half; float angle; uint endpoint; float2 sweep;
+    uint anchored,kind,faceIndex,unionIndex,contactClass,featureId;
+};
+struct Group
+{
+    float2 unionCenter; float unionAngle;
+    uint patchStart,patchCount,firstQuery,queryCount,reserved;
+};
+struct Manifold
+{
+    uint count,referenceFace; float2 normal,point0,point1;
+    float gap0,gap1; uint incidentFace,provenance0,provenance1;
+};
+StructuredBuffer<Body> _SourceBodies;
+StructuredBuffer<Primitive> _SourcePrimitives;
+StructuredBuffer<Group> _SourceGroups;
+StructuredBuffer<float4> _SourceDisplacement;
+StructuredBuffer<uint> _SolveControl;
+RWStructuredBuffer<Body> _WorkingBodies,_OriginBodies,_TrialBodies;
+RWStructuredBuffer<Primitive> _WorkingPrimitives,_OriginPrimitives,_TrialPrimitives;
+RWStructuredBuffer<Group> _WorkingGroups,_TrialGroups;
+RWStructuredBuffer<float4> _Displacement;
+StructuredBuffer<Manifold> _Manifolds;
+StructuredBuffer<uint2> _Indices;
+StructuredBuffer<uint> _Count,_BroadFault,_CompactFault,_ValidationFacts,_RowFault;
+RWStructuredBuffer<uint> _Control,_Facts,_Heads;
+// Each baseline point owns a node. Insertion links nodes with an atomic
+// exchange; lookups occur only in later dispatches after all links are stored.
+RWStructuredBuffer<uint4> _Nodes;
+RWStructuredBuffer<float2> _MetricBlocks;
+RWStructuredBuffer<float4> _Metric,_BaseMetric;
+uint _BodyCount,_PrimitiveCount,_GroupCount,_TrialIndex,_SelectOutput,_Baseline;
+static const uint Capacity=65536u;
+static const uint Empty=0xffffffffu;
+groupshared float2 _Reduction[256];
+
+float2 rotate2(float2 p,float angle)
+{float s,c;sincos(angle,s,c);return float2(c*p.x-s*p.y,s*p.x+c*p.y);}
+void latchFault(uint code)
+{
+    uint old;InterlockedCompareExchange(_Control[3],0u,code,old);
+}
+float trialAlpha()
+{
+    if(_SelectOutput!=0)
+        return _Control[1]!=0&&_Control[2]<8?1.0/(1u<<_Control[2]):0;
+    return _Control[0]!=0?1.0/(1u<<_TrialIndex):0;
+}
+
+// Control: active, accepted, selected trial (UINT_MAX for no movement),
+// fault (1=solve,2=geometry,3=envelope,4=invalid pose,5=no trial,6=row graph),
+// target reached, requires relinearization, trials evaluated, hard pass,
+// source solve fault, first failure trial, max surface travel bits, initialized.
+[numthreads(1,1,1)]
+void BeginSubstep(uint id:SV_DispatchThreadID)
+{
+    for(uint i=0;i<12;i++)_Control[i]=0;
+    _Control[2]=Empty;_Control[9]=Empty;_Control[11]=1;
+}
+[numthreads(64,1,1)]
+void SnapshotSubstep(uint id:SV_DispatchThreadID)
+{
+    if(id<_BodyCount)
+    {_WorkingBodies[id]=_SourceBodies[id];_OriginBodies[id]=_SourceBodies[id];}
+    if(id<_PrimitiveCount)
+    {_WorkingPrimitives[id]=_SourcePrimitives[id];_OriginPrimitives[id]=_SourcePrimitives[id];}
+    if(id<_GroupCount)_WorkingGroups[id]=_SourceGroups[id];
+}
+[numthreads(1,1,1)]
+void BeginSearch(uint id:SV_DispatchThreadID)
+{
+    // A failed search is latched until a fresh substep snapshot. Later queued
+    // geometry iterations cannot resurrect a failed working transaction.
+    if(_Control[11]!=1||_Control[3]!=0){_Control[0]=0;_Control[1]=0;return;}
+    _Control[0]=_SolveControl[1]==1&&_SolveControl[3]==0?1u:0u;
+    _Control[1]=0;_Control[2]=Empty;_Control[4]=0;_Control[5]=0;
+    _Control[6]=0;_Control[7]=0;_Control[8]=_SolveControl[3];
+    _Control[9]=Empty;_Control[10]=0;
+    if(_Control[0]==0)_Control[3]=1;
+}
+[numthreads(64,1,1)]
+void SnapshotDirection(uint id:SV_DispatchThreadID)
+{if(id<_BodyCount)_Displacement[id]=_Control[0]!=0?_SourceDisplacement[id]:float4(0,0,0,0);}
+[numthreads(256,1,1)]
+void ResetBaseline(uint id:SV_DispatchThreadID)
+{
+    if(id<Capacity)_Heads[id]=Empty;
+}
+[numthreads(1,1,1)]
+void ResetTrialFacts(uint id:SV_DispatchThreadID)
+{_Facts[0]=0;_Facts[1]=0;}
+
+[numthreads(64,1,1)]
+void BuildTrialBodies(uint id:SV_DispatchThreadID)
+{
+    if(id>=_BodyCount)return;
+    Body b=_WorkingBodies[id];float4 d=_Displacement[id];
+    float alpha=trialAlpha();
+    bool valid=all(isfinite(d))&&all(isfinite(b.center))&&
+        isfinite(b.inverseMass)&&isfinite(b.inverseInertia)&&
+        b.inverseMass>=0&&b.inverseInertia>=0;
+    if((b.inverseMass==0&&any(d.xy!=0))||(b.inverseInertia==0&&d.z!=0))valid=false;
+    if(!valid&&alpha>0){latchFault(4);alpha=0;}
+    // Use a branch: zero times a nonfinite direction must not poison a pose.
+    if(alpha>0)b.center+=alpha*d.xy;
+    if(!all(isfinite(b.center)))latchFault(4);
+    else if(alpha>0&&length(b.center-_OriginBodies[id].center)>.25)latchFault(3);
+    _TrialBodies[id]=b;
+}
+[numthreads(64,1,1)]
+void BuildTrialPrimitives(uint id:SV_DispatchThreadID)
+{
+    if(id>=_PrimitiveCount)return;
+    Primitive p=_WorkingPrimitives[id],origin=_OriginPrimitives[id];
+    float alpha=trialAlpha();
+    if(p.endpoint>=_BodyCount){latchFault(4);_TrialPrimitives[id]=p;return;}
+    float4 d=_Displacement[p.endpoint];Body b=_WorkingBodies[p.endpoint];
+    if(alpha>0&&all(isfinite(d)))
+    {
+        if(p.anchored!=0&&any(d.xyz!=0))latchFault(4);
+        p.center=b.center+alpha*d.xy+rotate2(p.center-b.center,alpha*d.z);
+        p.angle+=alpha*d.z;
+    }
+    // Conservative bound over the complete square/proxy surface. Origin is
+    // the predicted pose at substep start, not the last accepted correction.
+    float2 center=b.center;
+    if(alpha>0&&all(isfinite(d)))center+=alpha*d.xy;
+    Body start=_OriginBodies[p.endpoint];
+    float radius=length(origin.center-start.center)+length(p.half);
+    float travel=length(center-start.center)+radius*abs(p.angle-origin.angle);
+    if(!all(isfinite(p.center))||!isfinite(p.angle)||!isfinite(travel))latchFault(4);
+    else if(alpha>0)
+    {
+        uint old;InterlockedMax(_Control[10],asuint(travel),old);
+        if(travel>.25)latchFault(3);
+    }
+    // Requery uses fresh final geometry; the original prediction sweep must
+    // not be applied a second time to the corrected pose.
+    p.sweep=float2(0,0);_TrialPrimitives[id]=p;
+}
+[numthreads(64,1,1)]
+void BuildTrialGroups(uint id:SV_DispatchThreadID)
+{
+    if(id>=_GroupCount)return;
+    Group g=_WorkingGroups[id];float alpha=trialAlpha();
+    if(g.reserved>=_BodyCount){latchFault(4);_TrialGroups[id]=g;return;}
+    float4 d=_Displacement[g.reserved];Body b=_WorkingBodies[g.reserved];
+    if(alpha>0&&all(isfinite(d)))
+    {g.unionCenter=b.center+alpha*d.xy+rotate2(g.unionCenter-b.center,alpha*d.z);g.unionAngle+=alpha*d.z;}
+    if(!all(isfinite(g.unionCenter))||!isfinite(g.unionAngle))latchFault(4);
+    _TrialGroups[id]=g;
+}
+
+uint2 pointKey(uint2 pair,Manifold m,uint point)
+{
+    // Primitive indices are immutable throughout this topology generation.
+    uint provenance=point==0?m.provenance0:m.provenance1;
+    return uint2(pair.x|(pair.y<<14),m.referenceFace|(m.incidentFace<<12)|(provenance<<24)|(point<<26));
+}
+uint bucket(uint2 key)
+{
+    uint h=key.x*0x9e3779b9u^key.y*0x85ebca6bu;
+    h^=h>>16;return h&(Capacity-1);
+}
+bool wasViolated(uint2 key)
+{
+    uint node=_Heads[bucket(key)];
+    for(uint visit=0;visit<2*Capacity&&node!=Empty;visit++)
+    {
+        if(node>=2*Capacity){uint old;InterlockedOr(_Facts[0],1,old);return false;}
+        uint4 entry=_Nodes[node];
+        if(all(entry.xy==key))return true;
+        node=entry.z;
+    }
+    if(node!=Empty){uint old;InterlockedOr(_Facts[0],1,old);}
+    return false;
+}
+
+[numthreads(256,1,1)]
+void EvaluateGeometry(uint3 group:SV_GroupID,uint3 lane:SV_GroupThreadID)
+{
+    uint id=group.x*256+lane.x;
+    float sum=0,maximum=0;
+    if(id<min(_Count[0],Capacity))
+    {
+        Manifold m=_Manifolds[id];uint2 pair=_Indices[id];
+        bool valid=m.count<=2&&m.referenceFace<4096&&m.incidentFace<4096&&
+            pair.x<_PrimitiveCount&&pair.y<_PrimitiveCount;
+        if(!valid){uint old;InterlockedOr(_Facts[0],1,old);}
+        else
+        {
+            Primitive a=_SourcePrimitives[pair.x],b=_SourcePrimitives[pair.y];
+            bool solid=a.contactClass==2||b.contactClass==2;
+            float slop=solid?.0001:.002;
+            for(uint point=0;point<m.count;point++)
+            {
+                float gap=point==0?m.gap0:m.gap1;
+                uint provenance=point==0?m.provenance0:m.provenance1;
+                if(!isfinite(gap)||provenance>=4||a.contactClass==0||a.contactClass>2||
+                    b.contactClass==0||b.contactClass>2)
+                {uint old;InterlockedOr(_Facts[0],1,old);continue;}
+                float violation=max(0,-gap-slop);
+                sum+=violation*violation;maximum=max(maximum,violation);
+                if(solid&&gap<-.001)
+                {
+                    uint2 key=pointKey(pair,m,point);
+                    if(_Baseline!=0)
+                    {
+                        uint node=2*id+point,old;
+                        InterlockedExchange(_Heads[bucket(key)],node,old);
+                        _Nodes[node]=uint4(key,old,0);
+                    }
+                    else if(!wasViolated(key))
+                    {uint old;InterlockedOr(_Facts[1],1,old);}
+                }
+            }
+        }
+    }
+    _Reduction[lane.x]=float2(sum,maximum);
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=128;width>0;width>>=1)
+    {
+        if(lane.x<width)
+        {_Reduction[lane.x].x+=_Reduction[lane.x+width].x;
+         _Reduction[lane.x].y=max(_Reduction[lane.x].y,_Reduction[lane.x+width].y);}
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(lane.x==0)_MetricBlocks[group.x]=_Reduction[0];
+}
+[numthreads(256,1,1)]
+void FinalizeMetric(uint3 lane:SV_GroupThreadID)
+{
+    _Reduction[lane.x]=_MetricBlocks[lane.x];
+    GroupMemoryBarrierWithGroupSync();
+    for(uint width=128;width>0;width>>=1)
+    {
+        if(lane.x<width)
+        {_Reduction[lane.x].x+=_Reduction[lane.x+width].x;
+         _Reduction[lane.x].y=max(_Reduction[lane.x].y,_Reduction[lane.x+width].y);}
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if(lane.x==0)
+    {
+        float2 result=_Reduction[0];
+        bool valid=_Count[0]<=Capacity&&_BroadFault[0]==0&&_CompactFault[0]==0&&
+            _ValidationFacts[4]==0&&_Facts[0]==0&&all(isfinite(result));
+        _Metric[0]=float4(result,valid?1:0,valid&&_ValidationFacts[6]==0?1:0);
+    }
+}
+[numthreads(1,1,1)]
+void StoreBaseline(uint id:SV_DispatchThreadID)
+{
+    _BaseMetric[0]=_Metric[0];
+    if(_Control[0]==0)return;
+    if(_Metric[0].z==0){_Control[3]=2;_Control[0]=0;return;}
+    if(_Metric[0].y<=.00002)
+    {_Control[0]=0;_Control[1]=1;_Control[4]=1;_Control[7]=(uint)_Metric[0].w;}
+}
+[numthreads(1,1,1)]
+void SelectTrial(uint id:SV_DispatchThreadID)
+{
+    if(_Control[0]==0)return;
+    _Control[6]++;
+    if(_Control[3]!=0||_Metric[0].z==0)
+    {
+        if(_Control[3]==0)_Control[3]=2;
+        _Control[0]=0;_Control[9]=_TrialIndex;return;
+    }
+    bool target=_Metric[0].y<=.00002;
+    float alpha=1.0/(1u<<_TrialIndex);
+    bool armijo=_Metric[0].x<=(1-1e-4*alpha)*_BaseMetric[0].x;
+    if(_Facts[1]==0&&(target||armijo))
+    {
+        _Control[0]=0;_Control[1]=1;_Control[2]=_TrialIndex;
+        _Control[4]=target?1u:0u;_Control[5]=1;_Control[7]=(uint)_Metric[0].w;
+    }
+    else if(_TrialIndex==7){_Control[0]=0;_Control[3]=5;_Control[9]=7;}
+}
+[numthreads(1,1,1)]
+void CheckRefreshedGraph(uint id:SV_DispatchThreadID)
+{
+    if(_Control[1]==0)return;
+    if(_Control[3]!=0){_Control[1]=0;_Control[7]=0;return;}
+    _Control[7]=_ValidationFacts[6]==0?1u:0u;
+    if(_RowFault[0]!=0||_BroadFault[0]!=0||_CompactFault[0]!=0||_ValidationFacts[4]!=0)
+    {_Control[1]=0;latchFault(6);}
+}
+[numthreads(64,1,1)]
+void PublishWorkingBodies(uint id:SV_DispatchThreadID)
+{if(_Control[1]!=0&&_Control[3]==0&&id<_BodyCount)_WorkingBodies[id]=_TrialBodies[id];}
+[numthreads(64,1,1)]
+void PublishWorkingPrimitives(uint id:SV_DispatchThreadID)
+{if(_Control[1]!=0&&_Control[3]==0&&id<_PrimitiveCount)_WorkingPrimitives[id]=_TrialPrimitives[id];}
+[numthreads(64,1,1)]
+void PublishWorkingGroups(uint id:SV_DispatchThreadID)
+{if(_Control[1]!=0&&_Control[3]==0&&id<_GroupCount)_WorkingGroups[id]=_TrialGroups[id];}

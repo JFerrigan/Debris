@@ -40,6 +40,7 @@ namespace Debris.Simulation.CoupledContacts
         readonly int bodyCount;
         bool disposed;
         public long BufferBytes { get; private set; }
+        internal CoupledContactManifoldBatch Manifolds=>manifolds;
         internal GraphicsBuffer RowsBuffer=>rows;
         internal GraphicsBuffer RowManifoldIdsBuffer=>rowManifoldIds;
         internal GraphicsBuffer BodiesBuffer=>bodies;

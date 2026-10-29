@@ -80,6 +80,8 @@ namespace Debris.Simulation.CoupledContacts
         public int MaxSegmentsPerBody { get; }
         public long BufferBytes { get; private set; }
         public CoupledContactArena Arena=>arena;
+        internal CoupledContactManifoldBatch Manifolds=>generatedRows?.Manifolds;
+        internal GraphicsBuffer RowFault=>generatedRows?.RowFaultBuffer;
         internal GraphicsBuffer ProductInput=>xBuffer;
         internal GraphicsBuffer RowsBuffer=>rowBuffer;
         internal GraphicsBuffer RowManifoldIds=>rowManifoldIds;
