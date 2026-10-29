@@ -1,0 +1,247 @@
+#pragma kernel BeginTick
+#pragma kernel ValidateStage
+#pragma kernel AcceptSubstep
+#pragma kernel ValidateEndpoints
+#pragma kernel ValidateGrains
+#pragma kernel ValidateBindings
+#pragma kernel ValidateParameters
+#pragma kernel ValidateTerrain
+#pragma kernel ValidateCache
+#pragma kernel SynchronizeGrains
+#pragma kernel PreparePublication
+#pragma kernel CompleteTick
+#pragma kernel CopyEndpoints
+#pragma kernel CopyGrains
+#pragma kernel CopyBindings
+#pragma kernel CopyParameters
+#pragma kernel CopyCache
+#pragma kernel CopyWords
+
+struct Endpoint { float2 center,velocity; float angle,spin; uint r0,r1; };
+struct Grain { float2 center,velocity; float angle,spin; uint material,identity,flags,r0,r1,r2; };
+struct Parameters { float im,ii; float2 com; uint first,count,mobility,revision; };
+struct Binding { uint kind,low0,low1,high0,high1,generation,slotGeneration,revision,bound; };
+struct Cache { uint4 key0,key1; float4 impulseNormal,localAnchors; };
+struct Header { uint2 completedTick; uint generation,topology,cache,identity,version,activeCacheCount; };
+struct Completion
+{
+    uint2 tick,previousTick,completedTick;
+    uint generation,status,fault,stage,substeps,passedSubsteps,topology,cache,identity,version;
+};
+RWStructuredBuffer<uint> _Control,_Failure;
+RWStructuredBuffer<Header> _Header,_WorkingHeader;
+RWStructuredBuffer<Completion> _Completions;
+StructuredBuffer<uint> _StageResult;
+StructuredBuffer<Endpoint> _EndpointSource;
+RWStructuredBuffer<Endpoint> _EndpointDestination;
+StructuredBuffer<Grain> _GrainSource;
+RWStructuredBuffer<Grain> _GrainDestination;
+StructuredBuffer<Parameters> _ParameterSource;
+RWStructuredBuffer<Parameters> _ParameterDestination;
+StructuredBuffer<Binding> _BindingSource;
+RWStructuredBuffer<Binding> _BindingDestination;
+StructuredBuffer<Cache> _CacheSource;
+RWStructuredBuffer<Cache> _CacheDestination;
+StructuredBuffer<uint> _WordSource;
+RWStructuredBuffer<uint> _WordDestination;
+uint _TickLow,_TickHigh,_PreviousLow,_PreviousHigh,_ExpectedGeneration,
+    _ExpectedCache,_Topology,_Identity,_Substeps,_Slot;
+uint _Stage,_PassWord,_FaultWord,_Count,_CopyMode,_CacheCapacity;
+
+#define ACTIVE 0
+#define ACCEPTED 1
+#define FAULT 2
+#define FAULT_STAGE 3
+#define TICK_LOW 4
+#define TICK_HIGH 5
+#define GENERATION 6
+#define TOPOLOGY 7
+#define CACHE_GENERATION 8
+#define IDENTITY_REVISION 9
+#define NEXT_STAGE 10
+#define STAGE_CALLS 11
+#define SLOT 12
+#define SUBSTEPS 13
+#define PASSED_SUBSTEPS 14
+#define FINAL_SEEN 15
+#define PREVIOUS_LOW 16
+#define PREVIOUS_HIGH 17
+#define SOURCE_FAULT 20
+#define INVALID_COUNT 21
+#define IMMUTABLE_COUNT 22
+
+void fail(uint code,uint stage,uint source)
+{
+    uint old;InterlockedCompareExchange(_Control[FAULT],0u,code,old);
+    if(old==0){_Control[FAULT_STAGE]=stage;_Control[SOURCE_FAULT]=source;}
+    _Control[ACTIVE]=0;
+}
+bool copyEnabled()
+{return _CopyMode==0?_Control[ACTIVE]!=0:_CopyMode==1?_Control[ACCEPTED]!=0:_Control[ACCEPTED]==0;}
+
+[numthreads(1,1,1)]
+void BeginTick(uint id:SV_DispatchThreadID)
+{
+    for(uint i=0;i<64;i++)_Control[i]=0;
+    _Control[TICK_LOW]=_TickLow;_Control[TICK_HIGH]=_TickHigh;
+    _Control[PREVIOUS_LOW]=_PreviousLow;_Control[PREVIOUS_HIGH]=_PreviousHigh;
+    _Control[GENERATION]=_ExpectedGeneration;_Control[TOPOLOGY]=_Topology;
+    _Control[CACHE_GENERATION]=_ExpectedCache;_Control[IDENTITY_REVISION]=_Identity;
+    _Control[SLOT]=_Slot;_Control[SUBSTEPS]=_Substeps;_Control[NEXT_STAGE]=2;
+    _Control[63]=1;
+    Header h=_Header[0];
+    if(_Failure[0]!=0||any(h.completedTick!=uint2(_PreviousLow,_PreviousHigh))||
+       h.generation!=_ExpectedGeneration||h.cache!=_ExpectedCache)
+    {fail(1,1,_Failure[3]);return;}
+    if(h.topology!=_Topology||h.identity!=_Identity||h.version!=1)
+    {fail(5,1,0);return;}
+    _WorkingHeader[0]=h;
+    _Control[ACTIVE]=1;
+}
+[numthreads(1,1,1)]
+void ValidateStage(uint id:SV_DispatchThreadID)
+{
+    if(_Control[ACTIVE]==0)return;
+    _Control[STAGE_CALLS]++;
+    if(_Control[NEXT_STAGE]!=_Stage){fail(2,_Stage,0);return;}
+    if(_StageResult[_PassWord]!=1||_StageResult[_FaultWord]!=0)
+    {fail(3,_Stage,_StageResult[_FaultWord]);return;}
+    _Control[NEXT_STAGE]=_Stage+1;
+    if(_Stage==6)_Control[FINAL_SEEN]=1;
+}
+[numthreads(1,1,1)]
+void AcceptSubstep(uint id:SV_DispatchThreadID)
+{
+    if(_Control[ACTIVE]==0)return;
+    if(_Control[NEXT_STAGE]!=5||_Control[PASSED_SUBSTEPS]>=_Control[SUBSTEPS])
+    {fail(2,5,0);return;}
+    _Control[PASSED_SUBSTEPS]++;
+    _Control[NEXT_STAGE]=_Control[PASSED_SUBSTEPS]==_Control[SUBSTEPS]?6u:2u;
+}
+
+bool sameEndpoint(Endpoint a,Endpoint b)
+{
+    return all(asuint(a.center)==asuint(b.center))&&all(asuint(a.velocity)==asuint(b.velocity))&&
+        asuint(a.angle)==asuint(b.angle)&&asuint(a.spin)==asuint(b.spin)&&a.r0==b.r0&&a.r1==b.r1;
+}
+[numthreads(64,1,1)]
+void ValidateEndpoints(uint id:SV_DispatchThreadID)
+{
+    if(id>=_Count)return;
+    Endpoint e=_EndpointDestination[id];Parameters p=_ParameterSource[id];
+    bool valid=all(isfinite(e.center))&&all(isfinite(e.velocity))&&isfinite(e.angle)&&isfinite(e.spin);
+    if(!valid){uint old;InterlockedAdd(_Control[INVALID_COUNT],1,old);fail(4,7,0);}
+    Endpoint original=_EndpointSource[id];
+    if(e.r0!=original.r0||e.r1!=original.r1)
+    {uint old;InterlockedAdd(_Control[IMMUTABLE_COUNT],1,old);fail(5,7,0);}
+    if(p.mobility==0&&!sameEndpoint(e,_EndpointSource[id]))
+    {uint old;InterlockedAdd(_Control[IMMUTABLE_COUNT],1,old);fail(5,7,0);}
+}
+[numthreads(64,1,1)]
+void ValidateGrains(uint id:SV_DispatchThreadID)
+{
+    if(id>=_Count)return;
+    Grain a=_GrainSource[id],b=_GrainDestination[id];
+    if(a.material!=b.material||a.identity!=b.identity||a.r0!=b.r0||a.r1!=b.r1||a.r2!=b.r2)
+    {uint old;InterlockedAdd(_Control[IMMUTABLE_COUNT],1,old);fail(5,7,0);}
+}
+[numthreads(64,1,1)]
+void ValidateBindings(uint id:SV_DispatchThreadID)
+{
+    if(id>=_Count)return;
+    Binding a=_BindingSource[id],b=_BindingDestination[id];
+    if(a.kind!=b.kind||a.low0!=b.low0||a.low1!=b.low1||a.high0!=b.high0||a.high1!=b.high1||
+       a.generation!=b.generation||a.slotGeneration!=b.slotGeneration||a.revision!=b.revision||a.bound!=b.bound)
+    {uint old;InterlockedAdd(_Control[IMMUTABLE_COUNT],1,old);fail(5,7,0);}
+}
+[numthreads(64,1,1)]
+void ValidateParameters(uint id:SV_DispatchThreadID)
+{
+    if(id>=_Count)return;
+    Parameters a=_ParameterSource[id],b=_ParameterDestination[id];
+    if(asuint(a.im)!=asuint(b.im)||asuint(a.ii)!=asuint(b.ii)||any(asuint(a.com)!=asuint(b.com))||
+       a.first!=b.first||a.count!=b.count||a.mobility!=b.mobility||a.revision!=b.revision)
+    {uint old;InterlockedAdd(_Control[IMMUTABLE_COUNT],1,old);fail(5,7,0);}
+}
+[numthreads(64,1,1)]
+void ValidateTerrain(uint id:SV_DispatchThreadID)
+{
+    if(id<_Count&&_WordSource[id]!=_WordDestination[id])
+    {uint old;InterlockedAdd(_Control[IMMUTABLE_COUNT],1,old);fail(5,7,0);}
+}
+[numthreads(64,1,1)]
+void ValidateCache(uint id:SV_DispatchThreadID)
+{
+    if(id>=_Count)return;
+    Cache c=_CacheDestination[id];
+    // Physical key matching and warm-start admissibility belong to the
+    // cache builder. No nonfinite provisional payload may become committed.
+    if(!all(isfinite(c.impulseNormal))||!all(isfinite(c.localAnchors)))
+    {uint old;InterlockedAdd(_Control[INVALID_COUNT],1,old);fail(4,7,0);}
+}
+[numthreads(64,1,1)]
+void SynchronizeGrains(uint id:SV_DispatchThreadID)
+{
+    if(id>=_Count||_Control[ACTIVE]==0)return;
+    Grain g=_GrainDestination[id];Endpoint e=_EndpointSource[id];
+    g.center=e.center;g.velocity=e.velocity;g.angle=e.angle;g.spin=e.spin;
+    _GrainDestination[id]=g;
+}
+[numthreads(1,1,1)]
+void PreparePublication(uint id:SV_DispatchThreadID)
+{
+    Header h=_Header[0],working=_WorkingHeader[0];
+    if(_Control[ACTIVE]!=0&&(any(working.completedTick!=h.completedTick)||
+       working.generation!=h.generation||working.topology!=h.topology||working.cache!=h.cache||
+       working.identity!=h.identity||working.version!=h.version))fail(5,7,0);
+    if(_Control[ACTIVE]!=0&&working.activeCacheCount>_CacheCapacity)fail(4,7,0);
+    if(_Control[ACTIVE]!=0&&(_Control[NEXT_STAGE]!=7||_Control[FINAL_SEEN]!=1||
+       _Control[PASSED_SUBSTEPS]!=_Control[SUBSTEPS]))fail(2,7,0);
+    if(_Control[ACTIVE]!=0&&(h.generation==0xffffffffu||h.cache==0xffffffffu))fail(6,7,0);
+    _Control[ACCEPTED]=_Control[ACTIVE]!=0&&_Control[FAULT]==0?1u:0u;
+}
+[numthreads(1,1,1)]
+void CompleteTick(uint id:SV_DispatchThreadID)
+{
+    Header h=_Header[0];
+    bool accepted=_Control[ACCEPTED]!=0;
+    if(accepted)
+    {
+        h.completedTick=uint2(_Control[TICK_LOW],_Control[TICK_HIGH]);
+        h.generation++;h.cache++;h.activeCacheCount=_WorkingHeader[0].activeCacheCount;_Header[0]=h;
+    }
+    else if(_Failure[0]==0)
+    {
+        _Failure[0]=1;_Failure[1]=_Control[TICK_LOW];_Failure[2]=_Control[TICK_HIGH];
+        _Failure[3]=_Control[FAULT];_Failure[4]=_Control[FAULT_STAGE];
+    }
+    _WorkingHeader[0]=h;
+    Completion c;
+    c.tick=uint2(_Control[TICK_LOW],_Control[TICK_HIGH]);
+    c.previousTick=uint2(_Control[PREVIOUS_LOW],_Control[PREVIOUS_HIGH]);
+    c.completedTick=h.completedTick;c.generation=h.generation;
+    c.status=accepted?1u:_Control[FAULT]==1?3u:2u;
+    c.fault=_Control[FAULT];c.stage=_Control[FAULT_STAGE];
+    c.substeps=_Control[SUBSTEPS];c.passedSubsteps=_Control[PASSED_SUBSTEPS];
+    c.topology=h.topology;c.cache=h.cache;c.identity=h.identity;c.version=1;
+    _Completions[_Control[SLOT]]=c;
+    _Control[ACTIVE]=0;
+}
+[numthreads(64,1,1)]
+void CopyEndpoints(uint id:SV_DispatchThreadID)
+{if(id<_Count&&copyEnabled())_EndpointDestination[id]=_EndpointSource[id];}
+[numthreads(64,1,1)]
+void CopyGrains(uint id:SV_DispatchThreadID)
+{if(id<_Count&&copyEnabled())_GrainDestination[id]=_GrainSource[id];}
+[numthreads(64,1,1)]
+void CopyParameters(uint id:SV_DispatchThreadID)
+{if(id<_Count&&copyEnabled())_ParameterDestination[id]=_ParameterSource[id];}
+[numthreads(64,1,1)]
+void CopyBindings(uint id:SV_DispatchThreadID)
+{if(id<_Count&&copyEnabled())_BindingDestination[id]=_BindingSource[id];}
+[numthreads(64,1,1)]
+void CopyCache(uint id:SV_DispatchThreadID)
+{if(id<_Count&&copyEnabled())_CacheDestination[id]=_CacheSource[id];}
+[numthreads(64,1,1)]
+void CopyWords(uint id:SV_DispatchThreadID)
+{if(id<_Count&&copyEnabled())_WordDestination[id]=_WordSource[id];}

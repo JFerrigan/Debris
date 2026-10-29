@@ -1,6 +1,6 @@
 # V2-2 GPU solve source handoff
 
-Current checkpoint: bounded position stage with final geometry acceptance and position-stage rollback source; no complete solver tick or V2-2 gate pass. The latest user direction is to write code without launching Unity or the game. Prior focused GPU evidence remains in [STATUS](../STATUS.md); it does not cover the new position path.
+Current checkpoint: bounded position stage plus separate whole-tick transaction/publication source; no integrated physical solver tick or V2-2 gate pass. The latest user direction is to write code without launching Unity or the game. Prior focused GPU evidence remains in [STATUS](../STATUS.md); it does not cover the new position path.
 
 ## Position behavior added on 2026-10-29 UTC
 
@@ -58,3 +58,16 @@ No Unity/game process, shader import, GPU fixture, build or performance workload
 ## Next behavior
 
 Connect full-tick working-state and provisional-cache ownership, prediction/speed bounds, conservation/count facts, accepted publication and queued-tick dependency failure. Whole-tick rollback must include velocities, identities, material/fuel/cargo facts, topology generations and completion state. V2-0C exact packed references, V2-1 geometry/operator/cost gates, V2-3 throughput, V2-4 candidate integration and B.GATE remain open.
+
+
+## Whole-tick transaction source (implementation only)
+
+`CoupledTickState` owns fixed-topology committed and working buffers for endpoint motion, grains, body parameters, persistent identity bindings, contact cache, opaque inventory/fuel words, cargo facts and terrain revisions. All buffers and transaction/completion storage are charged to the shared arena. Initial state requires consistent grain/endpoint motion and identities, unique bindings, valid finite physical parameters and finite cache payloads. No transfer, damage or fuel-burn behavior is added.
+
+`CoupledTickTransaction` snapshots committed state at GPU begin, accepts velocity/prediction/position verdicts in order for each declared substep, then requires final facts. Publication independently checks finite endpoint/cache values and immutable anchored motion, endpoint reserved words, grain material/identity, body parameters, identity bindings and terrain revisions. Grain motion is synchronized from endpoints. Successful payload copies precede header/completion publication. Failure restores all working payloads from the last committed state. A persistent first-failure latch rejects subsequently queued ticks as dependency failures without advancing the committed header/cache generation. Consumers must use the same GPU queue and read committed payloads after completion; this is ordered publication, not a cross-queue atomic memory operation.
+
+The CPU reserves sixteen bounded completion slots and accepts only matching completed tick/generation records before reuse. Each tick must be recorded in one command buffer, and buffers must be submitted in recording order. Dropping a recorded schedule, disposing in-flight resources or recreating an owner to recover a failed FIFO is outside this contract. Recovery requires a drained session and an explicit authoritative reconstruction.
+
+Regression source defines stage rejection after earlier movement, dependent ticks, accepted publication, retention of an earlier accepted tick, immutable/nonfinite rejection, stage ordering, completion reuse, low-word tick wrap, duplicate ownership, nonfinite provisional cache, command-buffer ownership and corrupt completion records. These fixtures inject declared verdicts and GPU copies; they are transaction isolation definitions, not physical solver acceptance.
+
+No compilation, tests, Unity launch, shader compilation, build or player run occurred. Source review only. The transaction still needs production solver-stage wiring, physical prediction/speed/envelope and conservation/count facts, converged-only cache construction and warm-start eligibility, topology lifecycle integration and measured schedule/resource qualification. All V2 gates and B.GATE remain open.
