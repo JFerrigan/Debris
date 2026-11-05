@@ -74,3 +74,17 @@ Nine additional direct compiler invocations followed these implementation/regres
 | Sections 12–13: handoff | Source checkpoint and plan updated, ordinary commits pushed | Full goal completion is not proven by compilation |
 
 The remaining acceptance work requires execution, which the active user instruction forbids. Keep the full goal intact; do not mark it achieved or launch programs to manufacture evidence. Source review/fixes in this audit are progress, not a runtime pass.
+
+## HUD follow-up and native build evidence
+
+The user reported that the HUD was too small. Text now defaults to 16 px, headings to 20 px, with larger button/toggle/field padding and scrollbars. A GUI transform scales the complete HUD by resolution and DPI, bounded to keep controls on screen. Top-level −/+ controls persist the chosen zoom. Raw pointer coordinates use the inverse transform for panel hit testing. GUI state is restored after drawing.
+
+Direct C# compilation passed after correcting an unsupported GUIStyle property. Arithmetic checks covered 960×600, 1440×900, 1920×1080, 3024×1890 and 3840×2160 windows and 75–175% user zoom; panel extents and inverse hit mapping remain consistent. This does not substitute for a visual check.
+
+Native build 1 returned Success but logged HLSL errors for reserved `line` / `point` identifiers in the renderer, input, position-search and tick-stepper shaders. Build 2 exposed the remaining reserved `linear` identifier. Renaming these identifiers preserves equations and binary layouts. The tick-test meta file also contained a 33-character GUID; it is now valid 32-character hex.
+
+After two failed build-level shader results, diagnosis moved to three isolated shader checks, with no simulation dispatch. `ValidateShaders` now compiles/checks resources synchronously. The probes still fail on `CoupledTickStepper.QualifyCache`: IsSupported returns false, and querying its group size reports invalid index 10 despite a stated kernel count of 33. This remains an unresolved solver-support issue. The standalone build checks reported shader compilation errors but does not claim this separate hardware/kernel-support gate passes.
+
+Final HUD build: process exit 0, `Build Finished, Result: Success`, zero C#/shader errors, executable present. All manifest source hashes match the final source; source hash `c6e3965caa4da59cf9c96657c04d238b6969acc0f821f69dafc70dd1bd273b69`. Canonical log: `/private/tmp/debris-playground-hud-build.log`; failed build logs use `-hud-shader-errors.log` and `-hud-linear-errors.log`; isolated probe log: `/private/tmp/debris-playground-shader-validation.log`.
+
+No player was launched by the agent, no physics test was executed and no physical acceptance is claimed. The user must close/reopen the app to load the rebuilt HUD. The source-only checkpoint's absent-binary statements above are historical; the separate playground app now exists.

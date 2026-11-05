@@ -212,7 +212,7 @@ void ApplyPosition(uint id:SV_DispatchThreadID)
     _Endpoints[id]=e;
 }
 
-struct Row { uint a,b; float2 point,direction; float inverseRoot,gap; };
+struct Row { uint a,b; float2 contactPoint,direction; float inverseRoot,gap; };
 struct Feature { uint aPrimitive,bPrimitive,referenceFace,incidentFace,provenance,pointAxis; };
 struct Binding { uint kind,low0,low1,high0,high1,generation,slotGeneration,revision,bound; };
 struct Key { uint4 lo,hi; };
@@ -241,7 +241,7 @@ void tickFault(uint bit){uint old;InterlockedOr(_TickDiagnostics[0],bit,old);}
 void add4(inout float4 sum,inout float4 compensation,float4 value)
 {float4 corrected=value-compensation,next=sum+corrected;compensation=(next-sum)-corrected;sum=next;}
 
-// Baseline: P.xy,L,E; fixed initial COM.xy,linear/angular normalizers;
+// Baseline: P.xy,L,E; fixed initial COM.xy,linearError/angular normalizers;
 // total dynamic mass, dynamic endpoints, total endpoints, physical grains.
 // Accounting: accumulated known external-minus-anchor impulse/torque/work;
 // separate accumulated anchor impulse and torque. Fixed-order compensated sums.
@@ -320,16 +320,16 @@ void PhysicalFacts(uint id:SV_DispatchThreadID)
         add4(correction,cc,float4(m*(e.center-predicted.center),0,0));
     }
     float4 expected=_Baseline[0]+_Accounting[0];
-    float linear=length(total.xy-expected.xy)/_Baseline[1].z;
+    float linearError=length(total.xy-expected.xy)/_Baseline[1].z;
     float angular=abs(total.z-expected.z)/_Baseline[1].w;
     float energyGrowth=total.w-expected.w;
-    if(!all(isfinite(total))||!isfinite(linear)||!isfinite(angular)||!isfinite(energyGrowth))tickFault(1);
-    if(linear>1e-4)tickFault(8);
+    if(!all(isfinite(total))||!isfinite(linearError)||!isfinite(angular)||!isfinite(energyGrowth))tickFault(1);
+    if(linearError>1e-4)tickFault(8);
     if(angular>1e-3)tickFault(16);
     if(energyGrowth>max(.001*_Baseline[0].w,.0001))tickFault(32);
     if(dynamicCount!=(uint)_Baseline[2].y||_BodyCount!=(uint)_Baseline[2].z||_GrainCount!=(uint)_Baseline[2].w)tickFault(64);
     _TickDiagnostics[1]++;
-    _TickDiagnostics[2]=max(_TickDiagnostics[2],asuint(linear));
+    _TickDiagnostics[2]=max(_TickDiagnostics[2],asuint(linearError));
     _TickDiagnostics[3]=max(_TickDiagnostics[3],asuint(angular));
     _TickDiagnostics[4]=max(_TickDiagnostics[4],asuint(max(0,energyGrowth)));
     float com=_Baseline[2].x>0?length(correction.xy)/_Baseline[2].x:0;
@@ -376,8 +376,8 @@ bool pointData(uint rowIndex,out Key key,out float4 anchors)
     key.hi=uint4(bb.revision,a.featureId,b.featureId,
         f.referenceFace|(f.incidentFace<<12)|(f.provenance<<24)|(f.pointAxis<<26));
     Endpoint ea=_Endpoints[r.a],eb=_Endpoints[r.b];
-    anchors=float4(rotate2(r.point-.5*r.gap*r.direction-ea.center,-ea.angle),
-        rotate2(r.point+.5*r.gap*r.direction-eb.center,-eb.angle));
+    anchors=float4(rotate2(r.contactPoint-.5*r.gap*r.direction-ea.center,-ea.angle),
+        rotate2(r.contactPoint+.5*r.gap*r.direction-eb.center,-eb.angle));
     if(!all(isfinite(anchors))||!all(isfinite(r.direction))||abs(dot(r.direction,r.direction)-1)>1e-3||
        !isfinite(r.gap)||!(r.inverseRoot>0))
     {tickFault(1024);return false;}

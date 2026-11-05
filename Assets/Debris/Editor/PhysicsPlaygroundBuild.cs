@@ -55,11 +55,61 @@ namespace Debris.Editor
                 var report=BuildPipeline.BuildPlayer(new BuildPlayerOptions{scenes=new[]{Scene},locationPathName=Output,
                     target=BuildTarget.StandaloneOSX,options=BuildOptions.Development});
                 if(report.summary.result!=BuildResult.Succeeded)throw new InvalidOperationException("Playground build failed: "+report.summary.result);
+                // Unity can report Success while Resources shaders contain errors.
+                var shaderErrors=new List<string>();
+                var renderShader=AssetDatabase.LoadAssetAtPath<Shader>("Assets/Debris/Presentation/Resources/CoupledPlayground.shader");
+                foreach(var message in ShaderUtil.GetShaderMessages(renderShader))
+                    if(message.severity.ToString()=="Error")shaderErrors.Add(message.message);
+                foreach(string guid in AssetDatabase.FindAssets("t:ComputeShader",new[]{"Assets/Debris/Simulation/Resources"}))
+                {
+                    string path=AssetDatabase.GUIDToAssetPath(guid);
+                    if(!Path.GetFileName(path).StartsWith("Coupled",StringComparison.Ordinal))continue;
+                    foreach(var message in ShaderUtil.GetComputeShaderMessages(AssetDatabase.LoadAssetAtPath<ComputeShader>(path)))
+                        if(message.severity.ToString()=="Error")shaderErrors.Add(path+": "+message.message);
+                }
+                if(shaderErrors.Count>0)throw new InvalidOperationException("Playground shader compilation failed: "+string.Join("\n",shaderErrors.Distinct()));
                 File.WriteAllText("Builds/PhysicsPlayground/build-manifest.json",json);
                 Debug.Log("PHYSICS_PLAYGROUND_BUILD "+Output+" source="+identity.SourceHash+" (not launched)");
             }
             finally
             {PlayerSettings.productName=oldName;PlayerSettings.defaultScreenWidth=oldWidth;PlayerSettings.defaultScreenHeight=oldHeight;PlayerSettings.fullScreenMode=oldMode;}
+        }
+        public static void ValidateShaders()
+        {
+            bool previous=ShaderUtil.allowAsyncCompilation;ShaderUtil.allowAsyncCompilation=false;
+            try { ValidateShadersSynchronous(); }
+            finally { ShaderUtil.allowAsyncCompilation=previous; }
+        }
+        static void ValidateShadersSynchronous()
+        {
+            const string renderPath="Assets/Debris/Presentation/Resources/CoupledPlayground.shader";
+            AssetDatabase.ImportAsset(renderPath,ImportAssetOptions.ForceUpdate|ImportAssetOptions.ForceSynchronousImport);
+            var render=AssetDatabase.LoadAssetAtPath<Shader>(renderPath);
+            var material=new Material(render);
+            try { ShaderUtil.CompilePass(material,0,true); }
+            finally { UnityEngine.Object.DestroyImmediate(material); }
+            if(!render.isSupported||ShaderUtil.ShaderHasError(render))throw new InvalidOperationException("Playground render shader is unsupported or has compilation errors");
+            int kernels=0;
+            foreach(string path in Directory.GetFiles("Assets/Debris/Simulation/Resources","Coupled*.compute"))
+            {
+                AssetDatabase.ImportAsset(path,ImportAssetOptions.ForceUpdate|ImportAssetOptions.ForceSynchronousImport);
+                var compute=AssetDatabase.LoadAssetAtPath<ComputeShader>(path);
+                foreach(var line in File.ReadLines(path))
+                {
+                    var words=line.Trim().Split(new[]{' ','\t'},StringSplitOptions.RemoveEmptyEntries);
+                    if(words.Length<3||words[0]!="#pragma"||words[1]!="kernel")continue;
+                    int kernel=compute.FindKernel(words[2]);
+                    compute.GetKernelThreadGroupSizes(kernel,out uint x,out uint y,out uint z);
+                    if(!compute.IsSupported(kernel))throw new InvalidOperationException(path+": unsupported kernel "+words[2]+
+                        $" groups={x},{y},{z} bufferLimit={SystemInfo.maxComputeBufferInputsCompute}; "+
+                        string.Join(" | ",ShaderUtil.GetComputeShaderMessages(compute).Select(m=>m.severity+": "+m.message)));
+                    if(x==0||y==0||z==0)throw new InvalidOperationException(path+": invalid kernel "+words[2]);
+                    kernels++;
+                }
+                foreach(var message in ShaderUtil.GetComputeShaderMessages(compute))
+                    if(message.severity.ToString()=="Error")throw new InvalidOperationException(path+": "+message.message);
+            }
+            Debug.Log("PHYSICS_PLAYGROUND_SHADERS validated kernels="+kernels+" (no simulation dispatched)");
         }
     }
 }

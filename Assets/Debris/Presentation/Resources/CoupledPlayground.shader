@@ -47,8 +47,8 @@ Shader "Debris/PhysicsPlayground"
                     float2 derivative=max(fwidth(i.world),.00001);
                     float2 unit=abs(frac(i.world+.5)-.5)/derivative;
                     float2 major=abs(frac(i.world/10+.5)-.5)*10/derivative;
-                    float line=1-saturate(min(unit.x,unit.y));float large=1-saturate(min(major.x,major.y));
-                    return float4(float3(.035,.05,.07)+line*.025+large*.04,1);
+                    float gridLine=1-saturate(min(unit.x,unit.y));float large=1-saturate(min(major.x,major.y));
+                    return float4(float3(.035,.05,.07)+gridLine*.025+large*.04,1);
                 }
                 if(_Mode==3)
                 {

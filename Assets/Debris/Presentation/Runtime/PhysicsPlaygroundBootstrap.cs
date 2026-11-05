@@ -27,9 +27,28 @@ namespace Debris.Presentation
         int pointerSerial,rateTicks;
         ulong nextCommandId;
         double ticksPerSecond;
+        GUISkin hudSkin;
+        GUIStyle hudTitle;
+        float hudZoom=1;
+        const string HudZoomPreference="PhysicsPlayground.HudZoom";
         string px="0",py="0",vx="0",vy="0",angle="0",spin="0",editDensity="1",width="1",height="1";
         bool editAnchor;
-        Rect Panel=>new Rect(12,12,310,Mathf.Max(250,Screen.height-24));
+        float HudScale
+        {
+            get
+            {
+                float resolution=Mathf.Min(Screen.width/1440f,Screen.height/900f);
+                float dpi=Screen.dpi;
+                float densityScale=float.IsFinite(dpi)&&dpi>0?dpi/160f:1;
+                float desired=Mathf.Max(1,Mathf.Max(resolution,densityScale))*hudZoom;
+                float fit=Mathf.Min(Screen.width/680f,Screen.height/360f);
+                return Mathf.Max(.25f,Mathf.Min(Mathf.Clamp(desired,.75f,3.5f),fit));
+            }
+        }
+        float HudWidth=>Screen.width/HudScale;
+        float HudHeight=>Screen.height/HudScale;
+        Rect Panel=>new Rect(12,12,310,Mathf.Max(250,HudHeight-24));
+        Rect StatusPanel=>new Rect(338,12,Mathf.Max(100,HudWidth-350),76);
         CoupledPlaygroundSession Session=>editor?.Current;
         bool Busy=>editor==null||editor.Busy;
         string DirectoryPath=>Path.Combine(Application.persistentDataPath,"PhysicsPlayground");
@@ -38,6 +57,8 @@ namespace Debris.Presentation
 
         async void Start()
         {
+            float savedZoom=PlayerPrefs.GetFloat(HudZoomPreference,1);
+            hudZoom=float.IsFinite(savedZoom)?Mathf.Clamp(savedZoom,.75f,1.75f):1;
             Application.targetFrameRate=60;
             cameraView=new GameObject("Physics playground camera",typeof(Camera)).GetComponent<Camera>();
             cameraView.tag="MainCamera";cameraView.orthographic=true;cameraView.orthographicSize=30;
@@ -62,8 +83,8 @@ namespace Debris.Presentation
             var mouse=Mouse.current;var keyboard=Keyboard.current;
             Vector2 screen=mouse?.position.ReadValue()??Vector2.zero;
             pointer=cameraView.ScreenToWorldPoint(new Vector3(screen.x,screen.y,10));
-            Vector2 guiPoint=new Vector2(screen.x,Screen.height-screen.y);
-            bool overUI=Panel.Contains(guiPoint)||new Rect(338,12,Mathf.Max(100,Screen.width-350),56).Contains(guiPoint);
+            Vector2 guiPoint=new Vector2(screen.x,Screen.height-screen.y)/HudScale;
+            bool overUI=Panel.Contains(guiPoint)||StatusPanel.Contains(guiPoint);
             bool text=GUI.GetNameOfFocusedControl().StartsWith("edit",StringComparison.Ordinal);
             if(Session?.Poll()==true)
             {
@@ -330,9 +351,40 @@ namespace Debris.Presentation
         }
         void OnGUI()
         {
-            GUI.Box(Panel,GUIContent.none);GUILayout.BeginArea(new Rect(22,22,290,Mathf.Max(220,Screen.height-44)));
+            EnsureHudSkin();var previousMatrix=GUI.matrix;var previousSkin=GUI.skin;bool previousEnabled=GUI.enabled;
+            try
+            {
+                GUI.skin=hudSkin;GUI.matrix=Matrix4x4.Scale(new Vector3(HudScale,HudScale,1));DrawHud();
+            }
+            finally { GUI.matrix=previousMatrix;GUI.skin=previousSkin;GUI.enabled=previousEnabled; }
+        }
+        void EnsureHudSkin()
+        {
+            if(hudSkin)return;
+            hudSkin=Instantiate(GUI.skin);
+            foreach(var style in new[]{hudSkin.label,hudSkin.button,hudSkin.toggle,hudSkin.textField,hudSkin.box})
+            {style.fontSize=16;style.wordWrap=true;}
+            hudSkin.button.padding=new RectOffset(8,8,6,6);
+            hudSkin.textField.padding=new RectOffset(6,6,5,5);
+            hudSkin.toggle.padding=new RectOffset(24,6,5,5);
+            hudSkin.box.padding=new RectOffset(8,8,8,8);
+            hudSkin.horizontalSlider.fixedHeight=20;hudSkin.horizontalSlider.margin=new RectOffset(0,0,8,8);
+            hudSkin.horizontalSliderThumb.fixedWidth=18;hudSkin.horizontalSliderThumb.fixedHeight=24;
+            hudSkin.verticalScrollbar.fixedWidth=20;
+            hudTitle=new GUIStyle(hudSkin.label){fontSize=20,fontStyle=FontStyle.Bold,alignment=TextAnchor.MiddleCenter};
+        }
+        void ChangeHudZoom(float delta)
+        {hudZoom=Mathf.Clamp(hudZoom+delta,.75f,1.75f);PlayerPrefs.SetFloat(HudZoomPreference,hudZoom);}
+        void DrawHud()
+        {
+            GUI.Box(Panel,GUIContent.none);GUILayout.BeginArea(new Rect(22,22,290,Mathf.Max(220,HudHeight-44)));
             scroll=GUILayout.BeginScrollView(scroll);
-            GUILayout.Label("PHYSICS WORKBENCH",GUI.skin.box);GUILayout.Label("V2 solver • experimental / runtime unverified");
+            GUILayout.Label("PHYSICS WORKBENCH",hudTitle);
+            GUILayout.BeginHorizontal();GUILayout.Label("HUD size");
+            if(GUILayout.Button("−",GUILayout.Width(38)))ChangeHudZoom(-.1f);
+            GUILayout.Label(hudZoom.ToString("P0"),GUILayout.Width(50));
+            if(GUILayout.Button("+",GUILayout.Width(38)))ChangeHudZoom(.1f);GUILayout.EndHorizontal();
+            GUILayout.Label("V2 solver • experimental / runtime unverified");
             GUI.enabled=!Busy;
             GUILayout.BeginHorizontal();if(GUILayout.Button(running?"Pause [Space]":"Run [Space]"))ToggleRun();
             if(GUILayout.Button("Step [.]")){running=false;stepRequested=true;}GUILayout.EndHorizontal();
@@ -397,11 +449,11 @@ namespace Debris.Presentation
                 if(editor.History.Count>0){var h=editor.History[editor.History.Count-1];GUILayout.Label($"Last edit: {h.Command}\nMass change {h.MassChange:G4}\nMomentum change {h.MomentumChange}\nAngular change {h.AngularMomentumChange:G4}");}
             }
             GUI.enabled=true;GUILayout.EndScrollView();GUILayout.EndArea();
-            GUI.Box(new Rect(338,12,Mathf.Max(100,Screen.width-350),56),(Busy?"Applying edit… ":pointerRequest?"Picking… ":running?"RUNNING • ":"PAUSED • ")+status);
-            if(Session==null&&!Busy)GUI.Box(new Rect(350,90,Mathf.Max(120,Screen.width-380),100),"No live solver world. Reset a preset or import a valid scene.\n"+status);
+            GUI.Box(StatusPanel,(Busy?"Applying edit… ":pointerRequest?"Picking… ":running?"RUNNING • ":"PAUSED • ")+status);
+            if(Session==null&&!Busy)GUI.Box(new Rect(350,100,Mathf.Max(120,HudWidth-380),120),"No live solver world. Reset a preset or import a valid scene.\n"+status);
         }
         static void Field(string label,ref string text)
         {GUILayout.BeginHorizontal();GUILayout.Label(label,GUILayout.Width(110));GUI.SetNextControlName("edit"+label);text=GUILayout.TextField(text);GUILayout.EndHorizontal();}
-        void OnDestroy(){CancelManipulation();editor?.Dispose();view?.Dispose();if(cameraView)Destroy(cameraView.gameObject);}
+        void OnDestroy(){CancelManipulation();editor?.Dispose();view?.Dispose();if(cameraView)Destroy(cameraView.gameObject);if(hudSkin)Destroy(hudSkin);}
     }
 }

@@ -35,8 +35,8 @@ void PrepareForces(uint id:SV_DispatchThreadID)
             float2 pull=0;
             if(_Pull!=0)
             {
-                float2 point=e.center+offset,surface=e.velocity+e.spin*float2(-offset.y,offset.x);
-                pull=bounded(mass*(24*(_CursorAnchor.xy-point)-8*surface),cap);
+                float2 grabPoint=e.center+offset,surface=e.velocity+e.spin*float2(-offset.y,offset.x);
+                pull=bounded(mass*(24*(_CursorAnchor.xy-grabPoint)-8*surface),cap);
             }
             // One-tick impulse; the caller consumes its command only after submission.
             float2 push=bounded(60*_Impulse.xy,cap);

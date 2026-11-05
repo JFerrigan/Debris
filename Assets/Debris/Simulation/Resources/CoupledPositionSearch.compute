@@ -51,7 +51,7 @@ StructuredBuffer<Manifold> _Manifolds;
 StructuredBuffer<uint2> _Indices;
 StructuredBuffer<uint> _Count,_BroadFault,_CompactFault,_ValidationFacts,_RowFault;
 RWStructuredBuffer<uint> _Control,_Facts,_Heads;
-// Each baseline point owns a node. Insertion links nodes with an atomic
+// Each baseline pointOrdinal owns a node. Insertion links nodes with an atomic
 // exchange; lookups occur only in later dispatches after all links are stored.
 RWStructuredBuffer<uint4> _Nodes;
 RWStructuredBuffer<float2> _MetricBlocks;
@@ -185,11 +185,11 @@ void BuildTrialGroups(uint id:SV_DispatchThreadID)
     _TrialGroups[id]=g;
 }
 
-uint2 pointKey(uint2 pair,Manifold m,uint point)
+uint2 pointKey(uint2 pair,Manifold m,uint pointOrdinal)
 {
     // Primitive indices are immutable throughout this topology generation.
-    uint provenance=point==0?m.provenance0:m.provenance1;
-    return uint2(pair.x|(pair.y<<14),m.referenceFace|(m.incidentFace<<12)|(provenance<<24)|(point<<26));
+    uint provenance=pointOrdinal==0?m.provenance0:m.provenance1;
+    return uint2(pair.x|(pair.y<<14),m.referenceFace|(m.incidentFace<<12)|(provenance<<24)|(pointOrdinal<<26));
 }
 uint bucket(uint2 key)
 {
@@ -226,10 +226,10 @@ void EvaluateGeometry(uint3 group:SV_GroupID,uint3 lane:SV_GroupThreadID)
             Primitive a=_SourcePrimitives[pair.x],b=_SourcePrimitives[pair.y];
             bool solid=a.contactClass==2||b.contactClass==2;
             float slop=solid?.0001:.002;
-            for(uint point=0;point<m.count;point++)
+            for(uint pointOrdinal=0;pointOrdinal<m.count;pointOrdinal++)
             {
-                float gap=point==0?m.gap0:m.gap1;
-                uint provenance=point==0?m.provenance0:m.provenance1;
+                float gap=pointOrdinal==0?m.gap0:m.gap1;
+                uint provenance=pointOrdinal==0?m.provenance0:m.provenance1;
                 if(!isfinite(gap)||provenance>=4||a.contactClass==0||a.contactClass>2||
                     b.contactClass==0||b.contactClass>2)
                 {uint old;InterlockedOr(_Facts[0],1,old);continue;}
@@ -237,10 +237,10 @@ void EvaluateGeometry(uint3 group:SV_GroupID,uint3 lane:SV_GroupThreadID)
                 sum+=violation*violation;maximum=max(maximum,violation);
                 if(solid&&gap<-.001)
                 {
-                    uint2 key=pointKey(pair,m,point);
+                    uint2 key=pointKey(pair,m,pointOrdinal);
                     if(_Baseline!=0)
                     {
-                        uint node=2*id+point,old;
+                        uint node=2*id+pointOrdinal,old;
                         InterlockedExchange(_Heads[bucket(key)],node,old);
                         _Nodes[node]=uint4(key,old,0);
                     }
