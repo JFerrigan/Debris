@@ -1,6 +1,6 @@
 # Interactive V2 physics playground
 
-Planning checkpoint: 2026-11-05 UTC. **Plan only; playground implementation has not started.** The user stopped gameplay integration and requested a separate place to manipulate the new physics with mouse and keyboard. This is the current bounded deliverable. Do not resume Debris gameplay integration after writing this plan.
+Current checkpoint: 2026-11-05 UTC. **Standalone playground source implemented; runtime acceptance remains open.** The user subsequently requested implementation without running the program. That instruction authorizes source work and direct compilation; this assignment does not launch Unity, tests, builds or a player. The feature/acceptance requirements below remain intact. Do not resume Debris gameplay integration.
 
 ## 1. What we will build
 
@@ -216,4 +216,10 @@ Completion means this flow runs in the separate built app on the final source. C
 
 The rollback restored the exact pre-integration workspace status. `Showcase.cs` and `MatterView.cs` hashes match their pre-attempt values; the three untracked gameplay-integration sources were removed. Existing solver commits, tests, unfinished user work and game builds were preserved. No game binary was rebuilt or launched, and the previously reported black screen remains unresolved.
 
-The next implementation assignment should begin with P0, then build the isolated P1–P3 interaction loop. The immediate runtime prerequisite is a valid Unity 6000.3.11f1 Editor license. This planning assignment stops here; no gameplay or playground implementation is authorized by the existence of this document alone.
+The subsequent user assignment authorized playground implementation without running the program. See the source checkpoint below. Runtime verification still requires a valid Unity 6000.3.11f1 Editor license and permission to execute; no game integration has resumed.
+
+## 13. Implemented source and remaining acceptance
+
+Source now includes the dedicated scene/build entry, direct GPU renderer and picking, sampled force/torque tools, keyboard control, single-step/pause/reset, bounded grain painting, rigid placement, erase/delete/clear, pin/unpin, property edits, gravity vector, all six presets, atomic scene files, failure exports and explicit replay. Generation and command-ID guards reject stale input. Fenced edits reconstruct one owner cold and preserve a recovery snapshot. Empty worlds allocate no solver buffers. The concrete convex allocation formula is checked against the live ledger by the constructor when eventually executed.
+
+The [source evidence](evidence/B3R-playground-source.md) maps requirements to files and records direct compilation of runtime, presentation, editor entry and ten regression fixtures. Seventeen new cases are defined, including GPU manipulation/edit cases, but none has run. No checkbox or physical/resource/performance gate is closed by source compilation. P0 measurement, all runtime portions of P1–P4, and P5's actual packaged application and player acceptance remain open under the user's no-execution constraint.

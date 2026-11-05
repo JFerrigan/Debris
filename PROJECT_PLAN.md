@@ -1,6 +1,6 @@
 # Debris — Product and Execution Plan
 
-Current user assignment (2026-11-05 UTC): game integration is stopped. Roll back the interrupted attempt and deliver the [standalone physics-playground plan](docs/PHYSICS_PLAYGROUND_PLAN.md). That bounded assignment is complete; the game delivery phases below are retained as historical product direction, not an instruction to resume game work or implement the playground without a new request.
+Current user assignment (2026-11-05 UTC): game integration is stopped. Implement the [standalone physics playground](docs/PHYSICS_PLAYGROUND_PLAN.md) without running the program. Source implementation and direct compilation are recorded in the [playground checkpoint](docs/evidence/B3R-playground-source.md); runtime and packaging acceptance remain open. The game delivery phases below are retained as historical product direction, not an instruction to resume game work.
 
 ## Purpose
 

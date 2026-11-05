@@ -1,0 +1,95 @@
+#pragma kernel PrepareForces
+#pragma kernel Pick
+#pragma kernel Placement
+
+struct Endpoint { float2 center,velocity; float angle,spin; uint r0,r1; };
+struct Parameters { float im,ii; float2 com; uint first,count,mobility,revision; };
+struct Shape { float2 half; float4 color; uint anchored,grain; };
+struct Header { uint2 tick; uint generation,topology,cache,identity,version,count; };
+struct Hit { uint found,endpoint,tickLow,tickHigh; float2 local; uint generation,anchored; };
+StructuredBuffer<Endpoint> _Endpoints;
+StructuredBuffer<Parameters> _Parameters;
+StructuredBuffer<Shape> _Shapes;
+StructuredBuffer<Header> _Header;
+RWStructuredBuffer<float4> _Forces;
+RWStructuredBuffer<Hit> _Pick;
+uint _Count,_Generation,_Pull,_LocalAxes,_IncludeAnchors;
+int _Selected;
+float4 _CursorAnchor,_Drive,_Impulse,_Gravity,_Pointer;
+float4 _Placement;
+float _PlacementAngle;
+float2 rotate(float2 p,float a){float s,c;sincos(a,s,c);return float2(c*p.x-s*p.y,s*p.x+c*p.y);}
+float2 bounded(float2 v,float cap){float n=length(v);return n>cap&&n>0?v*(cap/n):v;}
+[numthreads(64,1,1)]
+void PrepareForces(uint id:SV_DispatchThreadID)
+{
+    if(id>=_Count)return;
+    Parameters p=_Parameters[id];Endpoint e=_Endpoints[id];float4 force=0;
+    if(p.mobility!=0)
+    {
+        float mass=1/p.im;force.xy=mass*_Gravity.xy;
+        if((int)id==_Selected)
+        {
+            float cap=_Drive.w;float2 offset=rotate(_CursorAnchor.zw,e.angle);
+            float2 drive=bounded(_Drive.xy,1);if(_LocalAxes!=0)drive=rotate(drive,e.angle);
+            float2 pull=0;
+            if(_Pull!=0)
+            {
+                float2 point=e.center+offset,surface=e.velocity+e.spin*float2(-offset.y,offset.x);
+                pull=bounded(mass*(24*(_CursorAnchor.xy-point)-8*surface),cap);
+            }
+            // One-tick impulse; the caller consumes its command only after submission.
+            float2 push=bounded(60*_Impulse.xy,cap);
+            float2 tool=cap*drive+pull+push;
+            float norm=length(tool),scale=norm>cap&&norm>0?cap/norm:1;
+            tool*=scale;force.xy+=tool;
+            // Center thrust has no artificial torque; pulling/pushing use the local pick.
+            float2 atPoint=(pull+push)*scale;
+            float radius=length(_Shapes[id].half);
+            force.z=clamp(_Drive.z,-1,1)*cap*radius;
+            force.z+=offset.x*atPoint.y-offset.y*atPoint.x;
+        }
+    }
+    _Forces[id]=force;
+}
+[numthreads(1,1,1)]
+void Pick(uint id:SV_DispatchThreadID)
+{
+    Hit hit;hit.found=0;hit.endpoint=0;hit.local=0;hit.generation=_Generation;hit.anchored=0;
+    hit.tickLow=_Header[0].tick.x;hit.tickHigh=_Header[0].tick.y;
+    float best=3.402823466e+38;
+    for(uint i=0;i<_Count;i++)
+    {
+        Shape shape=_Shapes[i];if(shape.anchored!=0&&_IncludeAnchors==0)continue;
+        Endpoint e=_Endpoints[i];float2 local=rotate(_Pointer.xy-e.center,-e.angle);
+        if(any(abs(local)>shape.half))continue;
+        float distance=dot(local,local);
+        // Endpoint order is persistent-ID sorted within each object class.
+        if(hit.found!=0&&distance>=best)continue;
+        best=distance;hit.found=1;hit.endpoint=i;hit.local=local;hit.anchored=shape.anchored;
+    }
+    _Pick[0]=hit;
+}
+[numthreads(1,1,1)]
+void Placement(uint id:SV_DispatchThreadID)
+{
+    Hit hit;hit.found=1;hit.endpoint=0;hit.local=0;hit.generation=_Generation;hit.anchored=0;
+    hit.tickLow=_Header[0].tick.x;hit.tickHigh=_Header[0].tick.y;
+    float2 ax=rotate(float2(1,0),_PlacementAngle),ay=rotate(float2(0,1),_PlacementAngle);
+    float2 extent=abs(ax)*_Placement.z+abs(ay)*_Placement.w;
+    if(any(_Placement.xy-extent< -511.5)||any(_Placement.xy+extent>=511.5))hit.found=0;
+    for(uint i=0;i<_Count&&hit.found!=0;i++)
+    {
+        Endpoint e=_Endpoints[i];Shape b=_Shapes[i];
+        float2 bx=rotate(float2(1,0),e.angle),by=rotate(float2(0,1),e.angle),delta=e.center-_Placement.xy;
+        float2 axes[4]={ax,ay,bx,by};float gap=-3.402823466e+38;
+        for(uint axis=0;axis<4;axis++)
+        {
+            float2 n=axes[axis];float ra=abs(dot(n,ax))*_Placement.z+abs(dot(n,ay))*_Placement.w;
+            float rb=abs(dot(n,bx))*b.half.x+abs(dot(n,by))*b.half.y;
+            gap=max(gap,abs(dot(delta,n))-ra-rb);
+        }
+        if(gap<.002)hit.found=0;
+    }
+    _Pick[0]=hit;
+}
