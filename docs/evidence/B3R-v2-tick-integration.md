@@ -2,6 +2,8 @@
 
 User scope: implement four ordered stages and commit after each; do not launch Unity, compile, build or run tests. Source inspection is not runtime acceptance. Legacy remains default.
 
+Follow-up (2026-11-05 UTC): validation has now resumed. Current runtime plus eight fixtures compile directly against pinned assemblies; Unity testing is blocked by Editor licensing. Three integrated `RecordTick` cases compile but remain unrun. See the [qualification checkpoint](B3R-v2-tick-qualification.md) for current evidence and next work; the source-only statements below describe the original four-step assignment.
+
 ## Step 1
 
 Accepted projected velocity output now updates transaction working endpoints; external force/torque integration; cold impulses; per-substep geometry rebasing; graph/finiteness rejection before motion application.
