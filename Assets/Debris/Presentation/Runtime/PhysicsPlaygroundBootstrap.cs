@@ -22,7 +22,7 @@ namespace Debris.Presentation
         string spawnVx="0",spawnVy="0",spawnSpin="0",gravityX="0",gravityY="-9.81";
         Vector2 localAnchor,pointer,previousPointer,bodyStart,pushStart,queuedImpulse,scroll;
         bool running,stepRequested,grabbing,drawingBody,pushing,focused=true,keepWalls=true,ignoreAnchors,
-            bodyAnchored,localAxes,diagnostics,previewValid=true,previewPending,faultLogged,pointerRequest;
+            bodyAnchored,localAxes,diagnostics,previewValid=true,previewPending,faultLogged,pointerRequest,editingText,clearTextFocus;
         float radius=.5f,density=1,sizeX=4,sizeY=4,spawnAngle,force=400,speed=1,accumulator,brushTime,previewTime,rateTime;
         int pointerSerial,rateTicks;
         ulong nextCommandId;
@@ -85,7 +85,8 @@ namespace Debris.Presentation
             pointer=cameraView.ScreenToWorldPoint(new Vector3(screen.x,screen.y,10));
             Vector2 guiPoint=new Vector2(screen.x,Screen.height-screen.y)/HudScale;
             bool overUI=Panel.Contains(guiPoint)||StatusPanel.Contains(guiPoint);
-            bool text=GUI.GetNameOfFocusedControl().StartsWith("edit",StringComparison.Ordinal);
+            if(mouse?.leftButton.wasPressedThisFrame==true&&!overUI){clearTextFocus=true;editingText=false;}
+            bool text=editingText;
             if(Session?.Poll()==true)
             {
                 if(Session.Faulted)
@@ -132,10 +133,10 @@ namespace Debris.Presentation
                 }
             }
             previousPointer=screen;
+            if(focused&&!text&&keyboard!=null&&keyboard.spaceKey.wasPressedThisFrame)ToggleRun();
             if(focused&&!text&&!Busy&&keyboard!=null)
             {
                 for(int i=0;i<6;i++)if(keyboard[(Key)((int)Key.Digit1+i)].wasPressedThisFrame)SetTool((Tool)i);
-                if(keyboard.spaceKey.wasPressedThisFrame)ToggleRun();
                 if(keyboard.periodKey.wasPressedThisFrame){running=false;stepRequested=true;}
                 if(keyboard.rKey.wasPressedThisFrame)_=ResetPreset();
                 if(keyboard.escapeKey.wasPressedThisFrame)CancelManipulation();
@@ -174,7 +175,7 @@ namespace Debris.Presentation
             if(!Busy&&!overUI&&(tool==Tool.Grains||tool==Tool.Erase))view?.Brush(pointer,radius,tool==Tool.Erase);
             if(pushing)view?.Arrow(pushStart,pointer);
         }
-        void SetTool(Tool value){CancelManipulation();tool=value;GUI.FocusControl(null);}
+        void SetTool(Tool value){CancelManipulation();tool=value;clearTextFocus=true;editingText=false;}
         void CancelManipulation(){pointerSerial++;grabbing=drawingBody=pushing=false;queuedImpulse=Vector2.zero;stepRequested=false;}
         void OnApplicationFocus(bool value){focused=value;if(!value){CancelManipulation();running=false;}}
         void OnDisable(){CancelManipulation();running=false;}
@@ -236,11 +237,15 @@ namespace Debris.Presentation
         }
         async Task<bool> Mutate(string name,Func<PlaygroundWorldDefinition,PlaygroundWorldDefinition> change,bool resume=true)
         {
-            if(Busy)return false;bool wasRunning=running;running=false;CancelManipulation();
+            if(Busy)return false;
+            // Busy already fences simulation submission. Editing must not
+            // change the user's Run/Pause choice or restore an obsolete one.
+            if(!resume)running=false;
+            CancelManipulation();
             bool ok=await editor.ApplyAsync(name,change);if(this==null)return false;
             status=editor.Status;accumulator=0;
             if(Session?.IndexOf(selected)<0){selected=null;inspected=null;}
-            if(ok&&resume)running=wasRunning;
+            if(Session==null||Session.Faulted)running=false;
             if(ok&&selected!=null)await InspectSelected();return ok;
         }
         async Task ResetPreset()
@@ -310,10 +315,9 @@ namespace Debris.Presentation
         }
         async Task SaveScene()
         {
-            if(Busy)return;bool resume=running;running=false;CancelManipulation();
+            if(Busy)return;CancelManipulation();
             try { var world=await editor.CaptureAsync();PlaygroundSceneFile.Save(ScenePath,world);status="Saved "+ScenePath; }
             catch(Exception e){status="Save failed: "+e.Message;}
-            finally { if(this!=null&&Session?.Faulted!=true)running=resume; }
         }
         async Task LoadScene()
         {
@@ -354,7 +358,9 @@ namespace Debris.Presentation
             EnsureHudSkin();var previousMatrix=GUI.matrix;var previousSkin=GUI.skin;bool previousEnabled=GUI.enabled;
             try
             {
-                GUI.skin=hudSkin;GUI.matrix=Matrix4x4.Scale(new Vector3(HudScale,HudScale,1));DrawHud();
+                GUI.skin=hudSkin;GUI.matrix=Matrix4x4.Scale(new Vector3(HudScale,HudScale,1));
+                if(clearTextFocus){GUI.FocusControl(null);clearTextFocus=false;}
+                DrawHud();editingText=GUI.GetNameOfFocusedControl().StartsWith("edit",StringComparison.Ordinal);
             }
             finally { GUI.matrix=previousMatrix;GUI.skin=previousSkin;GUI.enabled=previousEnabled; }
         }
@@ -385,8 +391,8 @@ namespace Debris.Presentation
             GUILayout.Label(hudZoom.ToString("P0"),GUILayout.Width(50));
             if(GUILayout.Button("+",GUILayout.Width(38)))ChangeHudZoom(.1f);GUILayout.EndHorizontal();
             GUILayout.Label("V2 solver • experimental / runtime unverified");
-            GUI.enabled=!Busy;
             GUILayout.BeginHorizontal();if(GUILayout.Button(running?"Pause [Space]":"Run [Space]"))ToggleRun();
+            GUI.enabled=!Busy;
             if(GUILayout.Button("Step [.]")){running=false;stepRequested=true;}GUILayout.EndHorizontal();
             if(GUILayout.Button("Home camera"))HomeCamera();
             GUILayout.Label("Simulation speed "+speed.ToString("F2")+"×");speed=GUILayout.HorizontalSlider(speed,.1f,1);

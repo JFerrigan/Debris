@@ -1,0 +1,6 @@
+{
+  "name": "Debris.Presentation.Tests",
+  "references": ["Debris.Presentation", "Debris.Simulation"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "includePlatforms": ["Editor"]
+}
