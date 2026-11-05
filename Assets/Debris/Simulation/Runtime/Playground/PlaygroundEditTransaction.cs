@@ -24,40 +24,58 @@ namespace Debris.Simulation.Playground
         public uint Revision { get; private set; }
         public bool Busy { get; private set; }
         public string Status { get; private set; }
-        public readonly List<PlaygroundEditFact> History=new List<PlaygroundEditFact>();
+        readonly List<PlaygroundEditFact> history=new List<PlaygroundEditFact>(128);
+        public IReadOnlyList<PlaygroundEditFact> History=>history;
         public event Action<PlaygroundWorldDefinition> Freeze;
         public event Action Rebound;
         uint generation;
-        bool disposed;
+        bool disposed,requiresRestart;
         uint NewGeneration()=>generation==uint.MaxValue?throw new InvalidOperationException("World generation exhausted"):++generation;
 
         public async Task<bool> ReplaceAsync(string command,PlaygroundWorldDefinition replacement)
             =>await ApplyAsync(command,w=>replacement.Copy());
         public async Task<bool> ApplyAsync(string command,Func<PlaygroundWorldDefinition,PlaygroundWorldDefinition> change)
         {
-            if(disposed||Busy)return false;Busy=true;
-            CoupledPlaygroundSession candidate=null;bool retired=false;
+            if(disposed||Busy)return false;
+            if(requiresRestart){Status="Restart the playground before editing: GPU owner cleanup or recovery failed";return false;}
+            Busy=true;
+            CoupledPlaygroundSession candidate=null;bool retired=false,published=false;
             try
             {
                 await DrainAsync();
                 var before=Current==null?(Recovery?.Copy()??new PlaygroundWorldDefinition()):await Current.SnapshotAsync();
                 Recovery=before.Copy();var proposed=change(before.Copy());
+                if(disposed)return false;
                 if(proposed==null)throw new ArgumentException("An edit must supply a world");
-                PlaygroundBudget.Admit(proposed);Freeze?.Invoke(before);
-                Current?.Dispose();Current=null;retired=true;
-                candidate=new CoupledPlaygroundSession(proposed,NewGeneration());
+                PlaygroundBudget.Admit(proposed);
+                uint nextRevision=checked(Revision+1),nextGeneration=NewGeneration();
+                var acceptedCopy=proposed.Copy();var fact=MakeFact(command,before,proposed,nextRevision);
+                Freeze?.Invoke(before);
+                if(disposed)return false;
+                try { Current?.Dispose(); }
+                catch(Exception release)
+                {
+                    Current=null;requiresRestart=true;Status=command+" stopped: previous GPU owner could not retire: "+release.Message;
+                    return false; // Do not allocate another arena after uncertain cleanup.
+                }
+                Current=null;retired=true;
+                candidate=new CoupledPlaygroundSession(proposed,nextGeneration);
                 await candidate.ValidateInitialAsync();
                 if(disposed){candidate.Dispose();return false;}
-                Current=candidate;candidate=null;Revision=checked(Revision+1);Recovery=proposed.Copy();
-                Record(command,before,proposed);Status=command+" applied";Rebound?.Invoke();return true;
+                Current=candidate;candidate=null;published=true;Revision=nextRevision;Recovery=acceptedCopy;
+                if(history.Count==128)history.RemoveAt(0);history.Add(fact);
+                Status=command+" applied";NotifyRebound();return true;
             }
             catch(Exception e)
             {
-                candidate?.Dispose();Status=command+" refused: "+e.Message;
+                if(published){Status=command+" applied; post-publication error: "+e.Message;return true;}
+                Status=command+" refused: "+e.Message;
+                try { candidate?.Dispose(); }
+                catch(Exception release){requiresRestart=true;Status+=". Candidate cleanup failed: "+release.Message;return false;}
                 if(retired&&!disposed)
                 {
-                    try { Current=new CoupledPlaygroundSession(Recovery,NewGeneration());Rebound?.Invoke(); }
-                    catch(Exception restore){Current?.Dispose();Current=null;Status+=". Recovery could not allocate: "+restore.Message;}
+                    try { Current=new CoupledPlaygroundSession(Recovery,NewGeneration());NotifyRebound(); }
+                    catch(Exception restore){requiresRestart=true;Current?.Dispose();Current=null;Status+=". Recovery could not allocate: "+restore.Message;}
                 }
                 return false;
             }
@@ -78,7 +96,15 @@ namespace Debris.Simulation.Playground
             while(!disposed&&Current!=null&&Current.Pending){Current.Poll();await Task.Yield();}
             if(disposed)throw new ObjectDisposedException(nameof(PlaygroundEditTransaction));
         }
-        void Record(string command,PlaygroundWorldDefinition before,PlaygroundWorldDefinition after)
+        void NotifyRebound()
+        {
+            foreach(var callback in Rebound?.GetInvocationList()??Array.Empty<Delegate>())
+            {
+                try { ((Action)callback)(); }
+                catch(Exception e){Status+="; view notification failed: "+e.Message;}
+            }
+        }
+        static PlaygroundEditFact MakeFact(string command,PlaygroundWorldDefinition before,PlaygroundWorldDefinition after,uint revision)
         {
             double mass=0,angular=0;Vector2 momentum=Vector2.zero;
             void Sum(PlaygroundWorldDefinition world,int sign)
@@ -92,9 +118,8 @@ namespace Debris.Simulation.Playground
                 }
             }
             Sum(before,-1);Sum(after,1);
-            History.Add(new PlaygroundEditFact{Utc=DateTime.UtcNow.ToString("O"),Command=command,Revision=Revision,
-                BeforeCount=before.Objects.Count,AfterCount=after.Objects.Count,MassChange=mass,MomentumChange=momentum,AngularMomentumChange=angular});
-            if(History.Count>128)History.RemoveAt(0);
+            return new PlaygroundEditFact{Utc=DateTime.UtcNow.ToString("O"),Command=command,Revision=revision,
+                BeforeCount=before.Objects.Count,AfterCount=after.Objects.Count,MassChange=mass,MomentumChange=momentum,AngularMomentumChange=angular};
         }
         public void Dispose(){if(disposed)return;disposed=true;Current?.Dispose();Current=null;}
     }

@@ -87,5 +87,48 @@ namespace Debris.Simulation.Tests
                 Assert.That(clear.Result,Is.True,editor.Status);Assert.That(editor.Current.Count,Is.Zero);Assert.That(editor.Current.BufferBytes,Is.Zero);
             }
         }
+        [UnityTest,Timeout(600000)] public IEnumerator ViewNotificationFailureCannotRollBackPublishedWorld()
+        {
+            using(var editor=new PlaygroundEditTransaction())
+            {
+                int notifications=0;
+                editor.Rebound+=()=>throw new InvalidOperationException("Broken view subscriber");
+                editor.Rebound+=()=>notifications++;
+                var first=editor.ReplaceAsync("Initial empty",new PlaygroundWorldDefinition());yield return Await(first);
+                Assert.That(first.Result,Is.True,editor.Status);Assert.That(editor.Revision,Is.EqualTo(1u));
+                Assert.That(editor.Current,Is.Not.Null);Assert.That(editor.Status,Does.Contain("notification failed"));
+                var owner=editor.Current;
+                var second=editor.ApplyAsync("Rename",w=>{w.Name="Accepted rename";return w;});yield return Await(second);
+                Assert.That(second.Result,Is.True,editor.Status);Assert.That(editor.Current,Is.Not.SameAs(owner));
+                Assert.That(editor.Revision,Is.EqualTo(2u));Assert.That(editor.Recovery.Name,Is.EqualTo("Accepted rename"));
+                Assert.That(editor.History.Count,Is.EqualTo(2));Assert.That(editor.Current.BufferBytes,Is.Zero);
+                Assert.That(notifications,Is.EqualTo(2),"A failed subscriber cannot suppress remaining view updates");
+            }
+        }
+        [UnityTest,Timeout(600000)] public IEnumerator FreezeFailureRetainsOwnerWithoutPublishingAnEdit()
+        {
+            using(var editor=new PlaygroundEditTransaction())
+            {
+                var first=editor.ReplaceAsync("Initial empty",new PlaygroundWorldDefinition());yield return Await(first);
+                Assert.That(first.Result,Is.True,editor.Status);var owner=editor.Current;
+                editor.Freeze+=w=>throw new InvalidOperationException("Frozen display unavailable");
+                var failed=editor.ApplyAsync("Rename",w=>{w.Name="Refused rename";return w;});yield return Await(failed);
+                Assert.That(failed.Result,Is.False);Assert.That(editor.Current,Is.SameAs(owner));
+                Assert.That(editor.Revision,Is.EqualTo(1u));Assert.That(editor.History.Count,Is.EqualTo(1));
+                Assert.That(editor.Status,Does.Contain("Frozen display unavailable"));
+            }
+        }
+        [UnityTest,Timeout(600000)] public IEnumerator DisposingDuringFreezeCannotConstructANewOwner()
+        {
+            using(var editor=new PlaygroundEditTransaction())
+            {
+                var first=editor.ReplaceAsync("Initial empty",new PlaygroundWorldDefinition());yield return Await(first);
+                Assert.That(first.Result,Is.True,editor.Status);
+                editor.Freeze+=w=>editor.Dispose();
+                var stopped=editor.ApplyAsync("Close during edit",w=>{w.Name="Must not publish";return w;});yield return Await(stopped);
+                Assert.That(stopped.Result,Is.False);Assert.That(editor.Current,Is.Null);
+                Assert.That(editor.Revision,Is.EqualTo(1u));Assert.That(editor.History.Count,Is.EqualTo(1));
+            }
+        }
     }
 }

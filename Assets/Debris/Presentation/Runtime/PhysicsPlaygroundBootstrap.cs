@@ -48,7 +48,10 @@ namespace Debris.Presentation
             {
                 view=new CoupledPlaygroundView(cameraView);
                 editor.Freeze+=world=>{CancelManipulation();view.Freeze(world);};
-                editor.Rebound+=()=>{view.ClearFrozen();faultLogged=false;};
+                editor.Rebound+=()=>{
+                    view.ClearFrozen();faultLogged=false;
+                    if(Session!=null){gravityX=Text(Session.Gravity.x);gravityY=Text(Session.Gravity.y);}
+                };
                 await ResetPreset();
             }
             catch(Exception e){status="Startup failed: "+e.Message;Debug.LogError(status);}

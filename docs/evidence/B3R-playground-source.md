@@ -43,12 +43,34 @@ Static checks cover scene-to-script GUID identity, asset metadata uniqueness, lo
 
 [PlaygroundWorldTests](../../Assets/Debris/Simulation/Tests/Editor/PlaygroundWorldTests.cs) defines fourteen cases: six presets; rotated/contained placement rejection; capacity refusal preserving identities; analytical mass/inertia; grains-first reconstruction preserving full body IDs; genuinely empty world; invalid density/mobility/identity/bounds; versioned scene roundtrip/rejection; and invalid save preserving the old file.
 
-[PlaygroundSessionTests](../../Assets/Debris/Simulation/Tests/Editor/PlaygroundSessionTests.cs) defines three GPU cases: admitted allocation totals and off-center mouse force with mass/inertia, including stale-world refusal; accounted gravity and explicit anchor immobility with hit/miss picking; and rejected edits retaining the owner followed by cold reconstruction preserving accepted motion and clearing to an empty world. Ten-minute timeouts include fixture lifetime.
+[PlaygroundSessionTests](../../Assets/Debris/Simulation/Tests/Editor/PlaygroundSessionTests.cs) defines six session cases. Three GPU cases cover: admitted allocation totals and off-center mouse force with mass/inertia, including stale-world refusal; accounted gravity and explicit anchor immobility with hit/miss picking; and rejected edits retaining the owner followed by cold reconstruction preserving accepted motion and clearing to an empty world. Three empty-world transaction cases additionally cover throwing post-publication subscribers, throwing pre-retirement freeze subscribers, and disposal during freeze. Ten-minute timeouts include fixture lifetime.
 
-All seventeen compile but remain unrun. Shader behavior/bindings, live resource admission, edit recovery on GPU allocation failure, final scene rendering, Input System interaction, full-tick scheduling cost, scene IO execution and replay behavior have no execution evidence in this assignment.
+All twenty compile but remain unrun. Shader behavior/bindings, live resource admission, edit recovery on GPU allocation failure, final scene rendering, Input System interaction, full-tick scheduling cost, scene IO execution and replay behavior have no execution evidence in this assignment.
 
 ## Build and acceptance handoff — do not execute under current scope
 
 When execution is authorized and the pinned Editor is licensed, open `Assets/Scenes/PhysicsPlayground.unity` through **Debris → Physics Playground → Open isolated scene**. The separate **Build Mac (do not launch)** menu calls `Debris.Editor.PhysicsPlaygroundBuild.BuildMac` and targets `Builds/PhysicsPlayground/Debris Physics Playground.app`. The builder records source hashes, restores temporary player-name/window settings, and does not launch its output. No app at that path has been produced in this assignment.
 
 Begin runtime work with P0's integrated solver and tiny-world resource/schedule checks, then the new fixtures, before proceeding to the plan's complete mouse/keyboard acceptance script. Keep the original tolerances and report measured limits. Do not infer a playable build or close B.GATE from this checkpoint. The active goal remains unproven pending the unexecuted requirements; existing user/game changes remain preserved.
+
+## Follow-up source audit
+
+The next goal turn found a concrete publication exception path: a throwing view notification could enter rollback after the new owner was already published, allowing a second live arena. Publication now precomputes revision/history/recovery data, transfers ownership once, and isolates each view subscriber's exception. Pre-retirement failures retain the old owner. Disposal during freeze stops reconstruction. Uncertain GPU cleanup/recovery requires restart rather than allowing another arena allocation. Loaded/reset gravity controls now reflect the current world's vector.
+
+Nine additional direct compiler invocations followed these implementation/regression additions; runtime, presentation and ten-fixture source compilation all end at exit 0 with no diagnostics. No tests, Unity, build or player ran. The three new transaction regression definitions bring the playground total to twenty unrun cases. Existing game source remains untouched.
+
+| Plan scope | Current evidence | What still prevents acceptance |
+|---|---|---|
+| Sections 1–2: isolated application using V2 | Dedicated scene, matching script GUID, build entry and source-only V2 ownership | No imported scene, built app or live solver evidence |
+| Section 3: every tool/shortcut | Controller branches and UI controls compile; Input System API references resolve | Actual mouse/key/focus behavior untested |
+| Section 4: picking and physical manipulation | GPU kernels and generation/command guards present; force/torque/gravity regressions defined | Shader compilation, bindings and physical results unverified |
+| Section 5: safe editing | Fenced reconstruction, recovery and publication fixes; failure cases defined | Live allocation/recovery/cleanup tests unrun |
+| Section 6: geometry/caps | Convex model, SAT, mass/inertia and allocation arithmetic; validation cases defined | Native resource admission and supported workload not measured |
+| Section 7: rendering/failures | Dedicated shader/view and retained-state/fault UI source | Visual startup, Metal behavior and failure display untested |
+| Section 8: presets/scene files | Six definitions, atomic codec and strict versions; roundtrip cases defined | Preset execution, filesystem IO and cold continuation untested |
+| Section 9: lifecycle/data flow | Explicit buffer ownership; compact normal readbacks; stopped snapshots; stale input rejection | Runtime lifecycle and leak checks unrun |
+| Section 10: P0–P5 gates | Source implementations and measurement fields present | All runtime/measurement gates and P5 binary remain open |
+| Section 11: all ten manual actions | Corresponding controller/editor/export/replay paths present | No actual player interaction evidence |
+| Sections 12–13: handoff | Source checkpoint and plan updated, ordinary commits pushed | Full goal completion is not proven by compilation |
+
+The remaining acceptance work requires execution, which the active user instruction forbids. Keep the full goal intact; do not mark it achieved or launch programs to manufacture evidence. Source review/fixes in this audit are progress, not a runtime pass.
