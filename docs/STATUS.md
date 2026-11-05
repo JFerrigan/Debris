@@ -1,6 +1,8 @@
 # Implementation status
 
-Current direction (2026-11-05 UTC): **runtime qualification resumed under the user's “Continue working” response to the validation request**. Next task: restore a valid license for pinned Unity 6000.3.11f1, then run the focused V2 fixtures including `CoupledTickStepperTests`. The first Unity attempt exited 198 before project compilation: “No valid Unity Editor license found. Please activate your license.” No tests ran or result XML was produced. Direct C# compilation passes; shader and physical behavior remain unverified. See [qualification checkpoint](evidence/B3R-v2-tick-qualification.md).
+Current direction (2026-11-05 UTC): **the user stopped game integration and requested rollback plus a detailed standalone physics-playground plan**. Both are complete. The [playground plan](PHYSICS_PLAYGROUND_PLAN.md) covers mouse picking/pulling, keyboard force/torque, spawn/delete, anchoring, paused edit reconstruction, rendering, failure handling and staged acceptance. This is a planning handoff; do not resume game expansion or start playground implementation automatically. The next requested implementation should begin with P0 solver smoke/resource/schedule checks, then P1–P3 standalone interaction and editing.
+
+Rollback removed only the three untracked integration files `CoupledGameplayImport.cs`, `CoupledGameplaySession.cs` and `CoupledGameplay.compute`; exact pre-integration git status was restored and `Showcase.cs`/`MatterView.cs` SHA-256 matched the saved baseline. All earlier solver/user changes and existing builds remain. No game build or launch occurred; the reported black screen is unresolved. Runtime prerequisite remains a valid pinned Unity 6000.3.11f1 license: the last attempt exited 198 before compilation/tests. See [qualification checkpoint](evidence/B3R-v2-tick-qualification.md).
 
 ## Current source checkpoint
 

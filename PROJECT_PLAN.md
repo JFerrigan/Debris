@@ -1,5 +1,7 @@
 # Debris — Product and Execution Plan
 
+Current user assignment (2026-11-05 UTC): game integration is stopped. Roll back the interrupted attempt and deliver the [standalone physics-playground plan](docs/PHYSICS_PLAYGROUND_PLAN.md). That bounded assignment is complete; the game delivery phases below are retained as historical product direction, not an instruction to resume game work or implement the playground without a new request.
+
 ## Purpose
 
 This is the top-level entry point for making Debris. It states what the game is, the order in which it is built, what proves each phase is complete, and what must not expand before its foundation works. Detailed rules live in the linked documents; this file resolves their order.
