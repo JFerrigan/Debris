@@ -15,6 +15,8 @@ namespace Debris.Simulation.Playground
         public PlaygroundWorldDefinition World;
         public PlaygroundInput Command;
         public uint[] Diagnostics;
+        public string DebugLogPath;
+        public PlaygroundDebugEvent[] RecentEvents;
         public static PlaygroundFailureFile Load(string path)
         {
             if(new FileInfo(path).Length>2*1024*1024)throw new InvalidDataException("Failure export exceeds 2 MiB");

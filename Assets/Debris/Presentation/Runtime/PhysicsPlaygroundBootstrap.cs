@@ -12,6 +12,44 @@ namespace Debris.Presentation
     {
         enum Tool { Select,Grains,Rectangle,Erase,Push,Anchor }
         PlaygroundEditTransaction editor;
+        PlaygroundDebugLog debugLog;
+        string observedStatus;
+        bool observedBusy;
+        float nextWaitLog;
+        [Serializable] sealed class DebugContext
+        {
+            public int Frame;
+            public string Tool,Selected;
+            public bool Running,Busy,Focused,EditingText,Pending,Grabbing,Drawing,Pushing;
+            public uint Revision,Generation;
+            public ulong AttemptedTick,AcceptedTick;
+            public Vector2 Pointer;
+        }
+        void Trace(string name,string detail=null)
+        {
+            if(debugLog==null)return;
+            debugLog.Write(name,detail,JsonUtility.ToJson(new DebugContext{Frame=Time.frameCount,Tool=tool.ToString(),Selected=selected,
+                Running=running,Busy=Busy,Focused=focused,EditingText=editingText,Pending=Session?.Pending??false,
+                Grabbing=grabbing,Drawing=drawingBody,Pushing=pushing,Revision=editor?.Revision??0,Generation=Session?.Generation??0,
+                AttemptedTick=Session?.AttemptedTick??0,AcceptedTick=Session?.AcceptedTick??0,Pointer=pointer}));
+        }
+        void SetRunning(bool value,string reason)
+        {
+            bool before=running;running=value;
+            Trace("run.request",reason+" before="+before+" after="+value);
+        }
+        void CaptureUnityLog(string message,string stack,LogType type)
+        {
+            if(type==LogType.Error||type==LogType.Exception||type==LogType.Assert||type==LogType.Warning)
+                debugLog?.Write("unity."+type,message+"\n"+stack);
+        }
+        void LateUpdate()
+        {
+            if(status!=observedStatus){observedStatus=status;Trace("status",status);}
+            if(Busy!=observedBusy){observedBusy=Busy;Trace("busy.changed");}
+            if((Busy||Session?.Pending==true||pointerRequest)&&Time.realtimeSinceStartup>=nextWaitLog)
+            {nextWaitLog=Time.realtimeSinceStartup+5;Trace("waiting","pointerRequest="+pointerRequest);}
+        }
         CoupledPlaygroundView view;
         Camera cameraView;
         Tool tool;
@@ -57,6 +95,11 @@ namespace Debris.Presentation
 
         async void Start()
         {
+            debugLog=new PlaygroundDebugLog(Path.Combine(DirectoryPath,"debug.jsonl"));
+            Application.logMessageReceived+=CaptureUnityLog;
+            var identity=Resources.Load<TextAsset>("PhysicsPlaygroundBuildIdentity");
+            Trace("startup","Unity="+Application.unityVersion+" app="+Application.version+" assembly="+typeof(CoupledPlaygroundSession).Assembly.ManifestModule.ModuleVersionId+" build="+(identity?identity.text:"Editor")+" log="+debugLog.Path+" loggingError="+debugLog.Error);
+            Debug.Log("PHYSICS_PLAYGROUND debug log: "+debugLog.Path);
             float savedZoom=PlayerPrefs.GetFloat(HudZoomPreference,1);
             hudZoom=float.IsFinite(savedZoom)?Mathf.Clamp(savedZoom,.75f,1.75f):1;
             Application.targetFrameRate=60;
@@ -64,7 +107,7 @@ namespace Debris.Presentation
             cameraView.tag="MainCamera";cameraView.orthographic=true;cameraView.orthographicSize=30;
             cameraView.transform.position=new Vector3(-8,0,-10);cameraView.nearClipPlane=.1f;cameraView.farClipPlane=100;
             cameraView.clearFlags=CameraClearFlags.SolidColor;cameraView.backgroundColor=new Color(.035f,.05f,.07f);
-            editor=new PlaygroundEditTransaction();
+            editor=new PlaygroundEditTransaction{Log=debugLog};
             try
             {
                 view=new CoupledPlaygroundView(cameraView);
@@ -75,7 +118,7 @@ namespace Debris.Presentation
                 };
                 await ResetPreset();
             }
-            catch(Exception e){status="Startup failed: "+e.Message;Debug.LogError(status);}
+            catch(Exception e){Trace("startup.exception",e.ToString());status="Startup failed: "+e.Message;Debug.LogError(status);}
         }
         void Update()
         {
@@ -87,14 +130,17 @@ namespace Debris.Presentation
             bool overUI=Panel.Contains(guiPoint)||StatusPanel.Contains(guiPoint);
             if(mouse?.leftButton.wasPressedThisFrame==true&&!overUI){clearTextFocus=true;editingText=false;}
             bool text=editingText;
+            if(mouse?.leftButton.wasPressedThisFrame==true)
+                Trace("input.left_down","overUI="+overUI+" alt="+(keyboard?.altKey.isPressed??false)+" screen="+screen);
+            if(mouse?.leftButton.wasReleasedThisFrame==true)Trace("input.left_up");
             if(Session?.Poll()==true)
             {
                 if(Session.Faulted)
                 {
-                    running=false;stepRequested=false;queuedImpulse=lastInput.Impulse;status=Session.Fault;
+                    SetRunning(false,"solver rejected tick");Trace("tick.rejected",Session.Fault+" diagnostics="+JsonUtility.ToJson(new DiagnosticValues{Values=Session.Diagnostics}));stepRequested=false;queuedImpulse=lastInput.Impulse;status=Session.Fault;
                     if(!faultLogged){Debug.LogError("PHYSICS_PLAYGROUND "+status);faultLogged=true;}
                 }
-                else rateTicks++;
+                else {rateTicks++;if(Session.AcceptedTick%60==0)Trace("tick.heartbeat");}
             }
             rateTime+=Time.unscaledDeltaTime;
             if(rateTime>=1){ticksPerSecond=rateTicks/rateTime;rateTicks=0;rateTime=0;}
@@ -133,11 +179,11 @@ namespace Debris.Presentation
                 }
             }
             previousPointer=screen;
-            if(focused&&!text&&keyboard!=null&&keyboard.spaceKey.wasPressedThisFrame)ToggleRun();
+            if(focused&&!text&&keyboard!=null&&keyboard.spaceKey.wasPressedThisFrame){Trace("input.space");ToggleRun();}
             if(focused&&!text&&!Busy&&keyboard!=null)
             {
                 for(int i=0;i<6;i++)if(keyboard[(Key)((int)Key.Digit1+i)].wasPressedThisFrame)SetTool((Tool)i);
-                if(keyboard.periodKey.wasPressedThisFrame){running=false;stepRequested=true;}
+                if(keyboard.periodKey.wasPressedThisFrame){SetRunning(false,"single step");stepRequested=true;}
                 if(keyboard.rKey.wasPressedThisFrame)_=ResetPreset();
                 if(keyboard.escapeKey.wasPressedThisFrame)CancelManipulation();
                 if(keyboard.deleteKey.wasPressedThisFrame||keyboard.backspaceKey.wasPressedThisFrame)_=DeleteSelected();
@@ -157,9 +203,10 @@ namespace Debris.Presentation
                     }
                     var command=new PlaygroundInput{WorldGeneration=session.Generation,CommandId=++nextCommandId,SelectedId=selected,Cursor=pointer,LocalAnchor=localAnchor,
                         Pull=grabbing,Drive=drive,Turn=turn,MaximumForce=force,LocalAxes=localAxes,Impulse=queuedImpulse};
+                    if(command.Pull||command.Drive!=Vector2.zero||command.Turn!=0||command.Impulse!=Vector2.zero||command.CommandId%60==1)Trace("tick.submit",JsonUtility.ToJson(command));
                     if(session.Submit(command))
                     {lastInput=command;queuedImpulse=Vector2.zero;stepRequested=false;accumulator=Mathf.Max(0,accumulator-1f/60);}
-                    else if(session.Faulted){running=false;status=session.Fault;}
+                    else {Trace("tick.submit_refused",JsonUtility.ToJson(command)+" fault="+session.Fault);if(session.Faulted){SetRunning(false,"tick submission fault");status=session.Fault;}}
                 }
             }
             else if(session?.Count==0){stepRequested=false;accumulator=0;}
@@ -175,12 +222,12 @@ namespace Debris.Presentation
             if(!Busy&&!overUI&&(tool==Tool.Grains||tool==Tool.Erase))view?.Brush(pointer,radius,tool==Tool.Erase);
             if(pushing)view?.Arrow(pushStart,pointer);
         }
-        void SetTool(Tool value){CancelManipulation();tool=value;clearTextFocus=true;editingText=false;}
+        void SetTool(Tool value){Trace("tool.change",tool+" -> "+value);CancelManipulation();tool=value;clearTextFocus=true;editingText=false;}
         void CancelManipulation(){pointerSerial++;grabbing=drawingBody=pushing=false;queuedImpulse=Vector2.zero;stepRequested=false;}
-        void OnApplicationFocus(bool value){focused=value;if(!value){CancelManipulation();running=false;}}
-        void OnDisable(){CancelManipulation();running=false;}
+        void OnApplicationFocus(bool value){focused=value;Trace("application.focus",value.ToString());if(!value){CancelManipulation();SetRunning(false,"application lost focus");}}
+        void OnDisable(){Trace("application.disabled");CancelManipulation();SetRunning(false,"component disabled");}
         void ToggleRun()
-        {CancelManipulation();if(Session?.Faulted==true){status="Edit or reset the rejected world before resuming";return;}running=!running;accumulator=0;}
+        {CancelManipulation();if(Session?.Faulted==true){status="Edit or reset the rejected world before resuming";Trace("run.refused",status);return;}SetRunning(!running,"Run/Pause button or Space");accumulator=0;}
         static Vector2 GridPoint(Vector2 p)=>new Vector2(Mathf.Floor(p.x)+.5f,Mathf.Floor(p.y)+.5f);
         PlaygroundObject RectanglePreview()
         {
@@ -194,7 +241,7 @@ namespace Debris.Presentation
         {
             previewPending=true;
             try { bool valid=await owner.CheckPlacementAsync(value);if(Session==owner)previewValid=valid; }
-            catch(Exception e){status="Placement preview unavailable: "+e.Message;}
+            catch(Exception e){Trace("operation.exception",e.ToString());status="Placement preview unavailable: "+e.Message;}
             finally { previewPending=false; }
         }
         async Task PickTool(Vector2 at,Tool action)
@@ -206,7 +253,7 @@ namespace Debris.Presentation
                 if(this==null||Session!=owner||Busy||serial!=pointerSerial)return;
                 var hit=await owner.PickAsync(at,action==Tool.Anchor||!ignoreAnchors);
                 if(this==null||Session!=owner||serial!=pointerSerial||hit.Generation!=owner.Generation)return;
-                selected=hit.Id;localAnchor=hit.LocalPoint;
+                Trace("pick.result","id="+hit.Id+" anchored="+hit.Anchored+" local="+hit.LocalPoint);selected=hit.Id;localAnchor=hit.LocalPoint;
                 if(selected==null)return;
                 if(action==Tool.Anchor)
                     await Mutate("Change anchor",world=>{
@@ -220,7 +267,7 @@ namespace Debris.Presentation
                     await InspectSelected();
                 }
             }
-            catch(Exception e){status="Picking failed: "+e.Message;}
+            catch(Exception e){Trace("operation.exception",e.ToString());status="Picking failed: "+e.Message;}
             finally { pointerRequest=false; }
         }
         async Task InspectSelected()
@@ -233,24 +280,26 @@ namespace Debris.Presentation
                 angle=Text(value.Angle*Mathf.Rad2Deg);spin=Text(value.Spin);editDensity=Text(value.Density);
                 width=Text(value.Half.x*2);height=Text(value.Half.y*2);editAnchor=value.Anchored;
             }
-            catch(Exception e){status="Inspection failed: "+e.Message;}
+            catch(Exception e){Trace("operation.exception",e.ToString());status="Inspection failed: "+e.Message;}
         }
         async Task<bool> Mutate(string name,Func<PlaygroundWorldDefinition,PlaygroundWorldDefinition> change,bool resume=true)
         {
-            if(Busy)return false;
+            if(Busy){Trace("tool.ignored",name+": editor busy");return false;}
+            Trace("tool.begin",name);
             // Busy already fences simulation submission. Editing must not
             // change the user's Run/Pause choice or restore an obsolete one.
-            if(!resume)running=false;
+            if(!resume)SetRunning(false,"explicit stop: "+name);
             CancelManipulation();
             bool ok=await editor.ApplyAsync(name,change);if(this==null)return false;
             status=editor.Status;accumulator=0;
             if(Session?.IndexOf(selected)<0){selected=null;inspected=null;}
-            if(Session==null||Session.Faulted)running=false;
+            if(Session==null||Session.Faulted)SetRunning(false,"edit left no valid session");
+            Trace("tool.end",name+" accepted="+ok+" status="+status);
             if(ok&&selected!=null)await InspectSelected();return ok;
         }
         async Task ResetPreset()
         {
-            if(Busy)return;running=false;selected=null;inspected=null;
+            if(Busy)return;SetRunning(false,"reset preset");selected=null;inspected=null;
             HomeCamera();
             await Mutate("Reset "+preset,w=>PlaygroundWorldDefinition.Preset(preset),false);
         }
@@ -289,7 +338,7 @@ namespace Debris.Presentation
                     if(count==0)throw new InvalidOperationException("No removable object under brush");return world;
                 });
             }
-            catch(Exception e){status="Erase failed: "+e.Message;}
+            catch(Exception e){Trace("operation.exception",e.ToString());status="Erase failed: "+e.Message;}
             finally { pointerRequest=false; }
         }
         Task DeleteSelected()=>Mutate("Delete selection",world=>{
@@ -317,28 +366,28 @@ namespace Debris.Presentation
         {
             if(Busy)return;CancelManipulation();
             try { var world=await editor.CaptureAsync();PlaygroundSceneFile.Save(ScenePath,world);status="Saved "+ScenePath; }
-            catch(Exception e){status="Save failed: "+e.Message;}
+            catch(Exception e){Trace("operation.exception",e.ToString());status="Save failed: "+e.Message;}
         }
         async Task LoadScene()
         {
             try { var world=PlaygroundSceneFile.Load(ScenePath);await Mutate("Load scene",w=>world,false); }
-            catch(Exception e){status="Load refused: "+e.Message;}
+            catch(Exception e){Trace("operation.exception",e.ToString());status="Load refused: "+e.Message;}
         }
         async Task ExportFailure()
         {
-            if(Busy)return;running=false;CancelManipulation();
+            if(Busy)return;SetRunning(false,"export failure");CancelManipulation();
             try
             {
                 var world=await editor.CaptureAsync();var session=Session;
                 var build=Resources.Load<TextAsset>("PhysicsPlaygroundBuildIdentity");
                 var file=new PlaygroundFailureFile{Utc=DateTime.UtcNow.ToString("O"),World=world,Command=lastInput,
                     Reason=session?.Fault??status,WorldRevision=editor.Revision,WorldGeneration=session?.Generation??0,AttemptedTick=session?.AttemptedTick??0,
-                    AcceptedTick=session?.AcceptedTick??0,Diagnostics=session?.Diagnostics,
+                    AcceptedTick=session?.AcceptedTick??0,Diagnostics=session?.Diagnostics,DebugLogPath=debugLog?.Path,RecentEvents=debugLog?.ExportTail,
                     UnityVersion=Application.unityVersion,ApplicationVersion=Application.version,
                     AssemblyId=typeof(CoupledPlaygroundSession).Assembly.ManifestModule.ModuleVersionId.ToString(),BuildIdentity=build?build.text:"Editor / source identity unrecorded"};
                 PlaygroundSceneFile.WriteAtomic(FailurePath,JsonUtility.ToJson(file,true));status="Failure exported to "+FailurePath;
             }
-            catch(Exception e){status="Failure export failed: "+e.Message;}
+            catch(Exception e){Trace("operation.exception",e.ToString());status="Failure export failed: "+e.Message;}
         }
         async Task ReplayFailure()
         {
@@ -351,7 +400,7 @@ namespace Debris.Presentation
                     if(Session.Submit(replay)){lastInput=replay;status="Failure command replay submitted; inspect resulting verdict";}
                 }
             }
-            catch(Exception e){status="Failure replay refused: "+e.Message;}
+            catch(Exception e){Trace("operation.exception",e.ToString());status="Failure replay refused: "+e.Message;}
         }
         void OnGUI()
         {
@@ -391,9 +440,9 @@ namespace Debris.Presentation
             GUILayout.Label(hudZoom.ToString("P0"),GUILayout.Width(50));
             if(GUILayout.Button("+",GUILayout.Width(38)))ChangeHudZoom(.1f);GUILayout.EndHorizontal();
             GUILayout.Label("V2 solver • experimental / runtime unverified");
-            GUILayout.BeginHorizontal();if(GUILayout.Button(running?"Pause [Space]":"Run [Space]"))ToggleRun();
+            GUILayout.BeginHorizontal();if(GUILayout.Button(running?"Pause [Space]":"Run [Space]")){Trace("ui.run_pause");ToggleRun();}
             GUI.enabled=!Busy;
-            if(GUILayout.Button("Step [.]")){running=false;stepRequested=true;}GUILayout.EndHorizontal();
+            if(GUILayout.Button("Step [.]")){SetRunning(false,"single step");stepRequested=true;}GUILayout.EndHorizontal();
             if(GUILayout.Button("Home camera"))HomeCamera();
             GUILayout.Label("Simulation speed "+speed.ToString("F2")+"×");speed=GUILayout.HorizontalSlider(speed,.1f,1);
             string[] tools={"1 Select / pull","2 Grain brush","3 Rectangle","4 Erase","5 Push / throw","6 Anchor"};
@@ -449,6 +498,14 @@ namespace Debris.Presentation
             GUILayout.BeginHorizontal();if(GUILayout.Button("Export scene"))_=SaveScene();if(GUILayout.Button("Import scene"))_=LoadScene();GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();if(GUILayout.Button("Export failure"))_=ExportFailure();if(GUILayout.Button("Replay failure"))_=ReplayFailure();GUILayout.EndHorizontal();
             diagnostics=GUILayout.Toggle(diagnostics,"Diagnostics");
+            if(diagnostics&&debugLog!=null)
+            {
+                GUILayout.Label("Debug log: "+debugLog.Path);
+                if(debugLog.Error!=null)GUILayout.Label("Log file unavailable: "+debugLog.Error);
+                bool enabled=GUI.enabled;GUI.enabled=true;
+                if(GUILayout.Button("Copy debug log path"))GUIUtility.systemCopyBuffer=debugLog.Path;
+                GUI.enabled=enabled;
+            }
             if(diagnostics&&Session!=null)
             {
                 GUILayout.Label($"World revision {editor.Revision} • generation {Session.Generation}\nAccepted {Session.AcceptedTick} / attempted {Session.AttemptedTick}\nCommand {nextCommandId} • profile {Session.Profile}\nObjects {Session.Count} • substeps {Session.SelectedSubsteps}\nExplicit buffers {(Session.BufferBytes+(view?.BufferBytes??0))/1048576.0:F2} MiB\nRecording {Session.RecordingMilliseconds:F2} ms\nAccepted rate {ticksPerSecond:F1} ticks/s\nFrame {Time.unscaledDeltaTime*1000:F1} ms\nGPU time: unmeasured\nDriver/command memory: unmeasured");
@@ -460,6 +517,12 @@ namespace Debris.Presentation
         }
         static void Field(string label,ref string text)
         {GUILayout.BeginHorizontal();GUILayout.Label(label,GUILayout.Width(110));GUI.SetNextControlName("edit"+label);text=GUILayout.TextField(text);GUILayout.EndHorizontal();}
-        void OnDestroy(){CancelManipulation();editor?.Dispose();view?.Dispose();if(cameraView)Destroy(cameraView.gameObject);if(hudSkin)Destroy(hudSkin);}
+        [Serializable] sealed class DiagnosticValues { public uint[] Values; }
+        void OnDestroy()
+        {
+            Trace("application.destroy");Application.logMessageReceived-=CaptureUnityLog;
+            try{CancelManipulation();editor?.Dispose();view?.Dispose();if(cameraView)Destroy(cameraView.gameObject);if(hudSkin)Destroy(hudSkin);}
+            finally{debugLog?.Dispose();}
+        }
     }
 }

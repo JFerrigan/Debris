@@ -54,6 +54,16 @@ namespace Debris.Simulation.Playground
         int readbacks;
         bool readbackError,pending,picking,snapshotting,disposed;
         ulong lastCommandId;
+        public PlaygroundDebugLog Log { get; set; }
+        [Serializable] sealed class FailureFacts
+        {
+            public uint Generation;
+            public ulong CommandId,AttemptedTick,AcceptedTick;
+            public uint[] Diagnostics,FirstFailure,Clock;
+        }
+        void TraceFault(string detail)=>Log?.Write("solver.fault",detail,JsonUtility.ToJson(new FailureFacts{
+            Generation=Generation,CommandId=lastCommandId,AttemptedTick=AttemptedTick,AcceptedTick=AcceptedTick,
+            Diagnostics=diagnostics,FirstFailure=failure,Clock=clock}));
         public uint Generation { get; }
         public bool Pending=>pending||picking||snapshotting;
         public bool Faulted { get; private set; }
@@ -145,19 +155,19 @@ namespace Debris.Simulation.Playground
                 pending=true;Graphics.ExecuteCommandBuffer(commands);commands.Clear();lastCommandId=input.CommandId;
                 RecordingMilliseconds=watch.Elapsed.TotalMilliseconds;return true;
             }
-            catch(Exception e){Faulted=true;Fault="Tick submission failed: "+e.Message;commands.Clear();return false;}
+            catch(Exception e){Faulted=true;Fault="Tick submission failed: "+e.Message;TraceFault(e.ToString());commands.Clear();return false;}
         }
         public bool Poll()
         {
             if(disposed||!pending||readbacks!=0)return false;
             pending=false;
-            if(readbackError){Faulted=true;Fault="GPU completion readback failed; accepted buffers retained";return true;}
+            if(readbackError){Faulted=true;Fault="GPU completion readback failed; accepted buffers retained";TraceFault(Fault);return true;}
             try { transaction.Retire(ticket,completion); }
-            catch(Exception e){Faulted=true;Fault="Completion mismatch: "+e.Message;return true;}
+            catch(Exception e){Faulted=true;Fault="Completion mismatch: "+e.Message;TraceFault(e.ToString());return true;}
             AcceptedTick=completion.CompletedTick;
             if(completion.Status!=(uint)CoupledTickStatus.Committed)
             {
-                Faulted=true;Fault=$"Tick {completion.AttemptedTick}: {(CoupledTickFault)completion.Fault} at {(CoupledTickStage)completion.Stage}; physical {(CoupledTickPhysicalFault)diagnostics[0]}, source {failure[5]}";
+                Faulted=true;Fault=$"Tick {completion.AttemptedTick}: {(CoupledTickFault)completion.Fault} at {(CoupledTickStage)completion.Stage}; physical {(CoupledTickPhysicalFault)diagnostics[0]}, source {failure[5]}";TraceFault(Fault);
             }
             return true;
         }
