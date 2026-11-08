@@ -431,15 +431,17 @@ void QualifyCache(uint id:SV_DispatchThreadID)
 {
     if(id>=min(_RowCount[0],_RowCapacity)||!active()||_TickDiagnostics[0]!=0)return;
     Key key;float4 anchors;if(!pointData(id,key,anchors))return;
-    uint node=_ReadCacheHeads[hashKey(key)],found=Empty,visits=0;
+    uint node=_ReadCacheHeads[hashKey(key)],found=Empty,visits=0,matches=0;
     while(node!=Empty&&visits++<_ReadDraftCount[0])
     {
         if(node>=_ReadDraftCount[0]){tickFault(2048);return;}
         if(equalKey(key,_DraftCache[node].key))
-        {if(found!=Empty){tickFault(2048);return;}found=node;}
+        {matches++;found=node;}
         node=_ReadCacheNext[node];
     }
-    if(node!=Empty){tickFault(2048);return;}
+    // Keep the duplicate verdict outside the traversal: Metal rejects the
+    // nested atomic fault/return branch inside this lookup loop.
+    if(node!=Empty||matches>1){tickFault(2048);return;}
     if(found==Empty)return;
     uint previous;InterlockedAdd(_CacheMatches[found],1,previous);
     if(previous!=0){tickFault(2048);return;}

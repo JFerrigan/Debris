@@ -68,8 +68,8 @@ namespace Debris.Simulation.CoupledContacts
                 if(asset==null)throw new InvalidOperationException("Missing CoupledTickStepper resource");
                 shader=UnityEngine.Object.Instantiate(asset);
                 bindPoses=Buffer(owner,state.EndpointCount,32);bindPoses.SetData(state.BindPoseEndpoints);
-                templatePrimitives=Buffer(owner,op.SourcePrimitiveCount,56);
-                templateGroups=Buffer(owner,Math.Max(1,groupCount),32);
+                templatePrimitives=Buffer(owner,op.SourcePrimitiveCount,56,GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.CopyDestination);
+                templateGroups=Buffer(owner,Math.Max(1,groupCount),32,GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.CopyDestination);
                 bodies=Buffer(owner,state.EndpointCount,16);
                 primitives=Buffer(owner,op.SourcePrimitiveCount,56);
                 groups=Buffer(owner,Math.Max(1,groupCount),32);
@@ -79,7 +79,7 @@ namespace Debris.Simulation.CoupledContacts
                 clock.SetData(new uint[]{0,0,0,0});slotGate.SetData(new uint[]{1});
                 radii=Buffer(owner,state.EndpointCount,4);predicted=Buffer(owner,state.EndpointCount,32);
                 predictionVerdict=Buffer(owner,2,4);positionVerdict=Buffer(owner,2,4);
-                startEndpoints=Buffer(owner,state.EndpointCount,32);
+                startEndpoints=Buffer(owner,state.EndpointCount,32,GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.CopyDestination);
                 baseline=Buffer(owner,3,16);accounting=Buffer(owner,2,16);
                 tickDiagnostics=Buffer(owner,16,4);physicalVerdict=Buffer(owner,2,4);
                 draftCache=Buffer(owner,Math.Max(1,cacheCapacity),64);draftCount=Buffer(owner,1,4);
@@ -173,9 +173,9 @@ namespace Debris.Simulation.CoupledContacts
             }
             catch { Dispose();throw; }
         }
-        GraphicsBuffer Buffer(string owner,int count,int stride)
+        GraphicsBuffer Buffer(string owner,int count,int stride,GraphicsBuffer.Target target=GraphicsBuffer.Target.Structured)
         {
-            var b=arena.Allocate(owner+"/"+owned.Count,count,stride);owned.Add(b);
+            var b=arena.Allocate(owner+"/"+owned.Count,count,stride,target);owned.Add(b);
             BufferBytes+=(long)count*stride;return b;
         }
         int Kernel(string name)

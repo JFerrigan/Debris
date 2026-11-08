@@ -104,3 +104,10 @@ One final Mac build passed, with no C#/shader errors, at `/private/tmp/debris-pl
 Automatic bounded JSONL logging now traces actual click/run/pause/focus events, edit stages and elapsed times, input command IDs, solver failures and Unity stacks. File errors retain an in-memory tail without changing actions/run intent. Diagnostics copies the file path; failure exports include the last sixteen events. See [usage and event schema](../PLAYGROUND_DEBUGGING.md).
 
 Two focused runs passed 9/9 each; the second followed bounded failure-export history and direct solver-exception records. Final result `/private/tmp/debris-playground-debug.xml` (06:01:52Z, 0.0478794 seconds). One final separate Mac build exited 0 with Success and no C#/shader errors; `/private/tmp/debris-playground-debug-build.log`. All manifest source hashes match and the executable exists. Source hash `af38bb7c0ffb1130635f4f1a1bb563fa782d6d1dab0aa27abd5d95f8d82a1f84`. No app launch or physics dispatch; actual interaction/GPU acceptance and QualifyCache support remain open.
+
+
+## First-step repair checkpoint (2026-11-08 UTC)
+
+GPU copy capabilities and Metal cache duplicate handling repaired; 39/39 affected regression checks passed. See [repair evidence](B3R-playground-first-step.md).
+
+Final Mac build succeeded, exit 0, with no C#/shader errors (`/private/tmp/debris-first-step-build.log`). The separate app exists at `Builds/PhysicsPlayground/Debris Physics Playground.app`; all manifest source hashes match. Source identity `20543eace4489e46feb479022f505836aee4857f676c1ab219d609bb624f21a5`. No player launch; manual interaction and full contact/scale/performance acceptance remain open.

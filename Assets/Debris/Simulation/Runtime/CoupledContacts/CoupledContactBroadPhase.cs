@@ -115,7 +115,7 @@ namespace Debris.Simulation.CoupledContacts
             var asset=Resources.Load<ComputeShader>("CoupledBroadPhase");
             if(asset==null)throw new InvalidOperationException("Missing CoupledBroadPhase compute resource");
             shader=UnityEngine.Object.Instantiate(asset);
-            primitives=Buffer(Math.Max(1,primitiveCount),56);
+            primitives=Buffer(Math.Max(1,primitiveCount),56,GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.CopySource);
             bounds=Buffer(Math.Max(1,primitiveCount),32);
             binCounts=Buffer(binCount,4);binCursors=Buffer(binCount,4);
             binStarts=Buffer(binCount,4);
@@ -126,7 +126,7 @@ namespace Debris.Simulation.CoupledContacts
             pairSortScratch=Buffer(MaxPairs,8);
             pairSortArgs=Buffer(3,4,
                 GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.IndirectArguments);
-            endpointBindings=Buffer(bindings==null?1:bodyCount,36);
+            endpointBindings=Buffer(bindings==null?1:bodyCount,36,GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.CopyDestination);
             if(bindings!=null)endpointBindings.SetData(bindings);
             pairCount=Buffer(1,4);fault=Buffer(1,4);
             if(primitiveCount>0)primitives.SetData(sourcePrimitives);

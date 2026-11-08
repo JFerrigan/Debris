@@ -20,7 +20,7 @@ namespace Debris.Simulation.Tests
             public readonly CoupledTickStepper Stepper;
             public readonly CommandBuffer Commands=new CommandBuffer();
 
-            public Fixture(Vector2 center,Vector2 velocity,float spin=0)
+            public Fixture(Vector2 center,Vector2 velocity,float spin=0,bool identities=false,int cacheCapacity=1)
             {
                 Assume.That(SystemInfo.supportsComputeShaders,Is.True);
                 var grain=new ProofGrain{Center=center,Velocity=velocity,AngularVelocity=spin,Material=1,Identity=7};
@@ -32,12 +32,21 @@ namespace Debris.Simulation.Tests
                         new BodyParameters{ShapeRevision=1}},
                     Bindings=new[]{Binding(CoupledPersistentIdentity.Grain(7)),
                         Binding(new CoupledPersistentIdentity{Kind=2,Low=11})},
-                    Cache=new[]{new CoupledCachePoint{ImpulseNormal=Vector4.one}},
+                    Cache=new CoupledCachePoint[cacheCapacity],
                     InventoryWords=new uint[]{10,20},CargoFacts=new uint[]{0,0,0},TerrainRevisions=new uint[]{1,2}
                 };
+                Initial.Cache[0]=new CoupledCachePoint{ImpulseNormal=Vector4.one};
                 var header=Initial.Header;header.ActiveCacheCount=1;Initial.Header=header;
                 try
                 {
+                    CoupledEndpointIdentityTable table=null;
+                    if(identities)
+                    {
+                        table=new CoupledEndpointIdentityTable(Initial.Bindings.Length);
+                        for(int i=0;i<Initial.Bindings.Length;i++)table.Bind(i,Initial.Bindings[i].Identity,1);
+                        Initial.Bindings=table.Snapshot();var identityHeader=Initial.Header;
+                        identityHeader.IdentityRevision=table.TableRevision;Initial.Header=identityHeader;
+                    }
                     State=new CoupledTickState(Initial,Arena);
                     Transaction=new CoupledTickTransaction(State);
                     Graph=new CoupledContactOperator(new[]{
@@ -47,7 +56,7 @@ namespace Debris.Simulation.Tests
                         new CoupledContactPrimitive{Center=center,Half=Vector2.one*.5f,ContactClass=1},
                         new CoupledContactPrimitive{Center=Initial.Endpoints[1].Center,Half=Vector2.one*.5f,
                             Endpoint=1,Anchored=1,ContactClass=2}
-                    },center-Vector2.one*4,1,8,8,arena:Arena);
+                    },center-Vector2.one*4,1,8,8,endpointIdentities:table,arena:Arena);
                     Stepper=new CoupledTickStepper(State,Transaction,Graph);
                 }
                 catch { Dispose();throw; }
@@ -84,6 +93,62 @@ namespace Debris.Simulation.Tests
             public void Dispose()
             {
                 Commands.Dispose();Stepper?.Dispose();Graph?.Dispose();Transaction?.Dispose();State?.Dispose();Arena.AssertEmpty();
+            }
+        }
+
+        [TestCase(false),TestCase(true),Timeout(30000)]
+        public void CacheQualificationCompilesAndRejectsDuplicateKeys(bool duplicate)
+        {
+            using(var f=new Fixture(Vector2.zero,Vector2.zero,identities:true,cacheCapacity:2))
+            {
+                object Field(string name)=>typeof(CoupledTickStepper).GetField(name,
+                    System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).GetValue(f.Stepper);
+                GraphicsBuffer Buffer(string name)=>(GraphicsBuffer)Field(name);
+                var shader=(ComputeShader)Field("shader");int kernel=shader.FindKernel("QualifyCache");
+                Assert.That(shader.IsSupported(kernel),Is.True,"Metal must compile the actual qualification kernel");
+                f.Transaction.ActivityGate.SetData(new uint[]{1});Buffer("slotGate").SetData(new uint[]{1});
+                f.Graph.ActiveRowCounter.SetData(new uint[]{1});
+                f.Graph.RowsBuffer.SetData(new[]{new CoupledContactRow{A=0,B=1,Point=Vector2.right*1.5f,Direction=Vector2.right,InverseRoot=1}});
+                f.Graph.RowFeatures.SetData(new[]{new CoupledContactFeature{APrimitive=0,BPrimitive=1}});
+                var key=new CoupledContactKeyWords{Endpoints=1u<<14,SlotGenerationA=1,SlotGenerationB=1,RevisionA=1,RevisionB=1};
+                var cache=new CoupledCachePoint{Key=key,ImpulseNormal=new Vector4(.1f,0,1,0),LocalAnchors=new Vector4(1.5f,0,-1.5f,0)};
+                Buffer("draftCache").SetData(new[]{cache,cache});Buffer("draftCount").SetData(new uint[]{duplicate?2u:1u});
+                uint hash=2166136261u;
+                foreach(uint word in new[]{key.Endpoints,key.SlotGenerationA,key.SlotGenerationB,key.RevisionA,key.RevisionB,key.FeatureA,key.FeatureB,key.Point})
+                    hash=unchecked((hash^word)*16777619u);
+                var heads=new uint[262144];Array.Fill(heads,uint.MaxValue);heads[hash&262143u]=0;
+                Buffer("cacheHeads").SetData(heads);Buffer("cacheNext").SetData(new[]{duplicate?1u:uint.MaxValue,uint.MaxValue});
+                Buffer("cacheMatches").SetData(new uint[2]);Buffer("cacheEligible").SetData(new uint[2]);Buffer("tickDiagnostics").SetData(new uint[16]);
+                f.Commands.DispatchCompute(shader,kernel,1,1,1);f.Execute();
+                var facts=Fixture.Read<uint>(Buffer("tickDiagnostics"),16);
+                Assert.That(facts[0],Is.EqualTo(duplicate?2048u:0u));
+                Assert.That(Fixture.Read<uint>(Buffer("cacheEligible"),2)[0],Is.EqualTo(duplicate?0u:1u));
+            }
+        }
+
+        [Test,Timeout(30000)]
+        public void FirstTickCopyBuffersPreserveTemplatesPosesAndPersistentBindings()
+        {
+            using(var f=new Fixture(new Vector2(2,3),Vector2.right*.25f,.1f,identities:true))
+            {
+                GraphicsBuffer Scratch(string name)=>(GraphicsBuffer)typeof(CoupledTickStepper)
+                    .GetField(name,System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).GetValue(f.Stepper);
+                void CopyAndCheck<T>(GraphicsBuffer source,GraphicsBuffer destination) where T:struct
+                {
+                    var before=Fixture.Read<T>(source,source.count);
+                    f.Commands.CopyBuffer(source,destination);f.Execute();
+                    Assert.That(Fixture.Read<T>(destination,destination.count),Is.EqualTo(before));
+                }
+                CopyAndCheck<CoupledContactPrimitive>(f.Graph.SourcePrimitives,Scratch("templatePrimitives"));
+                var group=f.Graph.Manifolds.UnionGroupsBuffer;
+                group.SetData(new[]{new CoupledUnionQueryGroup{UnionCenter=new Vector2(7,9),UnionAngle=.3f,PatchCount=3,QueryCount=5}});
+                CopyAndCheck<CoupledUnionQueryGroup>(group,Scratch("templateGroups"));
+                CopyAndCheck<CoupledEndpointBinding>(f.State.WorkingBindings,f.Graph.EndpointIdentities);
+                CopyAndCheck<BodyState>(f.State.WorkingEndpoints,Scratch("startEndpoints"));
+                // Reproduce the first submission path, while leaving simulation
+                // dispatches unexecuted in this buffer-contract regression.
+                Assert.DoesNotThrow(()=>f.Stepper.RecordTick(f.Commands,1,CoupledSolveProfile.C1));
+                f.Commands.Clear();
             }
         }
 

@@ -49,7 +49,7 @@ namespace Debris.Simulation.Tests
                 Identity=id,Bound=1,Generation=1,SlotGeneration=1,Revision=1};
             GraphicsBuffer Buffer<T>(T[] data) where T:struct
             {
-                var buffer=new GraphicsBuffer(GraphicsBuffer.Target.Structured,data.Length,
+                var buffer=new GraphicsBuffer(GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.CopySource,data.Length,
                     System.Runtime.InteropServices.Marshal.SizeOf<T>());
                 staging.Add(buffer);buffer.SetData(data);return buffer;
             }

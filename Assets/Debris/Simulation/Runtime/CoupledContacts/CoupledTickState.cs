@@ -82,7 +82,7 @@ namespace Debris.Simulation.CoupledContacts
                 Add(owner,Kind.Cache,initial.Cache);Add(owner,Kind.Inventory,initial.InventoryWords);
                 Add(owner,Kind.Cargo,initial.CargoFacts);Add(owner,Kind.Terrain,initial.TerrainRevisions);
                 HeaderBuffer=Buffer(owner+"/header",1,32);HeaderBuffer.SetData(new[]{initial.Header});
-                WorkingHeader=Buffer(owner+"/working-header",1,32);WorkingHeader.SetData(new[]{initial.Header});
+                WorkingHeader=Buffer(owner+"/working-header",1,32,GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.CopyDestination);WorkingHeader.SetData(new[]{initial.Header});
             }
             catch { Dispose();throw; }
         }
@@ -90,14 +90,17 @@ namespace Debris.Simulation.CoupledContacts
         {
             int stride=Marshal.SizeOf<T>(),count=Math.Max(1,data.Length);
             var committed=Buffer(owner+"/"+kind+"/committed",count,stride);
-            var working=Buffer(owner+"/"+kind+"/working",count,stride);
+            // The tick recorder copies poses and persistent bindings into derived buffers.
+            var target=GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.CopyDestination;
+            if(kind==Kind.Endpoints||kind==Kind.Bindings)target|=GraphicsBuffer.Target.CopySource;
+            var working=Buffer(owner+"/"+kind+"/working",count,stride,target);
             var upload=data.Length==0?new T[1]:data;
             committed.SetData(upload);working.SetData(upload);
             pairs.Add(new Pair{Kind=kind,Count=data.Length,Committed=committed,Working=working});
         }
-        GraphicsBuffer Buffer(string name,int count,int stride)
+        GraphicsBuffer Buffer(string name,int count,int stride,GraphicsBuffer.Target target=GraphicsBuffer.Target.Structured)
         {
-            var buffer=arena.Allocate(name,count,stride);owned.Add(buffer);
+            var buffer=arena.Allocate(name,count,stride,target);owned.Add(buffer);
             BufferBytes+=(long)count*stride;return buffer;
         }
         static bool Finite(float x)=>!float.IsNaN(x)&&!float.IsInfinity(x);

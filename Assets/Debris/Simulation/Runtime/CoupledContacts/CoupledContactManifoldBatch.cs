@@ -124,7 +124,8 @@ namespace Debris.Simulation.CoupledContacts
             compactPairs=Buffer(MaxActive,48);compactIndices=Buffer(MaxActive,8);
             compactManifolds=Buffer(MaxActive,52);
             compactCount=Buffer(1,4);compactFault=Buffer(1,4);
-            unionGroups=Buffer(Math.Max(1,union==null?0:union.Groups.Length),32);
+            unionGroups=Buffer(Math.Max(1,union==null?0:union.Groups.Length),32,
+                GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.CopySource);
             var indirect=GraphicsBuffer.Target.Structured|GraphicsBuffer.Target.IndirectArguments;
             markArgs=Buffer(4,4,indirect);scanArgs=Buffer(4,4,indirect);
             scatterArgs=Buffer(4,4,indirect);
