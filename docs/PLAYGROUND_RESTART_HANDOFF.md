@@ -18,6 +18,10 @@ The 39 affected checks verified narrow physics/transaction cases; the 11 renderi
 
 `CoupledTickStepper.RecordTick` records sixteen complete slot schedules per submitted tick, including velocity solving, geometry, prediction and position work. Graph/cache machinery includes large fixed-capacity buffers and dispatches. This is a concrete profiling target, not yet a measured attribution of all delay. The log lacks per-stage GPU timings; do not claim a precise GPU bottleneck from it.
 
+## Concrete source diagnosis added after the initial handoff
+
+Read the [Run cost audit](evidence/B3R-playground-run-cost-audit.md). C1 records at least 138,240 direct compute dispatches per tick, with fixed-capacity dot reductions submitting roughly 321 million workgroups. Inactive zero-valued reductions still have unconditional shared-memory loops/barriers in source. Audit capacity versus live counts and actual dispatch elimination before replacing solver mathematics or rewriting unrelated code. These counts are not measured stage timings.
+
 ## Recommended restart scope
 
 Preserve this repository, commits, unrelated dirty files and physics contracts. A fresh session should begin on an isolated branch/worktree and audit the execution path before deciding what to replace. Do not repeat a full UI or game rewrite by default.
