@@ -111,3 +111,10 @@ Two focused runs passed 9/9 each; the second followed bounded failure-export his
 GPU copy capabilities and Metal cache duplicate handling repaired; 39/39 affected regression checks passed. See [repair evidence](B3R-playground-first-step.md).
 
 Final Mac build succeeded, exit 0, with no C#/shader errors (`/private/tmp/debris-first-step-build.log`). The separate app exists at `Builds/PhysicsPlayground/Debris Physics Playground.app`; all manifest source hashes match. Source identity `20543eace4489e46feb479022f505836aee4857f676c1ab219d609bb624f21a5`. No player launch; manual interaction and full contact/scale/performance acceptance remain open.
+
+
+## Invisible-world repair (2026-11-12 UTC)
+
+Grid/body transparent sorting hid valid GPU objects; explicit material queues restore visibility. Actual live/frozen camera readbacks reproduce before and pass afterward. Eleven focused checks pass; [render evidence](B3R-playground-render.md).
+
+Final Mac build succeeded with exit 0 and no C#/shader errors (`/private/tmp/debris-render-build.log`); all manifest source hashes match. Source identity `722df31422bfecb3324c33ecf29fcf621e6a80ec811eda89516f02ddf6dd539a`. Reopen `Builds/PhysicsPlayground/Debris Physics Playground.app`, outside the Burst debug folder. No standalone player was launched.

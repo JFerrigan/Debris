@@ -24,9 +24,11 @@ namespace Debris.Presentation
             if(shader==null||!shader.isSupported)throw new InvalidOperationException("Playground render shader is missing or unsupported");
             try
             {
-                grid=new Material(shader);grid.SetInt("_Mode",0);
-                bodies=new Material(shader);bodies.SetInt("_Mode",1);
-                preview=new Material(shader);preview.SetInt("_Mode",2);
+                // Draw order must not depend on transparent material sorting: all
+                // procedural draws share the same bounds and use ZTest Always.
+                grid=new Material(shader){renderQueue=(int)RenderQueue.Background};grid.SetInt("_Mode",0);
+                bodies=new Material(shader){renderQueue=(int)RenderQueue.Geometry};bodies.SetInt("_Mode",1);
+                preview=new Material(shader){renderQueue=(int)RenderQueue.Transparent};preview.SetInt("_Mode",2);
                 fallbackEndpoints=new GraphicsBuffer(GraphicsBuffer.Target.Structured,1,32);
                 fallbackShapes=new GraphicsBuffer(GraphicsBuffer.Target.Structured,1,32);
                 fallbackEndpoints.SetData(new BodyState[1]);fallbackShapes.SetData(new PlaygroundShapeRecord[1]);

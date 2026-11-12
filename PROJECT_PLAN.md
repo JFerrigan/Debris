@@ -1,6 +1,6 @@
 # Debris — Product and Execution Plan
 
-Current user assignment (2026-11-08 UTC): stop at a verified checkpoint after repairing the [standalone physics playground](docs/PHYSICS_PLAYGROUND_PLAN.md). First-step GPU copy and Metal cache-kernel blockers are repaired; 39 affected regression checks pass. Finish the final separate Mac build and checkpoint without launching the player automatically. See [repair evidence](docs/evidence/B3R-playground-first-step.md). Game integration remains stopped; the delivery phases below are historical product direction.
+Current user assignment (2026-11-12 UTC): repair the invisible world in the [standalone physics playground](docs/PHYSICS_PLAYGROUND_PLAN.md). The grid covering bodies was reproduced with actual camera pixels; render queues now enforce background/body/overlay order. Eleven focused checks pass. Finish a source-matched Mac build without launching the player automatically; [render evidence](docs/evidence/B3R-playground-render.md). Game integration remains stopped.
 
 ## Purpose
 
