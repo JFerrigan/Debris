@@ -27,3 +27,6 @@ Recordings/
 *.sln
 *.user
 *.userprefs
+
+# Independent successor repository; preserve this project as reference.
+/TryTwo/

@@ -1,6 +1,6 @@
 # Debris — Product and Execution Plan
 
-Current user assignment (2026-11-12 UTC): repair the invisible world in the [standalone physics playground](docs/PHYSICS_PLAYGROUND_PLAN.md). The grid covering bodies was reproduced with actual camera pixels; render queues now enforce background/body/overlay order. Eleven focused checks pass. Finish a source-matched Mac build without launching the player automatically; [render evidence](docs/evidence/B3R-playground-render.md). Game integration remains stopped.
+Current user assignment (2026-11-12 UTC): preserve this project as reference and start a completely new, independent repository at `Documents/Debris/TryTwo`. Active direction is layered pixel-material space simulation, pure C# first. The new architecture, delivery gates, specs, demo and measured baseline are in that repository; start with `TryTwo/README.md`. No old-game phases below authorize more implementation here.
 
 ## Purpose
 
